@@ -1,0 +1,28 @@
+name: Format Daily Log
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  format-daily-log:
+    if: contains(github.event.issue.labels.*.name, 'daily-log')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Format title and assign author
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+        run: |
+          DATE=$(TZ=Europe/Stockholm date +"%Y-%m-%d")
+
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "$REPO" \
+            --title "$DATE – $AUTHOR – Daily Log" \
+            --add-assignee "$AUTHOR"

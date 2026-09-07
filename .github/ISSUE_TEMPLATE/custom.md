@@ -6,11 +6,14 @@ labels: daily-log
 assignees: ''
 ---
 
-## ✅ Done
+## ✅ Yesterday
 -
 
-## 🚧 Problem
+## ➡️ Today
 -
 
-## ➡️ ToDo
+## 🚧 Remaining Problem
+-
+
+## Key Points
 -

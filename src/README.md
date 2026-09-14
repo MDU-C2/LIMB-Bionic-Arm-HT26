@@ -22,6 +22,10 @@ This folder will contain AURORA software that runs on a computer rather than an 
 
 Candidates include the layered Python host program, shared packet and queue models, SocketCAN and Bleak adapters, configuration, sensor processing and fusion, vision, trajectory interfaces, and a selected simulation path. The team must first determine which implementation was active and separate reusable modules from experiments, cached assets, datasets, and incomplete paths.
 
-## Migration status
+## Current software
 
-Migration has not started. This folder contains no functional AURORA software yet.
+The [project GUI](gui/) is the shared launcher and extension point for host
+tools. Its [extension guide](gui/README.md) explains how to add tabs and program
+buttons. The isolated [PyBullet simulation](simulation/) is documented in the
+[simulation guide](../docs/SIMULATION.md). Other host software has not been
+migrated.

@@ -20,6 +20,8 @@ This folder will contain small, focused examples that teach users how to call co
 
 LIMB contains Python CAN snippets, BLE utilities, ESP-IDF component examples, simulation launch paths, and subsystem demonstrations. They may inform future examples only after the underlying interfaces are selected and tested; hardware-control examples require an additional safety review.
 
-## Migration status
+## Current examples
 
-Migration has not started. This folder contains no runnable examples.
+`simulation/demo` contains the inherited four-joint angle data and saved DMP
+rollout used by the tested trajectory player. Run it through the project GUI or
+follow the commands in the [simulation guide](../docs/SIMULATION.md).

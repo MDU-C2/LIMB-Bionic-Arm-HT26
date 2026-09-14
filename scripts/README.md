@@ -19,7 +19,3 @@ This folder will contain AURORA utilities for setup, validation, analysis, conve
 ## Possible LIMB migration
 
 LIMB includes a Jetson CAN setup script and many analysis, capture, conversion, calibration, and development utilities spread across subsystem directories. Candidates should be deduplicated, made portable where appropriate, given safe defaults, and separated from active control before migration.
-
-## Migration status
-
-Migration has not started. This folder contains no executable AURORA utility.

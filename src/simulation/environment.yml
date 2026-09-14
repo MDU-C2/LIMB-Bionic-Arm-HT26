@@ -1,0 +1,13 @@
+name: aurora-simulation
+channels:
+  - conda-forge
+dependencies:
+  # Versions verified with both the interactive and trajectory simulators.
+  - python=3.10
+  - numpy=1.26.4
+  - scipy=1.15.2
+  - pybullet=3.25
+  - pip
+  - pip:
+      # The conda-forge Windows build failed to load SDL in the tested setup.
+      - pygame==2.6.1

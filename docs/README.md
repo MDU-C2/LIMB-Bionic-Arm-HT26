@@ -6,8 +6,10 @@ This folder is the home for AURORA's shared technical and project documentation:
 
 ## Start here
 
-- [Development guide](development-guide.md) — where work belongs and how to reuse LIMB work safely.
-- [Development resources](resources.md) — official and project references for the current technology and hardware candidates.
+- [Simulation guide](SIMULATION.md) — installation, controls, data formats, and
+  migration scope for the tested PyBullet baseline.
+- [Development resources](resources.md) — official and project references for
+  the current technology and hardware candidates.
 
 ## What belongs here
 
@@ -29,4 +31,4 @@ LIMB contains documentation for CAN messages and data layouts, the Jetson AGX Or
 
 ## Migration status
 
-Migration has not started. The files currently in this folder were written for AURORA Step 1; no LIMB document has been copied.
+The software-only PyBullet baseline has been migrated. Other subsystem migration has not started.

@@ -21,6 +21,4 @@ This folder will contain AURORA unit, integration, communication, simulation, an
 
 LIMB has tests for host layers and end-to-end pipelines, node and CAN behavior, DMP reproduction, and numerous ESP-IDF examples or experimental test programs. Each candidate must be classified by scope and hardware effect, made reproducible, and linked to the code it validates.
 
-## Migration status
 
-Migration has not started. No legacy test has been copied or run, and AURORA has no test suite yet.

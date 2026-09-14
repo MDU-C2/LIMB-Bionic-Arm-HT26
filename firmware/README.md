@@ -20,6 +20,3 @@ This folder will contain AURORA firmware for ESP32 boards and any other embedded
 
 LIMB candidates include ESP-IDF targets for the robot shoulder, elbow, hand motors, hand pressure sensors, and human lower-arm cuff, together with CAN/TWAI, BLE, ADC, IMU, potentiometer, servo, continuous-servo, stepper, and motor-ramping components. Before selection, the team must confirm which firmware is installed on each board, reconcile duplicate components, and review all actuation and failure behavior.
 
-## Migration status
-
-Migration has not started. Nothing has been built or flashed, and this folder contains no functional firmware.

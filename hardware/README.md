@@ -22,6 +22,3 @@ This folder will hold the reviewed, source-of-truth description of AURORA's phys
 
 LIMB contains an Excel BOM, KiCad projects for arm modules and a CAN transceiver, EMG electronics, Gerber/drill/CNC exports, Multisim/Ultiboard material, photographs, many STL meshes, STEP models, and URDF descriptions. Candidates must be matched to installed hardware and source revisions; backups, exports, and repeated meshes should not be copied automatically.
 
-## Migration status
-
-Migration has not started. No LIMB hardware or CAD file has been copied.

@@ -19,7 +19,3 @@ This folder will contain AURORA research and experimental work that is valuable 
 ## Possible LIMB migration
 
 Candidates include the DMP thesis work, motion-capture and trajectory mapping, EMG classification, adaptive hand experiments, vision, sensor fusion, and exploratory simulation. Each area needs a provenance, privacy, dependency, reproducibility, and interface review before any selection.
-
-## Migration status
-
-Migration has not started. This folder contains no migrated experiment or dataset.

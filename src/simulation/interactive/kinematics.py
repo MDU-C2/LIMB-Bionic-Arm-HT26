@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from typing import Sequence
 
+from sim.joint_limits import RIGHT_ARM_LIMITS_DEG
+
 
 SHOULDER_ORIGIN = (0.0, 0.0, 0.0)
 UPPER_ARM_LENGTH_M = 0.305
@@ -13,11 +15,13 @@ HAND_GRIP_LENGTH_M = 0.120
 LOWER_CHAIN_LENGTH_M = FOREARM_LENGTH_M + HAND_GRIP_LENGTH_M
 
 MAX_REACH_M = UPPER_ARM_LENGTH_M + LOWER_CHAIN_LENGTH_M
-# The inherited model limits elbow flexion to 90 degrees.
-MIN_REACH_M = math.hypot(UPPER_ARM_LENGTH_M, LOWER_CHAIN_LENGTH_M)
-
-AZIMUTH_LIMIT_DEG = (-95.0, 50.0)
-ELEVATION_LIMIT_DEG = (-85.0, 150.0)
+ELBOW_FLEXION_LIMIT = RIGHT_ARM_LIMITS_DEG["elbow_x"]
+MIN_ELBOW_ANGLE_RAD = math.radians(180.0 + ELBOW_FLEXION_LIMIT.lower)
+MIN_REACH_M = math.sqrt(
+    UPPER_ARM_LENGTH_M**2
+    + LOWER_CHAIN_LENGTH_M**2
+    - 2.0 * UPPER_ARM_LENGTH_M * LOWER_CHAIN_LENGTH_M * math.cos(MIN_ELBOW_ANGLE_RAD)
+)
 
 
 def _target_components(target: Sequence[float]) -> tuple[float, float, float]:
@@ -31,7 +35,7 @@ def _target_components(target: Sequence[float]) -> tuple[float, float, float]:
 
 
 def is_reachable(target: Sequence[float]) -> tuple[bool, str]:
-    """Check the inherited distance, azimuth, and elevation limits."""
+    """Check whether the target fits the real arm's joint limits."""
     try:
         target_x, target_y, target_z = _target_components(target)
     except (TypeError, ValueError) as error:
@@ -50,13 +54,17 @@ def is_reachable(target: Sequence[float]) -> tuple[bool, str]:
     # The right-arm URDF's neutral direction is rotated 90 degrees from world X.
     azimuth = math.degrees(math.atan2(y, x)) - 90.0
     azimuth = (azimuth + 180.0) % 360.0 - 180.0
-    if not AZIMUTH_LIMIT_DEG[0] <= azimuth <= AZIMUTH_LIMIT_DEG[1]:
+    azimuth_limit = RIGHT_ARM_LIMITS_DEG["shoulder_z"]
+    if not azimuth_limit.lower <= azimuth <= azimuth_limit.upper:
         return False, f"AZIMUTH OUT OF LIMIT: {azimuth:.1f} deg"
 
     horizontal_distance = math.hypot(x, y)
-    elevation = math.degrees(math.atan2(z, horizontal_distance))
-    if not ELEVATION_LIMIT_DEG[0] <= elevation <= ELEVATION_LIMIT_DEG[1]:
-        return False, f"ELEVATION OUT OF LIMIT: {elevation:.1f} deg"
+    shoulder, elbow = calculate_ik_angles(horizontal_distance, z)
+    shoulder_limit = RIGHT_ARM_LIMITS_DEG["shoulder_y"]
+    if not shoulder_limit.lower <= shoulder <= shoulder_limit.upper:
+        return False, f"SHOULDER OUT OF LIMIT: {shoulder:.1f} deg"
+    if not ELBOW_FLEXION_LIMIT.lower <= elbow <= ELBOW_FLEXION_LIMIT.upper:
+        return False, f"ELBOW OUT OF LIMIT: {elbow:.1f} deg"
 
     return True, f"OK: target is reachable ({distance:.2f} m)"
 
@@ -78,7 +86,7 @@ def calculate_ik_angles(
         raise ValueError("horizontal distance cannot be negative")
 
     target_distance = math.hypot(horizontal_distance, height_difference)
-    safe_distance = max(0.528, min(target_distance, 0.730))
+    safe_distance = max(MIN_REACH_M, min(target_distance, MAX_REACH_M))
 
     alpha_cosine = (
         UPPER_ARM_LENGTH_M**2 + safe_distance**2 - LOWER_CHAIN_LENGTH_M**2

@@ -11,9 +11,19 @@
     <color rgba="0.8 0.6 0.4 1"/>
   </material>
 
-  <link name="base_link"/>
+  <link name="base_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
   
-  <link name="arm_base_rotated"/>
+  <link name="arm_base_rotated">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
 
   <joint name="world_to_arm_base" type="fixed">
     <parent link="base_link"/>
@@ -52,7 +62,7 @@
     <child link="right_shoulder_rotz"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-3.14" upper="3.14" effort="200" velocity="100.0"/> 
+    <limit lower="-0.698132" upper="-0.087266" effort="200" velocity="0.349066"/>
   </joint>
   
   <joint name="jRightShoulder_rotx" type="revolute">
@@ -60,7 +70,7 @@
     <child link="right_shoulder_rotx"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit lower="-3.14" upper="3.14" effort="200" velocity="100.0"/>
+    <limit lower="-1.047198" upper="1.047198" effort="200" velocity="0.698132"/>
   </joint>
 
   <joint name="jRightShoulder_roty" type="revolute">
@@ -68,7 +78,7 @@
     <child link="right_upper_arm"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-3.14" upper="3.14" effort="200" velocity="100.0"/>
+    <limit lower="0" upper="1.570796" effort="200" velocity="0.349066"/>
   </joint>
   
   <link name="right_upper_arm">
@@ -105,11 +115,41 @@
 
   <link name="right_elbow_roty">
     <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.1"/>
+      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.02"/></geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+
+  <joint name="jRightElbow_roty" type="revolute">
+    <parent link="right_upper_arm"/>
+    <child link="right_elbow_roty"/>
+    <origin xyz="0.305 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.047198" upper="0" effort="200" velocity="0.698132"/>
+  </joint>
+  
+  <joint name="jRightElbow_rotz" type="revolute">
+    <parent link="right_elbow_roty"/>
+    <child link="right_forearm"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0" upper="2.443461" effort="200" velocity="1.745329"/>
+  </joint>
+  
+  <link name="right_forearm">
+    <!-- The forearm rotates with the lower-arm actuator. -->
+    <inertial>
       <origin xyz="0 0 0" rpy="0 -1.5708 0"/>
       <mass value="1.0"/>
       <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.02"/>
     </inertial>
-      <visual>
+    <visual>
       <origin rpy="0 -1.5708 0" xyz="0 0 0"/>
       <geometry><mesh filename="arm/r_forearm.stl" scale="0.001 0.001 0.001"/></geometry>
       <material name="grey"/>
@@ -120,23 +160,7 @@
     </collision>
   </link>
 
-  <joint name="jRightElbow_roty" type="revolute">
-    <parent link="right_upper_arm"/>
-    <child link="right_elbow_roty"/>
-    <origin xyz="0.305 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <limit lower="-3.14" upper="3.14" effort="200" velocity="100.0"/>
-  </joint>
-  
-  <joint name="jRightElbow_rotz" type="revolute">
-    <parent link="right_elbow_roty"/>
-    <child link="right_forearm"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
-    <limit lower="-3.14" upper="3.14" effort="200" velocity="100.0"/>
-  </joint>
-  
-  <link name="right_forearm">
+  <link name="right_wrist_rotx">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <mass value="0.1"/>
@@ -144,55 +168,40 @@
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-       <geometry><sphere radius="0.02"/></geometry>
+      <geometry><sphere radius="0.02"/></geometry>
       <material name="blue"/>
     </visual>
   </link>
 
-  <link name="right_wrist_rotx">
+  <!-- Wrist bend and deviation are not actuated on the physical LIMB arm. -->
+  <joint name="jRightWrist_rotx" type="fixed">
+    <parent link="right_forearm"/>
+    <child link="right_wrist_rotx"/>
+    <origin xyz="0.310 0.0085 -0.005" rpy="0 0 0"/>
+  </joint>
+  
+  <joint name="jRightWrist_rotz" type="fixed">
+    <parent link="right_wrist_rotx"/>
+    <child link="right_hand"/>
+    <origin xyz="0 0 -0.006" rpy="0 0 0"/>
+  </joint>
+  
+  <link name="right_hand">
+    <!-- Keep the shell on the hand link so it follows the full arm chain. -->
     <inertial>
-      <origin xyz="0 0 0" rpy="0 -1.5708 0"/>
+      <origin xyz="0 0 0.006" rpy="0 -1.5708 0"/>
       <mass value="0.4"/>
       <inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/>
     </inertial>
     <visual>
-      <origin rpy="0 -1.5708 0" xyz="0 0 0"/>
-       <geometry><mesh filename="arm/r_hand.stl" scale="0.001 0.001 0.001"/></geometry>
+      <origin rpy="0 -1.5708 0" xyz="0 0 0.006"/>
+      <geometry><mesh filename="arm/r_hand.stl" scale="0.001 0.001 0.001"/></geometry>
       <material name="blue"/>
     </visual>
     <collision>
-      <origin rpy="0 -1.5708 0" xyz="0 0 0"/>
-       <geometry><mesh filename="arm/r_hand.stl" scale="0.001 0.001 0.001"/></geometry>
+      <origin rpy="0 -1.5708 0" xyz="0 0 0.006"/>
+      <geometry><mesh filename="arm/r_hand.stl" scale="0.001 0.001 0.001"/></geometry>
     </collision>
-  </link>
-
-  <joint name="jRightWrist_rotx" type="revolute">
-    <parent link="right_forearm"/>
-    <child link="right_wrist_rotx"/>
-    <origin xyz="0.310 0.0085 -0.005" rpy="0 0 0"/>
-    <axis xyz="1 0 0"/>
-    <limit lower="-3.14" upper="3.14" effort="200" velocity="100.0"/>
-  </joint>
-  
-  <joint name="jRightWrist_rotz" type="revolute">
-    <parent link="right_wrist_rotx"/>
-    <child link="right_hand"/>
-    <origin xyz="0 0 -0.006" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
-    <limit lower="-3.14" upper="3.14" effort="200" velocity="100.0"/>
-  </joint>
-  
-  <link name="right_hand">
-    <inertial>
-      <origin xyz="0 0 -0.006" rpy="0 0 0"/>
-      <mass value="0.1"/>
-      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-       <geometry><sphere radius="0.02"/></geometry>
-      <material name="blue"/>
-    </visual>
   </link>
 
   <joint name="joint_hand_cover" type="fixed">
@@ -202,6 +211,10 @@
   </joint>
 
   <link name="hand_cover_link">
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry><mesh filename="arm/fullhand2/r_cover_hand.stl" scale="0.001 0.001 0.001"/></geometry>

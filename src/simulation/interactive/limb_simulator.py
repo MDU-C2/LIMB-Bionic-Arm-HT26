@@ -10,24 +10,34 @@ from __future__ import annotations
 
 import math
 import os
+from pathlib import Path
+import sys
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
+SIMULATION_ROOT = Path(__file__).resolve().parents[1]
+if str(SIMULATION_ROOT) not in sys.path:
+    sys.path.insert(0, str(SIMULATION_ROOT))
 
 import pybullet as p
 import pybullet_data
 import pygame
 import tkinter as tk
 from kinematics import calculate_ik_angles, is_reachable
+from sim.joint_limits import (
+    FINGER_LIMITS_DEG,
+    RIGHT_ARM_HARDWARE_SIGN,
+    RIGHT_ARM_LIMITS_DEG,
+    max_velocity_rad_s,
+)
 
 
 SIMULATION_FREQUENCY_HZ = 60
 PHYSICS_SUBSTEPS = 4
-CONTROL_STEP_DEG = 1.5
-TARGET_CONTROL_STEP_DEG = 0.8
 TARGET_GRASP_DISTANCE_M = 0.20
 TARGET_NORMAL_MASS_KG = 0.1
 TARGET_GRASPED_MASS_KG = 0.01
-FINGER_ZERO_OFFSET_RAD = -1.4
+FINGER_MODEL_RANGE_RAD = 1.5
 
 ARM_MOTOR_FORCE = 200.0
 ARM_POSITION_GAIN = 0.05
@@ -56,59 +66,74 @@ def rad_to_deg(rad: float) -> float:
     return rad * 180.0 / math.pi
 
 
+def hardware_value(logical_name: str, value: float) -> float:
+    """Convert a right-arm URDF value to the physical actuator sign."""
+    return value * RIGHT_ARM_HARDWARE_SIGN[logical_name]
+
+
+def step_toward(current: float, target: float, joint_name: str, scale: float = 1.0) -> float:
+    """Move a command toward a target without exceeding its actuator speed."""
+    limit = RIGHT_ARM_LIMITS_DEG[joint_name]
+    target = limit.clamp(target)
+    difference = target - current
+    if difference == 0:
+        return current
+    max_step = limit.speed(difference) * scale / SIMULATION_FREQUENCY_HZ
+    return current + clamp(difference, -max_step, max_step)
+
+
+def keyboard_step(
+    keys,
+    positive_key: int,
+    negative_key: int,
+    joint_name: str,
+    scale: float,
+) -> float:
+    """Return one speed-limited keyboard step for a joint."""
+    direction = int(bool(keys[positive_key])) - int(bool(keys[negative_key]))
+    if direction == 0:
+        return 0.0
+    limit = RIGHT_ARM_LIMITS_DEG[joint_name]
+    return direction * limit.speed(direction) * scale / SIMULATION_FREQUENCY_HZ
+
+
 class Shoulder:
-    """Three-axis shoulder command and its inherited software limits."""
+    """Commands for the three shoulder actuators."""
 
     def __init__(self) -> None:
         """Initialize the shoulder in its neutral pose."""
-        self.angle_x = 0.0
-        self.angle_y = 0.0
-        self.angle_z = 0.0
-        # Limits (in degrees)
-        self.min_angle_x = -120
-        self.max_angle_x = 40
-        self.min_angle_y = -85
-        self.max_angle_y = 150.0
-        self.min_angle_z = -95
-        self.max_angle_z = 50
+        x_limit = RIGHT_ARM_LIMITS_DEG["shoulder_x"]
+        y_limit = RIGHT_ARM_LIMITS_DEG["shoulder_y"]
+        z_limit = RIGHT_ARM_LIMITS_DEG["shoulder_z"]
+        self.angle_x = x_limit.home
+        self.angle_y = y_limit.home
+        self.angle_z = z_limit.home
+        self.min_angle_x, self.max_angle_x = x_limit.lower, x_limit.upper
+        self.min_angle_y, self.max_angle_y = y_limit.lower, y_limit.upper
+        self.min_angle_z, self.max_angle_z = z_limit.lower, z_limit.upper
 
 
 class Elbow:
-    """Two-axis elbow command and its inherited software limits."""
+    """Commands for elbow flexion and lower-arm rotation."""
 
     def __init__(self) -> None:
-        """Initialize elbow flexion and pronation in their neutral pose."""
-        self.angle_x = 0.0  # Flexion
-        self.angle_y = 0.0  # Pronation
-        # Limits (in degrees)
-        self.min_angle_x = -90.0
-        self.max_angle_x = 0.0
-        self.min_angle_y = -90.0
-        self.max_angle_y = 90.0
-
-
-class Wrist:
-    """Two-axis wrist command and its inherited software limits."""
-
-    def __init__(self) -> None:
-        """Initialize wrist flexion and deviation in their neutral pose."""
-        self.angle_x = 0.0  # Flexion
-        self.angle_z = 0.0  # Deviation
-        # Limits (in degrees)
-        self.min_angle_x = -70.0
-        self.max_angle_x = 80.0
-        self.min_angle_z = -20.0
-        self.max_angle_z = 45.0
+        """Initialize elbow flexion and lower-arm rotation."""
+        x_limit = RIGHT_ARM_LIMITS_DEG["elbow_x"]
+        y_limit = RIGHT_ARM_LIMITS_DEG["elbow_y"]
+        self.angle_x = x_limit.home
+        self.angle_y = y_limit.home
+        self.min_angle_x, self.max_angle_x = x_limit.lower, x_limit.upper
+        self.min_angle_y, self.max_angle_y = y_limit.lower, y_limit.upper
 
 
 class Hand:
-    """Shared curl command for the index, middle, ring, and little fingers."""
+    """Shared curl command for the five finger servos."""
 
     def __init__(self) -> None:
         """Initialize the hand in an open pose."""
         self.curl = 0.0  # 0.0 is open; 1.0 is a closed fist.
         self.min_curl = 0.0
-        self.max_curl = 1.5  # About 86 degrees, closed fist.
+        self.max_curl = 1.0
 
 
 class LimbArm:
@@ -118,7 +143,6 @@ class LimbArm:
         """Initialize every joint group in its neutral pose."""
         self.shoulder = Shoulder()
         self.elbow = Elbow()
-        self.wrist = Wrist()
         self.hand = Hand()
 
 
@@ -156,31 +180,14 @@ def set_elbow(
         arm.elbow.angle_y = clamp(target, arm.elbow.min_angle_y, arm.elbow.max_angle_y)
 
 
-def set_wrist(
-    arm: LimbArm,
-    x: float | None = None,
-    z: float | None = None,
-    mode: str = "abs",
-) -> None:
-    """Set or adjust wrist angles while applying software limits."""
-    if x is not None:
-        target = (arm.wrist.angle_x + x) if mode == "rel" else x
-        arm.wrist.angle_x = clamp(target, arm.wrist.min_angle_x, arm.wrist.max_angle_x)
-    if z is not None:
-        target = (arm.wrist.angle_z + z) if mode == "rel" else z
-        arm.wrist.angle_z = clamp(target, arm.wrist.min_angle_z, arm.wrist.max_angle_z)
-
-
 def get_angles_deg(arm: LimbArm) -> dict[str, float]:
-    """Return the seven requested arm-joint angles in degrees."""
+    """Return the five requested arm-joint angles in degrees."""
     return {
         "shoulder_x": arm.shoulder.angle_x,
         "shoulder_y": arm.shoulder.angle_y,
         "shoulder_z": arm.shoulder.angle_z,
         "elbow_x": arm.elbow.angle_x,
         "elbow_y": arm.elbow.angle_y,
-        "wrist_x": arm.wrist.angle_x,
-        "wrist_z": arm.wrist.angle_z,
     }
 
 
@@ -188,15 +195,10 @@ def get_angles_rad(arm: LimbArm) -> dict[str, float]:
     """Return requested arm and finger joint angles in radians."""
     degs = get_angles_deg(arm)
     angles_rad = {k: deg_to_rad(v) for k, v in degs.items()}
-    for finger in ("index", "middle", "ring", "pinky"):
-        # Ring and little-finger joint 1 use an inherited URDF zero offset.
-        if finger in {"ring", "pinky"}:
-            angles_rad[f"{finger}_1"] = arm.hand.curl + FINGER_ZERO_OFFSET_RAD
-        else:
-            angles_rad[f"{finger}_1"] = arm.hand.curl
-        angles_rad[f"{finger}_2"] = arm.hand.curl
-        if finger in {"ring", "pinky"}:
-            angles_rad[f"{finger}_3"] = arm.hand.curl
+    for finger in FINGER_LIMITS_DEG:
+        joint_angle = FINGER_MODEL_RANGE_RAD * arm.hand.curl
+        for segment in range(1, 4):
+            angles_rad[f"{finger}_{segment}"] = joint_angle
     return angles_rad
 
 
@@ -225,6 +227,13 @@ def sync_to_pybullet(
         force = FINGER_MOTOR_FORCE if is_finger else ARM_MOTOR_FORCE
         p_gain = FINGER_POSITION_GAIN if is_finger else ARM_POSITION_GAIN
         v_gain = FINGER_VELOCITY_GAIN if is_finger else ARM_VELOCITY_GAIN
+        if is_finger:
+            finger = name.split("_", maxsplit=1)[0]
+            finger_limit = FINGER_LIMITS_DEG[finger]
+            motion_range = finger_limit.upper - finger_limit.lower
+            max_velocity = FINGER_MODEL_RANGE_RAD * finger_limit.speed_positive / motion_range
+        else:
+            max_velocity = max_velocity_rad_s(name)
 
         if use_motors:
             cli.setJointMotorControl2(
@@ -235,6 +244,7 @@ def sync_to_pybullet(
                 positionGain=p_gain,
                 velocityGain=v_gain,
                 force=force,
+                maxVelocity=max_velocity,
             )
         else:
             cli.resetJointState(
@@ -249,8 +259,9 @@ URDF_TO_LOGICAL_JOINT = {
     "jRightShoulder_rotz": "shoulder_z",
     "jRightElbow_roty": "elbow_x",
     "jRightElbow_rotz": "elbow_y",
-    "jRightWrist_rotx": "wrist_x",
-    "jRightWrist_rotz": "wrist_z",
+    "thumb_joint_1": "thumb_1",
+    "thumb_joint_2": "thumb_2",
+    "thumb_joint_3": "thumb_3",
     "index_joint_1": "index_1",
     "index_joint_2": "index_2",
     "middle_joint_1": "middle_1",
@@ -263,7 +274,7 @@ URDF_TO_LOGICAL_JOINT = {
     "pinky_joint_3": "pinky_3",
 }
 ARM_JOINT_NAMES = frozenset(
-    {"shoulder_x", "shoulder_y", "shoulder_z", "elbow_x", "elbow_y", "wrist_x", "wrist_z"}
+    {"shoulder_x", "shoulder_y", "shoulder_z", "elbow_x", "elbow_y"}
 )
 
 
@@ -284,7 +295,10 @@ def build_joint_index_map(robot_id: int, client) -> dict[str, int]:
 
     arm_joint_count = len(ARM_JOINT_NAMES.intersection(joint_map))
     if arm_joint_count != len(ARM_JOINT_NAMES):
-        print(f"Warning: {arm_joint_count}/7 arm joints found. Check the URDF names.")
+        print(
+            f"Warning: {arm_joint_count}/{len(ARM_JOINT_NAMES)} arm joints found. "
+            "Check the URDF names."
+        )
     return joint_map
 
 
@@ -330,9 +344,7 @@ except p.error as error:
 if physics_client < 0:
     raise SystemExit("Could not connect to the PyBullet GUI.")
 
-# Match the final LIMB25 workspace layout shown in the project screenshots.
-# These previews are useful when camera data is added and can also be toggled
-# from PyBullet's View menu.
+# Enable PyBullet's camera preview panels.
 for preview in (
     p.COV_ENABLE_RGB_BUFFER_PREVIEW,
     p.COV_ENABLE_DEPTH_BUFFER_PREVIEW,
@@ -351,21 +363,25 @@ p.setPhysicsEngineParameter(
 p.loadURDF("plane.urdf")
 p.loadURDF("table/table.urdf", [0, 0.8, -0.2], useFixedBase=True)
 
-# Keep the target fixed so repeatable arm-control experiments start from the
-# same position. The fallback cube preserves the scene if PyBullet lacks its
-# optional dinnerware assets.
-target_start_position = [0.2, 0.5, 0.5]
+# Keep the target in place until the hand grasps it.
+target_start_position = [0.2, 0.6, 0.5]
 target_start_orientation = p.getQuaternionFromEuler([0, 0, 0])
-try:
-    target_body = p.loadURDF(
-        "dinnerware/cup_small.urdf",
-        target_start_position,
-        target_start_orientation,
-        useFixedBase=True,
-    )
-    print(f"Cup loaded (ID: {target_body}) at {target_start_position}")
-except p.error:
-    print("Cup not found, creating a red cube (with collision).")
+target_body = None
+cup_urdf_path = os.path.join(pybullet_data.getDataPath(), "dinnerware", "cup_small.urdf")
+if os.path.isfile(cup_urdf_path):
+    try:
+        target_body = p.loadURDF(
+            cup_urdf_path,
+            target_start_position,
+            target_start_orientation,
+            useFixedBase=False,
+        )
+        print(f"Cup loaded (ID: {target_body}) at {target_start_position}")
+    except p.error as error:
+        print(f"Cup asset could not be loaded ({error}); using the test target.")
+
+if target_body is None:
+    print("Dinnerware cup unavailable; creating the red test target.")
     half_extents = [0.03, 0.03, 0.05]
     collision_shape = p.createCollisionShape(
         shapeType=p.GEOM_BOX,
@@ -383,6 +399,27 @@ except p.error:
         basePosition=target_start_position,
     )
     print(f"Replacement cube (ID: {target_body}) placed at {target_start_position}")
+
+
+def anchor_target_to_world() -> int:
+    """Hold the target at its start pose until grasping begins."""
+    constraint = p.createConstraint(
+        parentBodyUniqueId=target_body,
+        parentLinkIndex=-1,
+        childBodyUniqueId=-1,
+        childLinkIndex=-1,
+        jointType=p.JOINT_FIXED,
+        jointAxis=[0, 0, 0],
+        parentFramePosition=[0, 0, 0],
+        parentFrameOrientation=[0, 0, 0, 1],
+        childFramePosition=target_start_position,
+        childFrameOrientation=target_start_orientation,
+    )
+    p.changeConstraint(constraint, maxForce=10_000, erp=1.0)
+    return constraint
+
+
+target_anchor_constraint = anchor_target_to_world()
 p.resetDebugVisualizerCamera(
     cameraDistance=1.0,
     cameraYaw=45,
@@ -418,6 +455,7 @@ try:
     p.changeDynamics(
         target_body,
         -1,
+        mass=TARGET_NORMAL_MASS_KG,
         lateralFriction=2.5,
         spinningFriction=0.1,
         rollingFriction=0.1,
@@ -443,6 +481,7 @@ print("Initializing 'brain'...")
 
 arm = LimbArm()
 joint_indices = build_joint_index_map(robot_body, p)
+sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
 link_indices_by_name = build_link_name_index_map(robot_body, p)
 
 try:
@@ -475,7 +514,7 @@ except KeyError as error:
 print("Initializing sensor window (Tkinter)...")
 sensor_window = tk.Tk()
 sensor_window.title("LIMB Sensor Dashboard")
-sensor_window.geometry("450x450+50+50") # Size and position (X, Y)
+sensor_window.geometry("490x410+50+50") # Size and position (X, Y)
 sensor_window.attributes('-topmost', True) # Keep on top of PyBullet
 
 # StringVar objects let the simulation update values without recreating labels.
@@ -491,17 +530,15 @@ tk.Label(joint_frame, text="--- JOINT SENSORS ---", font=tk_font_bold).pack(anch
 
 # Short display labels map to the controller's logical joint names.
 joint_names_map = {
-    "Sh_x": "shoulder_x",
-    "Sh_y": "shoulder_y",
-    "Sh_z": "shoulder_z",
-    "Elb_x": "elbow_x",
-    "Elb_y": "elbow_y",
-    "Wr_x": "wrist_x",
-    "Wr_z": "wrist_z"
+    "Upper rot": "shoulder_x",
+    "Shoulder UD": "shoulder_y",
+    "Shoulder LR": "shoulder_z",
+    "Elbow": "elbow_x",
+    "Lower rot": "elbow_y",
 }
 
 row = tk.Frame(joint_frame)
-tk.Label(row, text="", width=6, font=("Consolas", 11, "bold")).pack(side=tk.LEFT)
+tk.Label(row, text="", width=13, font=("Consolas", 11, "bold")).pack(side=tk.LEFT)
 tk.Label(
     row,
     text="Angle",
@@ -523,7 +560,7 @@ for name, key in joint_names_map.items():
     sensor_vars[f"{key}_torque"] = tk.StringVar(value="--.- Nm")
 
     row = tk.Frame(joint_frame)
-    tk.Label(row, text=f"{name}:", width=6, font=tk_font_bold).pack(side=tk.LEFT)
+    tk.Label(row, text=f"{name}:", width=13, font=tk_font_bold).pack(side=tk.LEFT)
     tk.Label(
         row,
         textvariable=sensor_vars[f"{key}_angle"],
@@ -572,13 +609,10 @@ screen = pygame.display.set_mode((700, 250))
 pygame.display.set_caption("Arm Control (LIMB) - [ESC] to quit")
 font = pygame.font.SysFont("Consolas", 16)
 clock = pygame.time.Clock()
-step_deg = CONTROL_STEP_DEG
-
 print("\n--- Keyboard Controls ---")
-print("Shoulder (Y/X/Z): Up/Down (Y) | Left/Right (X) | C/V (Z)")
-print("Elbow: Z/S (flexion) | A/E (pronation)")
-print("Wrist (flex/dev): Q/D (flexion) | W/X (deviation)")
-print("Modifiers: Shift (fast), Ctrl (slow)")
+print("Shoulder: Up/Down | Left/Right")
+print("Upper arm rotation: C/V | Elbow: Z/S | Lower arm rotation: A/E")
+print("Modifiers: Shift (full speed), Ctrl (slow)")
 
 # --- 6. Simulation loop ----------------------------------------------------
 running = True
@@ -619,7 +653,8 @@ while running and p.isConnected():
     target_z_relative = target_position[2] - robot_position[2]
     target_relative_position = (target_x_relative, target_y_relative, target_z_relative)
 
-    # Process window and camera events.
+    # Handle one-time key presses.
+    reset_requested = False
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -627,6 +662,9 @@ while running and p.isConnected():
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_t:
                 hud_visible = not hud_visible
+
+            if event.key == pygame.K_SPACE:
+                reset_requested = True
 
             if event.key == pygame.K_TAB:
                 if camera_mode == "orbit":
@@ -646,38 +684,48 @@ while running and p.isConnected():
         running = False
 
     # Space resets the arm, target, and any active grasp.
-    if keys[pygame.K_SPACE]:
-        set_shoulder(arm, x=0, y=0, z=0, mode="abs")
-        set_elbow(arm, x=0, y=0, mode="abs")
-        set_wrist(arm, x=0, z=0, mode="abs")
+    if reset_requested:
+        set_shoulder(
+            arm,
+            x=RIGHT_ARM_LIMITS_DEG["shoulder_x"].home,
+            y=RIGHT_ARM_LIMITS_DEG["shoulder_y"].home,
+            z=RIGHT_ARM_LIMITS_DEG["shoulder_z"].home,
+            mode="abs",
+        )
+        set_elbow(
+            arm,
+            x=RIGHT_ARM_LIMITS_DEG["elbow_x"].home,
+            y=RIGHT_ARM_LIMITS_DEG["elbow_y"].home,
+            mode="abs",
+        )
+        arm.hand.curl = 0.0
         if p.isConnected():
-            for joint_index in joint_indices.values():
-                p.resetJointState(
-                    bodyUniqueId=robot_body,
-                    jointIndex=joint_index,
-                    targetValue=0.0,
-                )
+            sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
 
+        if grasp_constraint is not None:
+            p.removeConstraint(grasp_constraint)
+            grasp_constraint = None
+        if target_anchor_constraint is not None:
+            p.removeConstraint(target_anchor_constraint)
+            target_anchor_constraint = None
+
+        p.changeDynamics(target_body, -1, mass=TARGET_NORMAL_MASS_KG)
+        p.setCollisionFilterGroupMask(
+            target_body,
+            -1,
+            collisionFilterGroup=1,
+            collisionFilterMask=1,
+        )
         p.resetBasePositionAndOrientation(
             target_body,
             target_start_position,
             target_start_orientation,
         )
         p.resetBaseVelocity(target_body, [0, 0, 0], [0, 0, 0])
+        target_anchor_constraint = anchor_target_to_world()
+        print(">>> RESET (arm and target)")
 
-        if grasp_constraint is not None:
-            p.removeConstraint(grasp_constraint)
-            grasp_constraint = None
-            p.changeDynamics(target_body, -1, mass=TARGET_NORMAL_MASS_KG)
-            p.setCollisionFilterGroupMask(
-                target_body,
-                -1,
-                collisionFilterGroup=1,
-                collisionFilterMask=1,
-            )
-            print(">>> RESET (arm and target)")
-
-    # H steers the shoulder, elbow, and wrist toward the target.
+    # H steers the shoulder and elbow toward the target.
     if keys[pygame.K_h]:
         try:
             relative_x, relative_y, relative_z = target_relative_position
@@ -693,42 +741,34 @@ while running and p.isConnected():
             while target_shoulder_z <= -180:
                 target_shoulder_z += 360
 
-            speed = TARGET_CONTROL_STEP_DEG
-            shoulder_y_difference = target_shoulder_y - arm.shoulder.angle_y
-            elbow_difference = target_elbow_x - arm.elbow.angle_x
-            shoulder_z_difference = target_shoulder_z - arm.shoulder.angle_z
-            if shoulder_z_difference > 180:
-                shoulder_z_difference -= 360
-            elif shoulder_z_difference < -180:
-                shoulder_z_difference += 360
-
-            shoulder_x_difference = -arm.shoulder.angle_x
-            wrist_x_difference = -arm.wrist.angle_x
             set_shoulder(
                 arm,
-                x=arm.shoulder.angle_x
-                + clamp(shoulder_x_difference, -speed, speed),
-                y=arm.shoulder.angle_y
-                + clamp(shoulder_y_difference, -speed, speed),
-                z=arm.shoulder.angle_z
-                + clamp(shoulder_z_difference, -speed, speed),
+                x=step_toward(arm.shoulder.angle_x, 0.0, "shoulder_x"),
+                y=step_toward(
+                    arm.shoulder.angle_y,
+                    target_shoulder_y,
+                    "shoulder_y",
+                ),
+                z=step_toward(
+                    arm.shoulder.angle_z,
+                    target_shoulder_z,
+                    "shoulder_z",
+                ),
                 mode="abs",
             )
             set_elbow(
                 arm,
-                x=arm.elbow.angle_x + clamp(elbow_difference, -speed, speed),
-                mode="abs",
-            )
-            set_wrist(
-                arm,
-                x=arm.wrist.angle_x + clamp(wrist_x_difference, -speed, speed),
+                x=step_toward(arm.elbow.angle_x, target_elbow_x, "elbow_x"),
                 mode="abs",
             )
         except ValueError as error:
             print(f"Target cannot be reached: {error}")
 
     # F curls the fingers and grasps a nearby target; G releases it.
-    delta_hand = (0.05 if keys[pygame.K_f] else 0) + (-0.05 if keys[pygame.K_g] else 0)
+    hand_step = 1.0 / SIMULATION_FREQUENCY_HZ
+    delta_hand = (hand_step if keys[pygame.K_f] else 0) + (
+        -hand_step if keys[pygame.K_g] else 0
+    )
     if delta_hand:
         new_value = arm.hand.curl + delta_hand
         arm.hand.curl = clamp(new_value, arm.hand.min_curl, arm.hand.max_curl)
@@ -741,6 +781,9 @@ while running and p.isConnected():
 
         if contact_dist < TARGET_GRASP_DISTANCE_M:
             print(">>> GRIP ACTIVATED")
+            if target_anchor_constraint is not None:
+                p.removeConstraint(target_anchor_constraint)
+                target_anchor_constraint = None
             hand_state = p.getLinkState(robot_body, hand_link_index)
             hand_pos_world = hand_state[0]
             hand_orn_world = hand_state[1]
@@ -797,32 +840,32 @@ while running and p.isConnected():
 
 
 
-    # Speed
-    speed_mult = 1.0
+    speed_mult = 0.5
     if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
-        speed_mult = 4.0
+        speed_mult = 1.0
     if keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
         speed_mult = 0.25
-    step = step_deg * speed_mult
 
-    # Shoulder
-    delta_should_y = (step if keys[pygame.K_UP] else 0) + (-step if keys[pygame.K_DOWN] else 0)
-    delta_should_x = (-step if keys[pygame.K_RIGHT] else 0) + (step if keys[pygame.K_LEFT] else 0)
-    delta_should_z = (step if keys[pygame.K_c] else 0) + (-step if keys[pygame.K_v] else 0)
+    delta_should_y = keyboard_step(
+        keys, pygame.K_UP, pygame.K_DOWN, "shoulder_y", speed_mult
+    )
+    delta_should_z = keyboard_step(
+        keys, pygame.K_LEFT, pygame.K_RIGHT, "shoulder_z", speed_mult
+    )
+    delta_should_x = keyboard_step(
+        keys, pygame.K_c, pygame.K_v, "shoulder_x", speed_mult
+    )
     if delta_should_x or delta_should_y or delta_should_z:
         set_shoulder(arm, x=delta_should_x, y=delta_should_y, z=delta_should_z, mode="rel")
 
-    # Elbow (flexion and pronation)
-    delta_elbow_x = (step if keys[pygame.K_z] else 0) + (-step if keys[pygame.K_s] else 0)
-    delta_elbow_y = (step if keys[pygame.K_a] else 0) + (-step if keys[pygame.K_e] else 0)
+    delta_elbow_x = keyboard_step(
+        keys, pygame.K_s, pygame.K_z, "elbow_x", speed_mult
+    )
+    delta_elbow_y = keyboard_step(
+        keys, pygame.K_a, pygame.K_e, "elbow_y", speed_mult
+    )
     if delta_elbow_x or delta_elbow_y:
         set_elbow(arm, x=delta_elbow_x, y=delta_elbow_y, mode="rel")
-
-    # Wrist
-    delta_wrist_x = (step if keys[pygame.K_q] else 0) + (-step if keys[pygame.K_d] else 0)
-    delta_wrist_z = (step if keys[pygame.K_w] else 0) + (-step if keys[pygame.K_x] else 0)
-    if delta_wrist_x or delta_wrist_z:
-        set_wrist(arm, x=delta_wrist_x, z=delta_wrist_z, mode="rel")
 
     # --- B. Synchronization and Physics ---
     if not p.isConnected():
@@ -895,46 +938,48 @@ while running and p.isConnected():
         hand_position = wrist_position = elbow_position = default_position
         imu_euler_rad = default_orientation
 
+    hardware_angles_deg = {
+        name: hardware_value(name, measured_angles_deg.get(name, 0.0))
+        for name in ARM_JOINT_NAMES
+    }
+    hardware_torques = {
+        name: hardware_value(name, torques.get(name, 0.0))
+        for name in ARM_JOINT_NAMES
+    }
+
     # Draw the Pygame control and sensor HUD.
     screen.fill((18, 18, 18))
 
     text_lines = [
         (
-            "Shoulder (x,y,z): "
-            f"{measured_angles_deg.get('shoulder_x', 0):.1f}, "
-            f"{measured_angles_deg.get('shoulder_y', 0):.1f}, "
-            f"{measured_angles_deg.get('shoulder_z', 0):.1f} deg"
+            "Shoulder up/down, left/right: "
+            f"{hardware_angles_deg['shoulder_y']:.1f}, "
+            f"{hardware_angles_deg['shoulder_z']:.1f} deg"
         ),
         (
-            "Elbow (x,y):      "
-            f"{measured_angles_deg.get('elbow_x', 0):.1f}, "
-            f"{measured_angles_deg.get('elbow_y', 0):.1f} deg"
+            "Upper/lower arm rotation:      "
+            f"{hardware_angles_deg['shoulder_x']:.1f}, "
+            f"{hardware_angles_deg['elbow_y']:.1f} deg"
         ),
-        (
-            "Wrist (x,z):      "
-            f"{measured_angles_deg.get('wrist_x', 0):.1f}, "
-            f"{measured_angles_deg.get('wrist_z', 0):.1f} deg"
-        ),
+        f"Elbow up/down:                   {hardware_angles_deg['elbow_x']:.1f} deg",
         "---",
         (
-            "Torque Sh(x,y,z): "
-            f"{torques.get('shoulder_x', 0):.2f}, "
-            f"{torques.get('shoulder_y', 0):.2f}, "
-            f"{torques.get('shoulder_z', 0):.2f} Nm"
+            "Torque shoulder UD/LR: "
+            f"{hardware_torques['shoulder_y']:.2f}, "
+            f"{hardware_torques['shoulder_z']:.2f} Nm"
         ),
         (
-            "Torque Elb(x,y):  "
-            f"{torques.get('elbow_x', 0):.2f}, "
-            f"{torques.get('elbow_y', 0):.2f} | Wr(x,z): "
-            f"{torques.get('wrist_x', 0):.2f}, "
-            f"{torques.get('wrist_z', 0):.2f} Nm"
+            "Torque upper rot/elbow/lower rot: "
+            f"{hardware_torques['shoulder_x']:.2f}, "
+            f"{hardware_torques['elbow_x']:.2f}, "
+            f"{hardware_torques['elbow_y']:.2f} Nm"
         ),
         "---",
         f"Elbow position: x={elbow_position[0]:.3f} y={elbow_position[1]:.3f} z={elbow_position[2]:.3f}",
         f"Wrist position: x={wrist_position[0]:.3f} y={wrist_position[1]:.3f} z={wrist_position[2]:.3f}",
         f"Hand position:  x={hand_position[0]:.3f} y={hand_position[1]:.3f} z={hand_position[2]:.3f}",
         "---",
-        "Keys: Arrows+C/V | Elbow Z/S,A/E | Wrist Q/D,W/X | Space reset | ESC quit",
+        "Keys: Arrows | Upper rot C/V | Elbow Z/S | Lower rot A/E | Space reset",
     ]
     y = 10
     for line in text_lines:
@@ -985,8 +1030,8 @@ while running and p.isConnected():
     # Mirror sensor readings in the separate Tkinter dashboard.
     try:
         for key in joint_names_map.values():
-            sensor_vars[f"{key}_angle"].set(f"{measured_angles_deg.get(key, 0):.1f} deg")
-            sensor_vars[f"{key}_torque"].set(f"{torques.get(key, 0):.2f} Nm")
+            sensor_vars[f"{key}_angle"].set(f"{hardware_angles_deg[key]:.1f} deg")
+            sensor_vars[f"{key}_torque"].set(f"{hardware_torques[key]:.2f} Nm")
 
         # Update IMU
         sensor_vars["imu_roll"].set(f"Roll:  {rad_to_deg(imu_euler_rad[0]):.1f}")

@@ -20,7 +20,7 @@ if str(SIMULATION_ROOT) not in sys.path:
     sys.path.insert(0, str(SIMULATION_ROOT))
 
 from dmp.trajectory_io import load_dmp_trajectory, resolve_saved_dmp_rollout_path
-from sim.joint_limits import clamp_dmp_vector
+from sim.joint_limits import DMP_JOINT_NAMES, HARDWARE_JOINT_LIMITS_DEG, clamp_dmp_vector
 
 
 EXAMPLE_PATH = REPOSITORY_ROOT / "examples" / "simulation" / "demo"
@@ -38,6 +38,28 @@ def joint_index(body_uid: int, name: str) -> int:
         if p.getJointInfo(body_uid, index)[1].decode("utf-8") == name:
             return index
     raise KeyError(f"Joint not found in URDF: {name}")
+
+
+def speed_limited_step_times(
+    trajectory: np.ndarray,
+    requested_dt: float,
+) -> np.ndarray:
+    """Return a safe interval for each trajectory sample."""
+    step_times = np.full(len(trajectory), requested_dt, dtype=float)
+    if len(trajectory) < 2:
+        return step_times
+
+    differences = np.diff(trajectory, axis=0)
+    for column, name in enumerate(DMP_JOINT_NAMES):
+        limit = HARDWARE_JOINT_LIMITS_DEG[name]
+        positive_speed = math.radians(limit.speed_positive)
+        negative_speed = math.radians(limit.speed_negative)
+        speeds = np.where(differences[:, column] >= 0, positive_speed, negative_speed)
+        step_times[1:] = np.maximum(
+            step_times[1:],
+            np.abs(differences[:, column]) / speeds,
+        )
+    return step_times
 
 
 def main() -> None:
@@ -86,8 +108,16 @@ def main() -> None:
         prefer_saved_rollout=not args.refit,
     )
     trajectory = clamp_dmp_vector(requested)
+    step_times = speed_limited_step_times(trajectory, dt)
     clipped = int(np.count_nonzero(requested != trajectory))
     print(f"Trajectory: {len(trajectory)} samples, dt={dt:.6f} s; {clipped} values clipped")
+    slowed_steps = int(np.count_nonzero(step_times > dt * 1.000001))
+    if slowed_steps:
+        print(
+            f"Playback duration increased from {len(trajectory) * dt:.2f} s to "
+            f"{float(np.sum(step_times)):.2f} s for motor speeds "
+            f"({slowed_steps} slowed steps)"
+        )
     if clipped:
         clipped_by_joint = np.count_nonzero(requested != trajectory, axis=0)
         details = ", ".join(
@@ -132,15 +162,16 @@ def main() -> None:
             print(f"  {logical} -> {urdf_name} (sign {sign:+.0f})")
         # Resetting joint state gives deterministic playback of measured data.
         while True:
-            for sample in trajectory:
+            for sample, step_time in zip(trajectory, step_times):
                 if not p.isConnected():
                     return
+                p.setTimeStep(float(step_time))
                 for column, joint in enumerate(joint_ids):
                     command = float(sample[column] * JOINT_MAPPING[column][2])
                     p.resetJointState(robot, joint, command)
                 p.stepSimulation()
                 if not args.headless:
-                    time.sleep(dt)
+                    time.sleep(float(step_time))
             if not args.loop:
                 break
         print("Playback finished")

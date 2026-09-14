@@ -23,7 +23,7 @@ SIMULATION_ROOT = SIM_DIR.parent
 if str(SIMULATION_ROOT) not in sys.path:
     sys.path.insert(0, str(SIMULATION_ROOT))
 
-from sim.joint_limits import JOINT_LIMITS_RAD
+from sim.joint_limits import DMP_JOINT_NAMES, HARDWARE_JOINT_LIMITS_DEG, JOINT_LIMITS_RAD
 from sim.limb_sim import JOINT_MAPPING, joint_index
 
 
@@ -51,6 +51,7 @@ def main() -> None:
 
     try:
         p.setGravity(0, 0, 0)
+        p.setTimeStep(args.step_time)
         p.resetDebugVisualizerCamera(
             cameraDistance=1.25,
             cameraYaw=42,
@@ -110,7 +111,19 @@ def main() -> None:
                 )
                 for column, joint in enumerate(joint_ids):
                     command = math.radians(float(angles_deg[column])) * JOINT_MAPPING[column][2]
-                    p.resetJointState(robot, joint, command)
+                    current_command = p.getJointState(robot, joint)[0]
+                    physical_difference = (
+                        command - current_command
+                    ) * JOINT_MAPPING[column][2]
+                    limit = HARDWARE_JOINT_LIMITS_DEG[DMP_JOINT_NAMES[column]]
+                    p.setJointMotorControl2(
+                        robot,
+                        joint,
+                        p.POSITION_CONTROL,
+                        targetPosition=command,
+                        force=200.0,
+                        maxVelocity=math.radians(limit.speed(physical_difference)),
+                    )
 
                 angle_lines = ["Current angles (deg)"]
                 angle_lines.extend(

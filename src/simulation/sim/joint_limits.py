@@ -62,14 +62,14 @@ RIGHT_ARM_HARDWARE_SIGN = {
     "shoulder_y": 1.0,
     "shoulder_z": -1.0,
     "elbow_x": -1.0,
-    "elbow_y": 1.0,
+    "wrist_rotation": 1.0,
 }
 RIGHT_ARM_LIMITS_DEG = {
     "shoulder_x": HARDWARE_JOINT_LIMITS_DEG["upper_arm_rotation"],
     "shoulder_y": HARDWARE_JOINT_LIMITS_DEG["shoulder_up_down"],
     "shoulder_z": _reverse(HARDWARE_JOINT_LIMITS_DEG["shoulder_left_right"]),
     "elbow_x": _reverse(HARDWARE_JOINT_LIMITS_DEG["elbow_up_down"]),
-    "elbow_y": HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"],
+    "wrist_rotation": HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"],
 }
 
 

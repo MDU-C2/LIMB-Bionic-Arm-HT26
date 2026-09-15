@@ -1,34 +1,15 @@
 # Documentation
 
-## Purpose
+This directory contains the maintained setup and technical documentation for
+AURORA.
 
-This folder is the home for AURORA's shared technical and project documentation: architecture, communication protocols, setup procedures, decisions, troubleshooting, safety guidance, migration records, and daily updates.
+| Document | Contents |
+| --- | --- |
+| [Simulation and recording](SIMULATION.md) | Installation, controls, data capture, Motion AI, limits, and troubleshooting. |
+| [Development resources](resources.md) | Project, vendor, and standards references inherited from LIMB. |
 
-## Start here
-
-- [Simulation guide](SIMULATION.md) — installation, controls, data formats, and
-  migration scope for the tested PyBullet baseline.
-- [Development resources](resources.md) — official and project references for
-  the current technology and hardware candidates.
-
-## What belongs here
-
-- System and subsystem architecture.
-- Confirmed protocol and interface definitions.
-- Reproducible setup, calibration, repair, and troubleshooting procedures.
-- Design decisions, safety assumptions, migration records, and team updates.
-
-## What does not belong here
-
-- Functional host code or firmware.
-- PCB, CAD, and other editable hardware source files.
-- Unexplained binary exports, raw datasets, caches, or build output.
-- Instructions presented as verified when they have not been tested on AURORA.
-
-## Possible LIMB migration
-
-LIMB contains documentation for CAN messages and data layouts, the Jetson AGX Orin, ESP32 microcontrollers, BLE, ADC behavior, servo modification, simulation, and individual firmware modules. These documents may be migrated after their accuracy is checked against source code and the physical arm. Original paths and any changes must be recorded.
-
-## Migration status
-
-The software-only PyBullet baseline has been migrated. Other subsystem migration has not started.
+Subsystem documentation should be added when its implementation is selected.
+Each document must identify the relevant hardware or software revision, tested
+commands, expected result, known limitations, and the source of migrated
+information. Avoid copying old LIMB notes without checking them against the
+current arm.

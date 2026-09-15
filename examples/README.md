@@ -1,27 +1,16 @@
 # Examples
 
-## Purpose
+`simulation/demo` contains the small four-joint dataset used to verify DMP
+trajectory playback:
 
-This folder will contain small, focused examples that teach users how to call confirmed AURORA functionality.
+- `angles.npz` contains inherited measured angles;
+- `dmp_rollout_clean.npz` contains the prepared playback trajectory.
 
-## What belongs here
+Run the example from the **Simulation** tab or from the repository root:
 
-- Minimal examples for stable, documented public interfaces.
-- Safe, explicit examples that state prerequisites, expected output, and whether hardware is involved.
-- Examples kept in sync with tests and user documentation.
+```powershell
+micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --headless
+```
 
-## What does not belong here
-
-- The main application, reusable libraries, experiments, benchmarks, or debugging scraps.
-- Setup utilities or hardware test programs.
-- Examples that transmit actuation commands by default or imply unverified functionality works.
-
-## Possible LIMB migration
-
-LIMB contains Python CAN snippets, BLE utilities, ESP-IDF component examples, simulation launch paths, and subsystem demonstrations. They may inform future examples only after the underlying interfaces are selected and tested; hardware-control examples require an additional safety review.
-
-## Current examples
-
-`simulation/demo` contains the inherited four-joint angle data and saved DMP
-rollout used by the tested trajectory player. Run it through the project GUI or
-follow the commands in the [simulation guide](../docs/SIMULATION.md).
+Add examples only for maintained interfaces. Keep them small, state their
+origin, and avoid data that identifies a participant.

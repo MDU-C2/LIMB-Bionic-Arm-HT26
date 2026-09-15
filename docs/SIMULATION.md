@@ -1,129 +1,102 @@
-# LIMB simulation
+# Simulation and recording
 
-The project contains two simulation paths:
-
-- The **interactive task simulator** is the main workspace. It recreates the
-  final LIMB-HT25 table-and-target scene with the right arm, keyboard control,
-  inverse kinematics, grasping, and live sensor values.
-- The **trajectory tools** play a four-joint DMP rollout or open the left arm
-  with simple joint sliders.
-
-The easiest way to use either path is the project GUI:
-
-```powershell
-micromamba run -n aurora-simulation python src/gui/app.py
-```
-
-Open the **Simulation** tab and select **Open full simulator**. The launcher
-finds the simulation environment without storing a machine-specific path, so
-the same button works from every group member's clone.
-
-## Install
-
-Create the tested Python 3.10 environment from the repository root:
+The project provides an interactive right-arm task simulator, four-joint
+trajectory playback, manual joint sliders, sensor recording, and camera-pose
+playback. Start with the control center:
 
 ```powershell
 micromamba create -f src/simulation/environment.yml
+micromamba run -n aurora-simulation python src/gui/app.py
 ```
 
-Conda can also read the same file:
-
-```powershell
-conda env create -f src/simulation/environment.yml
-conda activate aurora-simulation
-```
-
-The environment contains NumPy, SciPy, PyBullet, and Pygame. Pygame is
-installed from its Windows wheel through pip because the tested conda-forge
-build could not initialize its SDL DLL on Windows.
+The environment uses Python 3.10 and contains PyBullet, Pygame, NumPy, SciPy,
+ONNX Runtime, Bleak, pyserial, DepthAI, OpenCV, and MediaPipe.
 
 ## Interactive simulator
 
-You can also start the full simulator directly:
+Open **Simulation** and select **Open full simulator**, or run:
 
 ```powershell
 micromamba run -n aurora-simulation python src/simulation/interactive/limb_simulator.py
 ```
 
-It opens three coordinated windows:
+Three coordinated windows open: the PyBullet scene, the keyboard controller,
+and the sensor dashboard. Click the controller before using the keyboard.
 
-1. **PyBullet scene** — the right arm, table, target, reach line, camera views,
-   collisions, and grasp constraint.
-2. **Arm Control HUD** — joint angles, simulated motor torque, link positions,
-   reachability, and keyboard controls.
-3. **LIMB Sensor Dashboard** — five actuator angle/torque rows, hand orientation,
-   simulated shoulder effort, and hand-contact status.
-
-Click the Arm Control HUD before using the keyboard.
-
-| Control | Keys |
+| Action | Keys |
 | --- | --- |
-| Shoulder up/down | Up / Down |
-| Shoulder left/right | Left / Right |
-| Upper-arm rotation | C / V |
-| Elbow bend/extend | Z / S |
-| Lower-arm rotation | A / E |
-| Full / slow movement speed | Shift / Ctrl |
-| Grip / release target | F / G |
-| Move toward target with IK | H |
-| Toggle target overlay | T |
-| Orbit / shoulder camera | Tab |
-| Reset arm and target | Space |
+| Shoulder up/down | W / S |
+| Shoulder left/right | A / D |
+| Upper-arm rotation | Q / E |
+| Elbow bend/extend | Up / Down |
+| Wrist rotation | Left / Right |
+| Precise movement | Ctrl |
+| Close/open fingers | F / G |
+| Grab/release a nearby target | Space |
+| Move toward the target with IK | H |
+| Toggle target guide | T |
+| Cycle cameras | C or Tab |
+| Select camera | 1 / 2 / 3 |
+| Toggle camera preview panels | P |
+| Show/hide sensor dashboard | I |
+| Reset the arm and target | R |
 | Quit | Escape |
 
-The target is anchored at its start position so an accidental collision cannot
-throw it out of the workspace. Pressing **F** within the displayed grasp radius
-removes that anchor and attaches the target to the hand. Pressing **G** releases
-it to normal gravity, while **Space** restores the complete starting state.
+The reset pose keeps the arm clear of the table. The target stays at its start
+position until it is grabbed, which prevents collisions from throwing it out
+of the workspace. Move the hand within 10 cm and press Space to attach it.
 
-The RGB, depth, and segmentation windows are PyBullet preview panels. The
-simulator does not yet publish or record camera frames.
+The RGB, depth, and segmentation panels start hidden. Press P to show them.
+They are simulated camera buffers and are not saved by the simulator.
 
-## Physical arm limits
+## Joint model
 
-The simulation uses the limits and maximum speeds from the final LIMB-HT25
-motor firmware. These values are shared by the interactive controls, IK,
-trajectory playback, sliders, and URDF models.
+The URDF includes the five driven motions visible on the physical arm:
+shoulder left/right, shoulder up/down, rotation above the bicep, elbow flexion,
+and lower-arm rotation at the wrist.
 
 | Actuator | Range | Maximum speed | Acceleration |
 | --- | ---: | ---: | ---: |
 | Shoulder up/down | 0 to 90 deg | +10 / -20 deg/s | 15 deg/s² |
 | Shoulder left/right | 5 to 40 deg | +20 / -10 deg/s | 15 deg/s² |
 | Upper-arm rotation | -60 to 60 deg | 40 deg/s | 20 deg/s² |
-| Elbow up/down | 0 to 60 deg | 40 deg/s | 20 deg/s² |
-| Lower-arm rotation | 0 to 140 deg | 100 deg/s | Not set in firmware |
+| Elbow | 0 to 60 deg | 40 deg/s | 20 deg/s² |
+| Lower-arm rotation | 0 to 140 deg | 100 deg/s | Not specified |
 
-The source values are in the old `LIMB-HT25/src/esp32` shoulder, elbow, and
-hand motor modules. The acceleration values are kept in the shared profile,
-but the current PyBullet controller only enforces position and speed. Matching
-the firmware acceleration ramps needs measured response data from the rebuilt
-arm.
+These values come from the LIMB-HT25 motor firmware and are applied by manual
+control, inverse kinematics, trajectory playback, and the URDF. The old
+shoulder firmware notes that the mechanism may only reach about 75 degrees,
+so the current arm must be measured before the 90-degree value is trusted.
+Update `src/simulation/sim/joint_limits.py` and both URDFs together when the
+physical limits are confirmed.
 
-The two wrist bend/deviation joints in the mesh are fixed because the physical
-arm has five driven arm motions. Finger commands use their firmware ranges:
-thumb 0–30, index 0–85, middle 0–90, ring 0–50, and pinky 0–90 degrees.
-The finger linkage in the URDF is still only a visual approximation.
+Joint angles and hand orientation on the dashboard come from PyBullet. Torque
+and shoulder effort are simulated motor values. The URDF mass, inertia, finger
+linkage, and contact behavior are estimates, so they must not be treated as
+physical measurements until the arm is calibrated.
 
-The shoulder firmware calibrates up/down as 0–90 degrees, but its own note says
-the measured mechanism reached closer to 75 degrees. Keep 90 degrees as the
-software limit until the rebuilt arm is measured, then update
-`src/simulation/sim/joint_limits.py` and the URDFs together.
+## Record sensors and camera pose
 
-## What the sensor values mean
+Use **Sensors** to select BLE, serial, or OAK-D capture, then configure and
+start the session in **Recording**. Every run creates a timestamped directory
+below `outputs/recordings` by default. See the
+[recording guide](../src/recording/README.md) for file formats and direct
+commands.
 
-The dashboard is useful for software integration, but it is not a validated
-hardware measurement system:
+For a LIMB-style training capture, select BLE and check **Labeled BLE capture**.
+The GUI guides 20 rest, 40 movement, and 20 rest windows, then saves the old
+wide CSV layout. Raw packets remain available if a capture is interrupted or
+needs review.
 
-- Joint angles come from the simulated URDF joints.
-- Torque is PyBullet's applied motor torque, not measured physical torque.
-- Hand roll, pitch, and yaw come from the simulated hand-link orientation.
-- `EMG Shoulder` is the average absolute simulated shoulder torque.
-- Hand pressure reports no measurement because the model has no pressure
-  sensor. Grasping uses a fixed constraint when the hand is close enough.
+OAK-D capture shows live video and records arm and hand landmarks. After the
+session, select `pose.json` in **Motion AI** to animate the arm or compare the
+movement with reference recordings. Live camera-to-simulation control has not
+been implemented.
 
-The URDF uses estimated mass and inertia values. Replace them with measured
-values before treating simulated dynamics or torque as representative of the
-physical arm.
+The migrated GRU model creates a movement embedding and compares it with
+reference recordings. It identifies similar motion profiles; it does not
+produce robot joint commands. Treat its output as experimental until it is
+validated with a larger, documented dataset.
 
 ## Trajectory tools
 
@@ -133,65 +106,49 @@ Loop the included example trajectory:
 micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --loop
 ```
 
-Open the left-arm model with four joint sliders:
+Open the left-arm joint sliders:
 
 ```powershell
 micromamba run -n aurora-simulation python src/simulation/sim/manual_sim.py
 ```
 
-Run one trajectory pass without a window as an installation check:
+Run a trajectory without a window as an installation check:
 
 ```powershell
 micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --headless
 ```
 
-The playback accepts a saved rollout NPZ containing `q_gen_rad` with shape
-`(T, 4)` and a positive scalar `dt`. With `--refit`, it accepts elbow and
-shoulder angle arrays and fits a new DMP rollout. `--source clean` and
-`--source raw` select the preferred input variant and fall back to compatible
-available data.
+Playback accepts an NPZ file containing `q_gen_rad` with shape `(T, 4)` and a
+positive scalar `dt`. With `--refit`, it accepts elbow and shoulder angle
+arrays and fits a DMP rollout. Non-finite rows are removed, joint positions are
+clipped to the shared limits, and playback slows when needed to respect motor
+speed limits.
 
-The included LIMB25 angle example contains 13 non-finite measurement rows.
-Refitting reports and removes those rows before training. Playback reports any
-values clipped to the robot limits and slows the sample interval when needed to
-stay inside the firmware speed limits.
+Camera-pose tools can also run directly:
 
-## Source and migration scope
+```powershell
+micromamba run -n aurora-simulation python src/simulation/ai/pose_recording_sim.py recording.json
+micromamba run -n aurora-simulation python src/simulation/ai/movement_recognition.py recording.json --references path/to/references
+```
 
-The interactive simulator comes from `LIMB-HT25/LIMB Simulation`, where the
-main implementation was introduced in commit `8f4fea9`. The migrated runtime
-is deliberately small:
+## Troubleshooting
 
-- `src/simulation/interactive/limb_simulator.py`
-- `src/simulation/interactive/kinematics.py`
-- `src/simulation/sim/arm/right_arm.urdf`
-- Two right-hand meshes absent from the existing shared arm assets
+- If an import is missing, recreate or update `aurora-simulation` from
+  `src/simulation/environment.yml`.
+- If simulator windows cover the control center, use Alt+Tab or the taskbar.
+- If BLE discovery fails, check the device name, power, and Windows Bluetooth
+  access.
+- If serial capture cannot start, select the current port and matching baud.
+- `No available devices` from DepthAI means the OAK-D is not detected; check
+  its USB connection and close other camera programs.
+- Run the headless trajectory command above after changing the environment or
+  simulation model.
 
-The remaining 25 meshes were byte-identical to assets already used by the
-trajectory model, so both simulators share one copy. The old six MKV screen
-recordings and three cable-management photos are reference material rather
-than runtime dependencies and were not copied.
+## Provenance
 
-The LIMB-HT25 URDF placed the forearm mesh before the lower-arm rotation joint
-and the hand shell before the wrist-deviation joint. Those parts could therefore
-look detached even though the kinematic links remained connected. The migrated
-URDF assigns each mesh, collision shape, mass, and inertia to the downstream
-link that actually rotates it.
-
-The old `simulation_1_IMU.py`, `simulation_2_imus.py`, serial readers, and
-Arduino test are separate COM5/COM6 hardware experiments. They do not produce
-the final scene shown in the screenshots and contain machine-specific serial
-settings, so they were not folded into the portable simulator. Real IMU input
-should return later as a selectable sensor backend with ports chosen in the
-Robot tab.
-
-A repository-wide search also found `dmp/sim/limb_sim_table.py`, the slider
-sandbox, older playback scripts, collision-analysis scripts, and archived
-Panda/InMoov experiments. The table variant is the four-joint trajectory player
-with a configurable box and disabled arm/table collisions; it is not the final
-right-arm task scene. The maintained playback and manual slider paths already
-cover the reusable parts of those scripts.
-
-The four-joint trajectory player came from Oscar Ågren's `DMP-arm` commit
-`88b0d2ea5df63764ebb56aad8926f92084926fc7`, previously included as a LIMB-HT25
-submodule.
+The interactive task scene and right-arm model were migrated from
+`MDU-C2/LIMB-HT25`. The trajectory player came from Oscar Ågren's DMP-arm work
+previously included by that repository. Shared meshes are kept in one location
+under `src/simulation/sim/arm`; archived videos, duplicate meshes, fixed-port
+experiments, and machine-specific build products were not carried into the
+runtime.

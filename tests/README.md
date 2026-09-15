@@ -1,24 +1,17 @@
 # Tests
 
-## Purpose
+The repository has a small automated BLE capture test. Broader automated
+coverage is a handover priority before hardware control is added.
 
-This folder will contain AURORA unit, integration, communication, simulation, and safety-validation tests.
+Current software checks from the repository root are:
 
-## What belongs here
+```powershell
+micromamba run -n aurora-simulation python -m compileall -q src
+micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --headless
+micromamba run -n aurora-simulation python -m unittest discover -s tests -v
+```
 
-- Deterministic tests for functional code and documented interfaces.
-- Clearly labelled integration and hardware-in-the-loop tests with prerequisites and safeguards.
-- Fixtures and test data that are small, non-sensitive, and traceable.
-- Tests for protocol compatibility, limits, fault handling, and simulation behavior.
-
-## What does not belong here
-
-- Ad hoc actuation scripts disguised as tests.
-- Tests that contact real CAN/BLE devices or move hardware without explicit isolation, labelling, and operator controls.
-- Application code, firmware, caches, transient reports, or large captured datasets.
-
-## Possible LIMB migration
-
-LIMB has tests for host layers and end-to-end pipelines, node and CAN behavior, DMP reproduction, and numerous ESP-IDF examples or experimental test programs. Each candidate must be classified by scope and hardware effect, made reproducible, and linked to the code it validates.
-
-
+Future tests should cover additional firmware packet formats, pose mapping,
+joint limits, trajectory loading, recorder cleanup, and GUI discovery.
+Hardware-in-the-loop tests must identify the connected equipment and must not
+actuate the arm by default.

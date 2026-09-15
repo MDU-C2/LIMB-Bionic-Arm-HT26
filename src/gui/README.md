@@ -1,8 +1,8 @@
-# AURORA project GUI
+# AURORA control center
 
-`app.py` is the shared Tkinter control center for software that runs from this
-repository. It gives every group member the same entry point even when their
-clone is stored in a different directory.
+`app.py` is the shared Tkinter launcher for software in this repository. It
+uses paths relative to the repository, so each group member can keep the clone
+in a different location.
 
 Start it from the repository root:
 
@@ -10,97 +10,65 @@ Start it from the repository root:
 micromamba run -n aurora-simulation python src/gui/app.py
 ```
 
-## Structure
+The control center has tabs for simulation, recording, saved recordings,
+sensors, Motion AI, robot tools, and project information. Programs started by
+the GUI write to the Activity panel and can be stopped from the same window.
+PyBullet and camera previews open as separate windows.
 
-The launcher separates common services from tab-specific controls:
+## Architecture
 
-- `TAB_DEFINITIONS` declares the tab keys, labels, order, and builder methods.
-- `_build_*_tab()` methods create controls for one feature area.
-- `_start_program()` runs one child program at a time and sends its output to
-  the Activity panel.
-- `_refresh_*()` methods discover scripts, recordings, firmware, and local
-  tools without fixed machine paths.
-- `_update_controls()` keeps actions disabled when their requirements are not
-  available or another program is running.
+- `TAB_DEFINITIONS` sets the tab keys, labels, order, and builder methods.
+- `_build_*_tab()` methods create the contents of one tab.
+- `_start_program()` manages one child program and captures its output.
+- `_refresh_*()` methods discover recorders, recordings, serial ports, and
+  firmware projects.
+- `_update_controls()` disables actions whose requirements are unavailable.
 
-All repository paths are derived from the location of `app.py`. Paths shown in
-the GUI stay relative to the repository when possible.
+Pages are scrollable so all controls remain available on smaller or scaled
+displays. Keep repository paths relative and let users select device names,
+ports, and output folders in the GUI.
 
 ## Add a tab
 
-Add one entry to `TAB_DEFINITIONS`:
+1. Add a `TabDefinition` entry in `app.py`.
+2. Add the matching `_build_*_tab()` method to `ProjectGui`.
+3. Store shared state in `ProjectGui.__init__`.
+4. Call `_update_controls()` whenever the new feature changes readiness.
+5. Update the Info tab and this guide if the feature adds a new entry point.
 
-```python
-TabDefinition("sensors", "Sensors", "_build_sensors_tab"),
-```
+Use `_heading()`, `_card()`, and `_start_program()` so new pages behave like
+the existing ones.
 
-Then add the matching builder to `ProjectGui`:
+## Add a recorder
 
-```python
-def _build_sensors_tab(self, tab: ttk.Frame) -> None:
-    """Populate controls and status for live sensors."""
-    tab.columnconfigure(0, weight=1)
-    self._heading(tab, "Sensors", "Inspect live robot sensor data.")
-    card = self._card(tab, 2, "Sensor source", "Choose and start a source.")
-    ttk.Button(card, text="Start", command=self.start_sensors).grid(
-        row=2,
-        column=0,
-        sticky="w",
-    )
-```
+The GUI discovers Python files named `record*.py` or `capture*.py` below `src`
+when they contain a `__main__` entry point. Recorders receive these settings:
 
-The notebook creates the page and calls the registered builder. Put shared
-state in `ProjectGui.__init__`, and call `_update_controls()` after readiness
-changes.
+| Environment variable | Value |
+| --- | --- |
+| `AURORA_OUTPUT_DIR` | Parent directory for session folders. |
+| `AURORA_SUBJECT` | Subject or session label. |
+| `AURORA_DURATION_SECONDS` | Duration; `0` means record until stopped. |
+| `AURORA_BLE_DEVICE` | BLE device name selected in the GUI. |
+| `AURORA_SERIAL_PORT` | Selected serial port. |
+| `AURORA_SERIAL_BAUD` | Selected serial baud rate. |
 
-## Add a program button
-
-Start repository programs through `_start_program()` so their output, status,
-and stop behavior remain consistent:
-
-```python
-def start_sensors(self) -> None:
-    """Start the maintained sensor reader."""
-    script = REPOSITORY_ROOT / "src" / "sensors" / "read_sensors.py"
-    command = [str(self.simulation_python or sys.executable), "-u", str(script)]
-    self._start_program("Sensor reader", "sensors", command)
-```
-
-Pass `working_directory=` when a tool expects a particular directory and
-`environment=` when it needs explicit environment variables. Do not put a
-group member's absolute path or serial port in the source.
-
-## Recording integration
-
-The Recording tab and **Start recording** button are already connected. The
-button becomes available when the launcher finds a Python file below `src`
-whose name starts with `record` or `capture` and which has a `__main__` entry
-point. For example:
-
-```text
-src/recording/record_session.py
-```
-
-The launcher passes the selected output directory in `AURORA_OUTPUT_DIR` and
-appends the optional arguments entered in the tab. A recorder should read that
-variable, create its files below that directory, handle `KeyboardInterrupt`,
-and close files and devices before exiting. The Recordings tab recognizes the
-file extensions listed in `RECORDING_EXTENSIONS`.
+A recorder should create a timestamped session directory, write `meta.json`,
+flush data while running, and close devices and files on Ctrl+C. Add new output
+extensions to `RECORDING_EXTENSIONS` if the Recordings tab must display them.
+The BLE recorder also accepts `--dataset-label` when its labeled-capture
+checkbox is selected.
 
 ## Firmware integration
 
 The Robot tab discovers PlatformIO projects by `platformio.ini` and ESP-IDF
-projects by their top-level `CMakeLists.txt` below `firmware`. Build, flash, and
-monitor output uses the shared Activity panel. Flashing requires a selected
-serial port and an explicit confirmation in the GUI.
+projects by a top-level `CMakeLists.txt` below `firmware`. Flashing requires a
+selected serial port and confirmation in the GUI.
 
-## Maintenance rules
+## Maintenance
 
-- Give every module, class, and method a short docstring that states its role.
-- Comment the reason for a decision or constraint; keep obvious widget code
-  self-explanatory through clear names.
-- Keep tab code in its own builder and reuse `_heading()`, `_card()`, and
-  `_start_program()`.
-- Add a dependency only when the standard library or current simulation
-  environment cannot provide the required behavior.
-- Update this guide and the Info tab when an entry-point convention changes.
+- Keep obvious widget code clear through names instead of comments.
+- Document public behavior and hardware constraints where they matter.
+- Start long-running tools through `_start_program()`.
+- Never store a personal path, serial port, or device address in source code.
+- Keep hardware actions user initiated and report failures in Activity.

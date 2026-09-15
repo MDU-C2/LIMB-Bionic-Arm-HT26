@@ -1,21 +1,11 @@
 # Research
 
-## Purpose
+Use this directory for reproducible experiments that are useful to the project
+but are not part of the maintained runtime. No separate research experiment is
+committed yet.
 
-This folder will contain AURORA research and experimental work that is valuable to study but is not yet integrated into the main system, including Dynamic Movement Primitives (DMP), adaptive control, sensor processing, and exploratory perception or trajectory methods.
-
-## What belongs here
-
-- Reproducible experiments with a stated question, method, inputs, outputs, and limitations.
-- Research implementations whose relationship to active AURORA interfaces is documented.
-- Small, appropriately governed evaluation data or references to externally managed datasets.
-
-## What does not belong here
-
-- Restoration-critical host control or production firmware.
-- Unexplained notebooks, raw personal data, downloaded model caches, generated results, virtual environments, or large binaries.
-- Experiments presented as safe for hardware operation without integration and validation.
-
-## Possible LIMB migration
-
-Candidates include the DMP thesis work, motion-capture and trajectory mapping, EMG classification, adaptive hand experiments, vision, sensor fusion, and exploratory simulation. Each area needs a provenance, privacy, dependency, reproducibility, and interface review before any selection.
+Each experiment should state its question, input data, setup command, method,
+result, and limitations. Record model and dataset provenance and keep personal
+or large raw data outside Git. Code required by the GUI or simulation belongs
+under `src`; the current movement model is documented in
+[`docs/SIMULATION.md`](../docs/SIMULATION.md).

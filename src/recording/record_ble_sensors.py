@@ -13,7 +13,7 @@ import struct
 import time
 from typing import Callable
 
-from common import create_session_directory, env_float, utc_now, write_metadata
+from common import create_session_directory, env_float, experiment_metadata, utc_now, write_metadata
 from ble_dataset import LabeledBleCapture
 
 
@@ -41,6 +41,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", default=os.environ.get("AURORA_BLE_DEVICE", "LIMBServer"))
     parser.add_argument("--address", default="", help="Connect to a known BLE address directly.")
+    parser.add_argument(
+        "--preview", action="store_true",
+        help="Show live EMG and IMU feedback without saving a session.",
+    )
     parser.add_argument("--scan-timeout", type=float, default=12.0)
     parser.add_argument("--subject", default=os.environ.get("AURORA_SUBJECT", "session"))
     parser.add_argument(
@@ -62,60 +66,79 @@ class BleRecorder:
 
     def __init__(
         self,
-        session: Path,
+        session: Path | None,
         sample_sink: Callable[[str, int, list[list[object]]], None] | None = None,
     ) -> None:
         self.session = session
         self.sample_sink = sample_sink
         self.counts = {name: 0 for name in SENSOR_UUIDS}
-        self.raw_file = (session / "packets.jsonl").open("w", encoding="utf-8", buffering=1)
-        self.files = {
-            "emg": (session / "emg.csv").open("w", newline="", encoding="utf-8"),
-            "imu": (session / "imu.csv").open("w", newline="", encoding="utf-8"),
-            "piezo": (session / "piezo.csv").open("w", newline="", encoding="utf-8"),
-        }
+        self.raw_file = (
+            (session / "packets.jsonl").open("w", encoding="utf-8", buffering=1)
+            if session is not None else None
+        )
+        self.files = {}
+        if session is not None:
+            self.files = {
+                "emg": (session / "emg.csv").open("w", newline="", encoding="utf-8"),
+                "imu": (session / "imu.csv").open("w", newline="", encoding="utf-8"),
+                "piezo": (session / "piezo.csv").open("w", newline="", encoding="utf-8"),
+            }
         self.writers = {name: csv.writer(file) for name, file in self.files.items()}
-        self.writers["emg"].writerow(
-            ("host_time", "sequence", "device_time", "sensor", "sample", "value")
-        )
-        self.writers["piezo"].writerow(
-            ("host_time", "sequence", "device_time", "sensor", "sample", "value")
-        )
-        self.writers["imu"].writerow(
-            ("host_time", "sequence", "device_time", "sensor", "sample", *IMU_COLUMNS)
-        )
+        if self.writers:
+            self.writers["emg"].writerow(
+                (
+                    "host_time", "host_monotonic_ns", "sequence", "device_time",
+                    "sensor", "sample", "value",
+                )
+            )
+            self.writers["piezo"].writerow(
+                (
+                    "host_time", "host_monotonic_ns", "sequence", "device_time",
+                    "sensor", "sample", "value",
+                )
+            )
+            self.writers["imu"].writerow(
+                (
+                    "host_time", "host_monotonic_ns", "sequence", "device_time",
+                    "sensor", "sample", *IMU_COLUMNS,
+                )
+            )
 
     def close(self) -> None:
         """Flush and close all session files."""
-        self.raw_file.close()
+        if self.raw_file is not None:
+            self.raw_file.close()
         for file in self.files.values():
             file.close()
 
     def handle(self, sensor: str, data: bytearray) -> None:
         """Save one notification and decode it when its packet layout is known."""
         host_time = utc_now()
+        host_monotonic_ns = time.monotonic_ns()
         payload = bytes(data)
         self.counts[sensor] += 1
-        self.raw_file.write(
-            json.dumps(
-                {
-                    "host_time": host_time,
-                    "sensor": sensor,
-                    "uuid": SENSOR_UUIDS[sensor],
-                    "size": len(payload),
-                    "data_base64": base64.b64encode(payload).decode("ascii"),
-                },
-                separators=(",", ":"),
+        if self.raw_file is not None:
+            self.raw_file.write(
+                json.dumps(
+                    {
+                        "host_time": host_time,
+                        "host_monotonic_ns": host_monotonic_ns,
+                        "sensor": sensor,
+                        "uuid": SENSOR_UUIDS[sensor],
+                        "size": len(payload),
+                        "data_base64": base64.b64encode(payload).decode("ascii"),
+                    },
+                    separators=(",", ":"),
+                )
+                + "\n"
             )
-            + "\n"
-        )
         try:
             if sensor == "emg":
-                self._decode_emg(host_time, payload)
+                self._decode_emg(host_time, host_monotonic_ns, payload)
             elif sensor == "imu":
-                self._decode_imu(host_time, payload)
+                self._decode_imu(host_time, host_monotonic_ns, payload)
             else:
-                self._decode_piezo(host_time, payload)
+                self._decode_piezo(host_time, host_monotonic_ns, payload)
         except (ValueError, struct.error) as error:
             print(f"Could not decode {sensor} packet ({len(payload)} bytes): {error}")
 
@@ -123,16 +146,22 @@ class BleRecorder:
         self,
         sensor: str,
         host_time: str,
+        host_monotonic_ns: int,
         sequence: int,
         device_time: int | str,
         channels: list[list[int]],
     ) -> None:
-        writer = self.writers[sensor]
+        writer = self.writers.get(sensor)
+        if writer is None:
+            return
         for sensor_id, values in enumerate(channels):
             for sample_id, value in enumerate(values):
-                writer.writerow((host_time, sequence, device_time, sensor_id, sample_id, value))
+                writer.writerow(
+                    (host_time, host_monotonic_ns, sequence, device_time,
+                     sensor_id, sample_id, value)
+                )
 
-    def _decode_emg(self, host_time: str, data: bytes) -> None:
+    def _decode_emg(self, host_time: str, host_monotonic_ns: int, data: bytes) -> None:
         if len(data) == struct.calcsize("<HIQ80H"):
             _, sequence, device_time, *values = struct.unpack("<HIQ80H", data)
             channels = [values[:40], values[40:]]
@@ -145,11 +174,11 @@ class BleRecorder:
             channels = [list(struct.unpack(f"<{(len(data) - 4) // 2}H", data[4:]))]
         else:
             raise ValueError("unknown EMG packet layout")
-        self._write_values("emg", host_time, sequence, device_time, channels)
+        self._write_values("emg", host_time, host_monotonic_ns, sequence, device_time, channels)
         if self.sample_sink is not None:
             self.sample_sink("emg", sequence, channels)
 
-    def _decode_piezo(self, host_time: str, data: bytes) -> None:
+    def _decode_piezo(self, host_time: str, host_monotonic_ns: int, data: bytes) -> None:
         if len(data) == struct.calcsize("<HIQ10H"):
             _, sequence, device_time, *values = struct.unpack("<HIQ10H", data)
         elif len(data) >= 6 and (len(data) - 4) % 2 == 0:
@@ -158,11 +187,11 @@ class BleRecorder:
             values = list(struct.unpack(f"<{(len(data) - 4) // 2}H", data[4:]))
         else:
             raise ValueError("unknown piezo packet layout")
-        self._write_values("piezo", host_time, sequence, device_time, [values])
+        self._write_values("piezo", host_time, host_monotonic_ns, sequence, device_time, [values])
         if self.sample_sink is not None:
             self.sample_sink("piezo", sequence, [values])
 
-    def _decode_imu(self, host_time: str, data: bytes) -> None:
+    def _decode_imu(self, host_time: str, host_monotonic_ns: int, data: bytes) -> None:
         samples: list[tuple[int, list[float]]]
         if len(data) == struct.calcsize("<HIQ12h"):
             _, sequence, device_time, *raw = struct.unpack("<HIQ12h", data)
@@ -180,15 +209,19 @@ class BleRecorder:
         else:
             raise ValueError("unknown IMU packet layout")
 
-        writer = self.writers["imu"]
+        writer = self.writers.get("imu")
         sensor_sample_counts: dict[int, int] = {}
         for sensor_id, values in samples:
             sample_id = sensor_sample_counts.get(sensor_id, 0)
             sensor_sample_counts[sensor_id] = sample_id + 1
             padded = values + [""] * (len(IMU_COLUMNS) - len(values))
-            writer.writerow(
-                (host_time, sequence, device_time, sensor_id, sample_id, *padded[: len(IMU_COLUMNS)])
-            )
+            if writer is not None:
+                writer.writerow(
+                    (
+                        host_time, host_monotonic_ns, sequence, device_time,
+                        sensor_id, sample_id, *padded[: len(IMU_COLUMNS)],
+                    )
+                )
         if self.sample_sink is not None:
             channels: list[list[object]] = []
             for sensor_id, values in samples:
@@ -200,6 +233,13 @@ class BleRecorder:
 
 async def record(args: argparse.Namespace) -> int:
     """Connect to a LIMB server and record every available sensor stream."""
+    if getattr(args, "preview", False):
+        if args.dataset_label:
+            print("Preview cannot be combined with labeled capture.")
+            return 2
+        from ble_preview import run_ble_preview
+
+        return await run_ble_preview(args, BleRecorder, SENSOR_UUIDS)
     try:
         from bleak import BleakClient, BleakScanner
     except ImportError:
@@ -288,6 +328,7 @@ async def record(args: argparse.Namespace) -> int:
                 "characteristics": SENSOR_UUIDS,
                 "duration_seconds": round(time.monotonic() - started, 3),
                 "packet_counts": recorder.counts,
+                **experiment_metadata(),
                 **({"labeled_capture": capture.summary()} if capture is not None else {}),
             },
         )

@@ -23,7 +23,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 
-# --- 1. Repository paths and supported files -------------------------------
+# Repository paths
 
 GUI_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = GUI_DIR.parents[1]
@@ -69,10 +69,10 @@ RECORDING_ENTRYPOINT_PREFIXES = ("record", "capture")
 RECORDER_DETAILS = {
     "record_ble_sensors.py": "BLE recorder for raw streams or labeled 80-window captures.",
     "record_serial_sensors.py": "Serial recorder for JSON lines and other sensor messages.",
-    "record_oak_pose.py": "OAK-D arm and hand tracking for simulation playback and Motion AI.",
+    "record_oak_pose.py": "Open unflipped OAK-D video with readable labels and selected-arm angles; record inside the camera window. Stereo 3D points require --depth.",
 }
 
-# --- 2. Shared visual theme -------------------------------------------------
+# Theme
 
 BACKGROUND = "#f3f5f9"
 CARD = "#ffffff"
@@ -86,7 +86,7 @@ ERROR = "#b42318"
 CONSOLE = "#111827"
 
 
-# --- 3. Small data models and the tab extension registry -------------------
+# Tab registry
 
 @dataclass(frozen=True)
 class FirmwareProject:
@@ -106,9 +106,6 @@ class TabDefinition:
     builder_name: str
 
 
-# --- GUI extension registry -------------------------------------------------
-# Add a future tab here, then implement the named builder method on ProjectGui.
-# Keeping this list declarative makes tab order and available areas easy to scan.
 TAB_DEFINITIONS = (
     TabDefinition("simulation", "Simulation", "_build_simulation_tab"),
     TabDefinition("recording", "Recording", "_build_recording_tab"),
@@ -120,7 +117,7 @@ TAB_DEFINITIONS = (
 )
 
 
-# --- 4. Portable path and environment discovery ----------------------------
+# Path discovery
 
 def project_path(value: str | Path) -> Path:
     """Resolve a path entered in the GUI relative to the repository."""
@@ -303,7 +300,7 @@ def has_trajectory_data(directory: Path) -> bool:
         return False
 
 
-# --- 5. Main application ----------------------------------------------------
+# Application
 
 class ProjectGui(ttk.Frame):
     """Main AURORA launcher frame shared by all registered project tabs."""
@@ -328,6 +325,7 @@ class ProjectGui(ttk.Frame):
 
         self.trajectory_path = tk.StringVar(value=str(DEFAULT_TRAJECTORY))
         self.loop_playback = tk.BooleanVar(value=True)
+        self.dynamic_simulation = tk.BooleanVar(value=False)
         self.refit_dmp = tk.BooleanVar(value=False)
         self.motion_recording = tk.StringVar()
         self.motion_references = tk.StringVar(value=str(DEFAULT_REFERENCE_DIRECTORY))
@@ -337,7 +335,10 @@ class ProjectGui(ttk.Frame):
         self.recording_arguments = tk.StringVar()
         self.recording_output = tk.StringVar(value=str(DEFAULT_RECORDINGS_DIRECTORY))
         self.recording_subject = tk.StringVar(value="S01")
+        self.recording_trial_id = tk.StringVar(value="T01")
+        self.recording_test_type = tk.StringVar(value="grip_emg")
         self.recording_duration = tk.StringVar(value="0")
+        self.recording_camera_side = tk.StringVar(value="left")
         self.recording_ble_device = tk.StringVar(value="LIMBServer")
         self.recording_ble_dataset = tk.BooleanVar(value=False)
         self.recording_movement_label = tk.StringVar(value="1")
@@ -387,7 +388,7 @@ class ProjectGui(ttk.Frame):
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.after(100, self._drain_log_queue)
 
-    # --- Window and tab construction ---------------------------------------
+    # Window and tabs
 
     def _configure_styles(self) -> None:
         """Configure the common color, typography, and widget styles."""
@@ -554,8 +555,8 @@ class ProjectGui(ttk.Frame):
             tab,
             2,
             "Interactive task simulator",
-            "Open the LIMB25 table-and-target scene with 7-axis keyboard control, "
-            "inverse kinematics, grasping, live joint torque, hand IMU, and simulated EMG.",
+            "Open the table-and-target scene with five arm actuators and hand controls. "
+            "Physics mode uses gravity and position motors; direct mode previews joint poses.",
         )
         self.interactive_button = ttk.Button(
             interactive,
@@ -564,6 +565,12 @@ class ProjectGui(ttk.Frame):
             command=self.start_interactive_simulation,
         )
         self.interactive_button.grid(row=2, column=0, sticky="w")
+        ttk.Checkbutton(
+            interactive,
+            text="Physics mode (gravity and motor torques)",
+            variable=self.dynamic_simulation,
+            style="Card.TCheckbutton",
+        ).grid(row=3, column=0, sticky="w", pady=(8, 0))
 
         playback = self._card(
             tab,
@@ -754,8 +761,28 @@ class ProjectGui(ttk.Frame):
             row=1, column=1, sticky="ew", padx=(12, 0), pady=(4, 0)
         )
 
+        experiment_row = ttk.Frame(card, style="Card.TFrame")
+        experiment_row.grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        experiment_row.columnconfigure(0, weight=1)
+        experiment_row.columnconfigure(1, weight=1)
+        ttk.Label(experiment_row, text="Trial ID", style="Card.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(experiment_row, text="Test type", style="Card.TLabel").grid(
+            row=0, column=1, sticky="w", padx=(12, 0)
+        )
+        ttk.Entry(experiment_row, textvariable=self.recording_trial_id).grid(
+            row=1, column=0, sticky="ew", pady=(4, 0)
+        )
+        ttk.Combobox(
+            experiment_row,
+            textvariable=self.recording_test_type,
+            values=("grip_emg", "movement_imu", "combined", "other"),
+            state="readonly",
+        ).grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(4, 0))
+
         device_row = ttk.Frame(card, style="Card.TFrame")
-        device_row.grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        device_row.grid(row=5, column=0, sticky="ew", pady=(0, 10))
         device_row.columnconfigure(0, weight=1)
         device_row.columnconfigure(1, weight=1)
         ttk.Label(device_row, text="BLE device", style="Card.TLabel").grid(
@@ -783,7 +810,7 @@ class ProjectGui(ttk.Frame):
         )
 
         self.ble_dataset_row = ttk.Frame(card, style="Card.TFrame")
-        self.ble_dataset_row.grid(row=5, column=0, sticky="ew", pady=(0, 10))
+        self.ble_dataset_row.grid(row=6, column=0, sticky="ew", pady=(0, 10))
         self.ble_dataset_row.columnconfigure(1, weight=1)
         ttk.Checkbutton(
             self.ble_dataset_row,
@@ -807,8 +834,18 @@ class ProjectGui(ttk.Frame):
             style="Card.TLabel",
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
+        self.camera_side_row = ttk.Frame(card, style="Card.TFrame")
+        self.camera_side_row.grid(row=6, column=0, sticky="w", pady=(0, 10))
+        ttk.Label(self.camera_side_row, text="Subject arm", style="Card.TLabel").pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Combobox(
+            self.camera_side_row, textvariable=self.recording_camera_side,
+            values=("left", "right"), state="readonly", width=9,
+        ).pack(side="left")
+
         arguments_row = ttk.Frame(card, style="Card.TFrame")
-        arguments_row.grid(row=6, column=0, sticky="ew", pady=(0, 10))
+        arguments_row.grid(row=7, column=0, sticky="ew", pady=(0, 10))
         arguments_row.columnconfigure(1, weight=1)
         ttk.Label(arguments_row, text="Optional arguments", style="Card.TLabel").grid(
             row=0, column=0, padx=(0, 8)
@@ -818,7 +855,7 @@ class ProjectGui(ttk.Frame):
         )
 
         output_row = ttk.Frame(card, style="Card.TFrame")
-        output_row.grid(row=7, column=0, sticky="ew", pady=(0, 12))
+        output_row.grid(row=8, column=0, sticky="ew", pady=(0, 12))
         output_row.columnconfigure(1, weight=1)
         ttk.Label(output_row, text="Output", style="Card.TLabel").grid(
             row=0, column=0, padx=(0, 8)
@@ -831,7 +868,13 @@ class ProjectGui(ttk.Frame):
         )
 
         action_row = ttk.Frame(card, style="Card.TFrame")
-        action_row.grid(row=8, column=0, sticky="w")
+        action_row.grid(row=9, column=0, sticky="w")
+        self.recording_preview_button = ttk.Button(
+            action_row,
+            text="Open selected source (no recording)",
+            command=self.preview_selected_source,
+        )
+        self.recording_preview_button.pack(side="left", padx=(0, 8))
         self.record_button = ttk.Button(
             action_row,
             text="Start recording",
@@ -856,7 +899,7 @@ class ProjectGui(ttk.Frame):
         self._heading(
             tab,
             "Sensor tools",
-            "Choose a source here, then set the session details and start it in Recording.",
+            "Open a sensor source. The camera has its recording control inside the live view.",
         )
 
         sources = (
@@ -867,7 +910,7 @@ class ProjectGui(ttk.Frame):
             ),
             (
                 "OAK-D pose camera",
-                "Record arm and hand landmarks plus video for simulation playback and Motion AI.",
+                "Show the selected shoulder, elbow, wrist and arm angles live; record inside the camera window.",
                 "record_oak_pose.py",
             ),
             (
@@ -876,14 +919,23 @@ class ProjectGui(ttk.Frame):
                 "record_serial_sensors.py",
             ),
         )
+        self.sensor_preview_buttons: dict[str, ttk.Button] = {}
         for row, (title, description, filename) in enumerate(sources, start=2):
             card = self._card(tab, row, title, description)
-            ttk.Button(
+            preview_button = ttk.Button(
                 card,
-                text="Use in Recording",
-                style="Accent.TButton",
-                command=lambda selected=filename: self._select_recorder(selected),
-            ).grid(row=2, column=0, sticky="w")
+                text="Open camera" if filename == "record_oak_pose.py" else "Open live (no recording)",
+                command=lambda selected=filename: self.start_sensor_preview(selected),
+            )
+            preview_button.grid(row=2, column=0, sticky="w")
+            self.sensor_preview_buttons[filename] = preview_button
+            if filename != "record_oak_pose.py":
+                ttk.Button(
+                    card,
+                    text="Use in Recording",
+                    style="Accent.TButton",
+                    command=lambda selected=filename: self._select_recorder(selected),
+                ).grid(row=3, column=0, sticky="w", pady=(8, 0))
 
         ttk.Label(
             tab,
@@ -1121,7 +1173,7 @@ class ProjectGui(ttk.Frame):
         scrollbar.grid(row=1, column=1, sticky="ns")
         self._append_log("AURORA Control Center ready.\n")
 
-    # --- Simulation actions -------------------------------------------------
+    # Simulation actions
 
     def _browse_trajectory(self) -> None:
         """Choose a trajectory directory and store a portable path."""
@@ -1237,10 +1289,12 @@ class ProjectGui(ttk.Frame):
                 "Create aurora-simulation from src/simulation/environment.yml, then refresh Info.",
             )
             return
+        command = [str(self.simulation_python), "-u", str(INTERACTIVE_SIMULATION_SCRIPT)]
+        command += ["--mode", "dynamic" if self.dynamic_simulation.get() else "kinematic"]
         self._start_program(
             "Interactive task simulator",
             "simulation",
-            [str(self.simulation_python), "-u", str(INTERACTIVE_SIMULATION_SCRIPT)],
+            command,
         )
 
     def start_simulation(self) -> None:
@@ -1292,7 +1346,7 @@ class ProjectGui(ttk.Frame):
             [str(self.simulation_python), "-u", str(MANUAL_SIMULATION_SCRIPT)],
         )
 
-    # --- Recording program discovery and launch ----------------------------
+    # Recording programs
 
     def _recording_selection_changed(self) -> None:
         """Describe the selected recorder and refresh its start state."""
@@ -1309,6 +1363,15 @@ class ProjectGui(ttk.Frame):
             self.ble_dataset_row.grid()
         else:
             self.ble_dataset_row.grid_remove()
+        camera_selected = program is not None and program.name == "record_oak_pose.py"
+        if camera_selected:
+            self.camera_side_row.grid()
+            self.recording_preview_button.pack_forget()
+            self.record_button.configure(text="Open camera")
+        else:
+            self.camera_side_row.grid_remove()
+            self.recording_preview_button.pack(side="left", padx=(0, 8), before=self.record_button)
+            self.record_button.configure(text="Start recording")
         self._update_controls()
 
     def _refresh_recording_ports(self) -> None:
@@ -1366,6 +1429,9 @@ class ProjectGui(ttk.Frame):
         if program is None:
             messagebox.showinfo("Recording unavailable", "No recording program was found in src.")
             return
+        if program.name == "record_oak_pose.py":
+            self.start_sensor_preview(program.name)
+            return
         output_value = self.recording_output.get().strip()
         if not output_value:
             messagebox.showerror("Output folder required", "Choose a recording output folder.")
@@ -1373,9 +1439,14 @@ class ProjectGui(ttk.Frame):
         output = project_path(output_value)
         try:
             duration = float(self.recording_duration.get().strip())
-            baud = int(self.recording_serial_baud.get().strip())
-            if duration < 0 or baud <= 0:
-                raise ValueError("Duration cannot be negative and baud must be positive.")
+            if duration < 0:
+                raise ValueError("Duration cannot be negative.")
+            baud = (
+                int(self.recording_serial_baud.get().strip())
+                if program.name == "record_serial_sensors.py" else 115200
+            )
+            if baud <= 0:
+                raise ValueError("Baud must be positive.")
             output.mkdir(parents=True, exist_ok=True)
             arguments = self._split_arguments(self.recording_arguments.get())
         except (OSError, ValueError) as error:
@@ -1403,10 +1474,80 @@ class ProjectGui(ttk.Frame):
             "AURORA_BLE_DEVICE": self.recording_ble_device.get().strip(),
             "AURORA_SERIAL_PORT": self.recording_serial_port.get().strip(),
             "AURORA_SERIAL_BAUD": str(baud),
+            "AURORA_TRIAL_ID": self.recording_trial_id.get().strip(),
+            "AURORA_TEST_TYPE": self.recording_test_type.get().strip(),
         }
         python = self.simulation_python or _console_python(Path(sys.executable))
         command = [str(python), "-u", str(program), *arguments]
         self._start_program("Recording", "recording", command, environment=environment)
+
+    def preview_selected_source(self) -> None:
+        """Open the selected recorder's sensor source without creating files."""
+        program = self.recording_programs.get(self.recording_program.get())
+        if program is None or program.name not in RECORDER_DETAILS:
+            messagebox.showinfo("Preview unavailable", "Select a maintained sensor source first.")
+            return
+        self.start_sensor_preview(program.name)
+
+    def start_sensor_preview(self, filename: str) -> None:
+        """Launch a sensor monitor or the preview-first camera window."""
+        if filename not in RECORDER_DETAILS:
+            return
+        program = REPOSITORY_ROOT / "src" / "recording" / filename
+        if not program.is_file():
+            messagebox.showerror("Preview unavailable", f"Program not found: {program}")
+            return
+        if filename == "record_serial_sensors.py" and not self.recording_serial_port.get().strip():
+            messagebox.showerror("Serial port required", "Choose a serial port in Recording first.")
+            self.notebook.select(self.tabs["recording"])
+            return
+        if filename == "record_ble_sensors.py" and not self.recording_ble_device.get().strip():
+            messagebox.showerror("BLE device required", "Enter the BLE device name in Recording first.")
+            self.notebook.select(self.tabs["recording"])
+            return
+        baud = self.recording_serial_baud.get().strip() or "115200"
+        if filename == "record_serial_sensors.py":
+            try:
+                if int(baud) <= 0:
+                    raise ValueError("Baud must be positive.")
+            except ValueError as error:
+                messagebox.showerror("Invalid serial baud", str(error))
+                return
+        environment = {
+            "AURORA_BLE_DEVICE": self.recording_ble_device.get().strip(),
+            "AURORA_SERIAL_PORT": self.recording_serial_port.get().strip(),
+            "AURORA_SERIAL_BAUD": baud,
+        }
+        if filename == "record_oak_pose.py":
+            output_value = self.recording_output.get().strip()
+            if not output_value:
+                messagebox.showerror("Output folder required", "Choose a camera recording output folder.")
+                return
+            try:
+                duration = float(self.recording_duration.get().strip())
+                if duration < 0:
+                    raise ValueError("Duration cannot be negative.")
+                arguments = self._split_arguments(self.recording_arguments.get())
+            except ValueError as error:
+                messagebox.showerror("Camera settings invalid", str(error))
+                return
+            environment.update({
+                "AURORA_OUTPUT_DIR": str(project_path(output_value).resolve()),
+                "AURORA_SUBJECT": self.recording_subject.get().strip() or "session",
+                "AURORA_DURATION_SECONDS": str(duration),
+                "AURORA_CAMERA_SIDE": self.recording_camera_side.get(),
+                "AURORA_TRIAL_ID": self.recording_trial_id.get().strip(),
+                "AURORA_TEST_TYPE": self.recording_test_type.get().strip(),
+            })
+        else:
+            arguments = []
+        python = self.simulation_python or _console_python(Path(sys.executable))
+        self._start_program(
+            "OAK-D camera" if filename == "record_oak_pose.py" else f"{filename.removeprefix('record_').removesuffix('.py')} preview",
+            "preview",
+            [str(python), "-u", str(program), "--preview", *arguments],
+            environment=environment,
+        )
 
     @staticmethod
     def _split_arguments(value: str) -> list[str]:
@@ -1421,7 +1562,7 @@ class ProjectGui(ttk.Frame):
             ]
         return parts
 
-    # --- Saved-recording browser -------------------------------------------
+    # Saved recordings
 
     def _refresh_recordings(self) -> None:
         """Scan supported recording files and cache their metadata."""
@@ -1549,7 +1690,7 @@ class ProjectGui(ttk.Frame):
                 return
         self._open_existing(root)
 
-    # --- Firmware discovery and actions ------------------------------------
+    # Firmware actions
 
     def _discover_firmware_projects(self) -> dict[str, FirmwareProject]:
         """Find supported ESP-IDF and PlatformIO projects below firmware."""
@@ -1658,7 +1799,7 @@ class ProjectGui(ttk.Frame):
             working_directory=project.directory,
         )
 
-    # --- Project status -----------------------------------------------------
+    # Project status
 
     def _refresh_info(self) -> None:
         """Render current dependency, program, and tool availability."""
@@ -1728,7 +1869,7 @@ class ProjectGui(ttk.Frame):
             self._set_status("Ready", "ready")
         self._append_log("Project status refreshed.\n")
 
-    # --- Shared child-process supervision ----------------------------------
+    # Child processes
 
     def _start_program(
         self,
@@ -1939,6 +2080,16 @@ class ProjectGui(ttk.Frame):
         self.record_button.configure(
             state="disabled" if running or not recording_ready else "normal"
         )
+        selected_program = self.recording_programs.get(self.recording_program.get())
+        selected_preview = selected_program is not None and selected_program.name in RECORDER_DETAILS
+        self.recording_preview_button.configure(
+            state="disabled" if running or not selected_preview else "normal"
+        )
+        for filename, button in self.sensor_preview_buttons.items():
+            preview_script = REPOSITORY_ROOT / "src" / "recording" / filename
+            button.configure(
+                state="disabled" if running or not preview_script.is_file() else "normal"
+            )
 
         firmware = self.firmware_projects.get(self.firmware_project.get())
         firmware_ready = firmware is not None and shutil.which(firmware.executable) is not None
@@ -1954,7 +2105,7 @@ class ProjectGui(ttk.Frame):
         )
         self.stop_button.configure(state="normal" if running else "disabled")
 
-    # --- Shared UI helpers --------------------------------------------------
+    # UI helpers
 
     def _set_status(self, text: str, state: str) -> None:
         """Set the global status message and its severity color."""
@@ -2038,7 +2189,7 @@ class ProjectGui(ttk.Frame):
         self.window.destroy()
 
 
-# --- 6. Application entry point --------------------------------------------
+# Entry point
 
 def main() -> None:
     """Create the top-level window and run the Tk event loop."""

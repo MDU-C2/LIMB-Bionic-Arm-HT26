@@ -116,18 +116,9 @@
   <link name="left_elbow_roty">
     <inertial>
       <origin xyz="0 0 0" rpy="0 1.5708 0"/>
-      <mass value="1.0"/>
-      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.02"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
     </inertial>
-      <visual>
-      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
-      <geometry><mesh filename="arm/r_forearm.stl" scale="-0.001 0.001 0.001"/></geometry>
-      <material name="grey"/>
-    </visual>
-    <collision>
-      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
-      <geometry><mesh filename="arm/r_forearm.stl" scale="-0.001 0.001 0.001"/></geometry>
-    </collision>
   </link>
 
   <joint name="jLeftElbow_roty" type="revolute">
@@ -142,21 +133,26 @@
     <parent link="left_elbow_roty"/>
     <child link="left_forearm"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 -1"/>
+    <!-- Lower-arm rotation is along the mirrored forearm's length. -->
+    <axis xyz="-1 0 0"/>
     <limit lower="0" upper="2.443461" effort="200" velocity="1.745329"/>
   </joint>
   
   <link name="left_forearm">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.1"/>
-      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.02"/>
     </inertial>
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-       <geometry><sphere radius="0.02"/></geometry>
-      <material name="blue"/>
+      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
+      <geometry><mesh filename="arm/r_forearm.stl" scale="-0.001 0.001 0.001"/></geometry>
+      <material name="grey"/>
     </visual>
+    <collision>
+      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
+      <geometry><mesh filename="arm/r_forearm.stl" scale="-0.001 0.001 0.001"/></geometry>
+    </collision>
   </link>
 
   <link name="left_wrist_rotx">
@@ -168,6 +164,11 @@
     <visual>
       <origin rpy="0 3.14152 -1.5708" xyz="-0.07 0 0.009"/>
        <geometry><mesh filename="arm/fullhand2/LeftWristlargeV4.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="blue"/>
+    </visual>
+    <visual>
+      <origin xyz="-0.004 0 0" rpy="0 1.5708 0"/>
+      <geometry><cylinder radius="0.028" length="0.045"/></geometry>
       <material name="blue"/>
     </visual>
     <collision>
@@ -196,9 +197,9 @@
       <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
     </inertial>
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-       <geometry><sphere radius="0.02"/></geometry>
-      <material name="blue"/>
+      <origin xyz="0 0 0.006" rpy="0 1.5708 0"/>
+      <geometry><mesh filename="arm/r_hand.stl" scale="-0.001 0.001 0.001"/></geometry>
+      <material name="grey"/>
     </visual>
   </link>
 

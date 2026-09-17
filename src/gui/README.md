@@ -1,8 +1,6 @@
 # AURORA control center
 
-`app.py` is the shared Tkinter launcher for software in this repository. It
-uses paths relative to the repository, so each group member can keep the clone
-in a different location.
+`app.py` launches the project's desktop tools from repository-relative paths.
 
 Start it from the repository root:
 
@@ -10,10 +8,8 @@ Start it from the repository root:
 micromamba run -n aurora-simulation python src/gui/app.py
 ```
 
-The control center has tabs for simulation, recording, saved recordings,
-sensors, Motion AI, robot tools, and project information. Programs started by
-the GUI write to the Activity panel and can be stopped from the same window.
-PyBullet and camera previews open as separate windows.
+Child-program output appears in Activity. PyBullet and camera previews open in
+separate windows.
 
 ## Architecture
 
@@ -23,10 +19,6 @@ PyBullet and camera previews open as separate windows.
 - `_refresh_*()` methods discover recorders, recordings, serial ports, and
   firmware projects.
 - `_update_controls()` disables actions whose requirements are unavailable.
-
-Pages are scrollable so all controls remain available on smaller or scaled
-displays. Keep repository paths relative and let users select device names,
-ports, and output folders in the GUI.
 
 ## Add a tab
 
@@ -49,9 +41,12 @@ when they contain a `__main__` entry point. Recorders receive these settings:
 | `AURORA_OUTPUT_DIR` | Parent directory for session folders. |
 | `AURORA_SUBJECT` | Subject or session label. |
 | `AURORA_DURATION_SECONDS` | Duration; `0` means record until stopped. |
+| `AURORA_CAMERA_SIDE` | Subject arm selected for OAK-D tracking; left by default. |
 | `AURORA_BLE_DEVICE` | BLE device name selected in the GUI. |
 | `AURORA_SERIAL_PORT` | Selected serial port. |
 | `AURORA_SERIAL_BAUD` | Selected serial baud rate. |
+| `AURORA_TRIAL_ID` | Trial identifier saved in session metadata. |
+| `AURORA_TEST_TYPE` | Selected grip, movement, or combined test type. |
 
 A recorder should create a timestamped session directory, write `meta.json`,
 flush data while running, and close devices and files on Ctrl+C. Add new output
@@ -59,16 +54,13 @@ extensions to `RECORDING_EXTENSIONS` if the Recordings tab must display them.
 The BLE recorder also accepts `--dataset-label` when its labeled-capture
 checkbox is selected.
 
+The three maintained sources accept `--preview`. BLE and serial use it for a
+read-only monitor. OAK-D always opens a live camera view first; it creates a
+session only when START REC is clicked inside that view. The GUI gives OAK-D
+one Open camera action and passes the selected subject arm and output settings.
+
 ## Firmware integration
 
 The Robot tab discovers PlatformIO projects by `platformio.ini` and ESP-IDF
 projects by a top-level `CMakeLists.txt` below `firmware`. Flashing requires a
 selected serial port and confirmation in the GUI.
-
-## Maintenance
-
-- Keep obvious widget code clear through names instead of comments.
-- Document public behavior and hardware constraints where they matter.
-- Start long-running tools through `_start_program()`.
-- Never store a personal path, serial port, or device address in source code.
-- Keep hardware actions user initiated and report failures in Activity.

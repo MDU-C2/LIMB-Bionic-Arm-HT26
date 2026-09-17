@@ -41,6 +41,14 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def experiment_metadata() -> dict[str, str]:
+    """Return the trial identifiers shared by all recording programs."""
+    return {
+        "trial_id": os.environ.get("AURORA_TRIAL_ID", "").strip(),
+        "test_type": os.environ.get("AURORA_TEST_TYPE", "").strip(),
+    }
+
+
 def write_metadata(session: Path, values: dict[str, object]) -> None:
     """Save final session details beside the recorded data."""
     metadata = {

@@ -64,7 +64,6 @@ def speed_limited_step_times(
 
 def main() -> None:
     """Parse options, load a trajectory, and play it in PyBullet."""
-    # Keep the CLI usable both from the GUI and for repeatable terminal runs.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--path", type=Path, default=EXAMPLE_PATH)
     parser.add_argument(
@@ -90,7 +89,6 @@ def main() -> None:
     if not args.path.is_dir():
         raise FileNotFoundError(f"Trial directory not found: {args.path}")
 
-    # Resolve and validate all data before opening a PyBullet window.
     saved = resolve_saved_dmp_rollout_path(args.path, args.source)
     if saved is not None and not args.refit:
         expected_suffix = f"dmp_rollout_{args.source}.npz"
@@ -140,6 +138,13 @@ def main() -> None:
     if connection < 0:
         raise RuntimeError("Could not connect to PyBullet")
     try:
+        if not args.headless:
+            for preview in (
+                p.COV_ENABLE_RGB_BUFFER_PREVIEW,
+                p.COV_ENABLE_DEPTH_BUFFER_PREVIEW,
+                p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW,
+            ):
+                p.configureDebugVisualizer(preview, 0)
         p.setGravity(0, 0, 0)
         # PyBullet on Windows cannot open the non-ASCII parent path directly.
         # Loading from this directory keeps all URDF and mesh paths ASCII-only.
@@ -154,13 +159,20 @@ def main() -> None:
         finally:
             os.chdir(previous_directory)
         joint_ids = [joint_index(robot, urdf_name) for _, urdf_name, _ in JOINT_MAPPING]
+        wrist_joint = joint_index(robot, "jLeftElbow_rotz")
         for index in range(p.getNumJoints(robot)):
             p.setJointMotorControl2(robot, index, p.POSITION_CONTROL, force=0.0)
+        # The four-column trajectory has no wrist channel. Hold the forearm at
+        # zero so the hand remains aligned throughout playback.
+        p.setJointMotorControl2(
+            robot, wrist_joint, p.POSITION_CONTROL,
+            targetPosition=0.0, force=10.0,
+            maxVelocity=math.radians(HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"].speed_positive),
+        )
 
         print("Playing:")
         for logical, urdf_name, sign in JOINT_MAPPING:
             print(f"  {logical} -> {urdf_name} (sign {sign:+.0f})")
-        # Resetting joint state gives deterministic playback of measured data.
         while True:
             for sample, step_time in zip(trajectory, step_times):
                 if not p.isConnected():

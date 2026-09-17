@@ -8,7 +8,7 @@ import json
 import os
 import time
 
-from common import create_session_directory, env_float, utc_now, write_metadata
+from common import create_session_directory, env_float, experiment_metadata, utc_now, write_metadata
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +21,10 @@ def parse_args() -> argparse.Namespace:
         default=int(os.environ.get("AURORA_SERIAL_BAUD", "115200")),
     )
     parser.add_argument("--subject", default=os.environ.get("AURORA_SUBJECT", "session"))
+    parser.add_argument(
+        "--preview", action="store_true",
+        help="Print live serial messages without creating a recording session.",
+    )
     parser.add_argument(
         "--duration",
         type=float,
@@ -55,54 +59,67 @@ def main() -> int:
         print("Baud must be positive and duration cannot be negative.")
         return 2
 
-    session = create_session_directory("serial", args.subject)
-    output_path = session / "serial.jsonl"
+    session = None if args.preview else create_session_directory("serial", args.subject)
+    output_path = None if session is None else session / "serial.jsonl"
     started = time.monotonic()
     lines_written = 0
-    print(f"Recording {args.port} at {args.baud} baud")
-    print(f"Saving to {session}")
+    print(f"{'Previewing' if args.preview else 'Recording'} {args.port} at {args.baud} baud")
+    if session is not None:
+        print(f"Saving to {session}")
+    else:
+        print("Preview mode does not create a session folder or save messages.")
 
     try:
-        with serial.Serial(args.port, args.baud, timeout=0.2) as device, output_path.open(
-            "w", encoding="utf-8", buffering=1
-        ) as output:
-            while args.duration == 0 or time.monotonic() - started < args.duration:
-                raw = device.readline()
-                if not raw:
-                    continue
-                text = raw.decode("utf-8", errors="replace").strip()
-                record: dict[str, object] = {
-                    "host_time": utc_now(),
-                    "text": text,
-                    "raw_base64": base64.b64encode(raw).decode("ascii"),
-                }
-                try:
-                    record["data"] = json.loads(text)
-                except json.JSONDecodeError:
-                    pass
-                output.write(json.dumps(record, separators=(",", ":")) + "\n")
-                lines_written += 1
-                if lines_written % 100 == 0:
-                    print(f"Recorded {lines_written} serial messages")
+        with serial.Serial(args.port, args.baud, timeout=0.2) as device:
+            output = output_path.open("w", encoding="utf-8", buffering=1) if output_path else None
+            try:
+                while args.duration == 0 or time.monotonic() - started < args.duration:
+                    raw = device.readline()
+                    if not raw:
+                        continue
+                    text = raw.decode("utf-8", errors="replace").strip()
+                    if args.preview:
+                        print(f"[{utc_now()}] {text}")
+                        continue
+                    record: dict[str, object] = {
+                        "host_time": utc_now(),
+                        "host_monotonic_ns": time.monotonic_ns(),
+                        "text": text,
+                        "raw_base64": base64.b64encode(raw).decode("ascii"),
+                    }
+                    try:
+                        record["data"] = json.loads(text)
+                    except json.JSONDecodeError:
+                        pass
+                    output.write(json.dumps(record, separators=(",", ":")) + "\n")
+                    lines_written += 1
+                    if lines_written % 100 == 0:
+                        print(f"Recorded {lines_written} serial messages")
+            finally:
+                if output is not None:
+                    output.close()
     except KeyboardInterrupt:
         print("Stopping serial recording...")
     except serial.SerialException as error:
         print(f"Serial recording failed: {error}")
         return 1
     finally:
-        write_metadata(
-            session,
-            {
-                "source": "serial",
-                "subject": args.subject,
-                "port": args.port,
-                "baud": args.baud,
-                "duration_seconds": round(time.monotonic() - started, 3),
-                "messages": lines_written,
-            },
-        )
+        if session is not None:
+            write_metadata(
+                session,
+                {
+                    "source": "serial",
+                    "subject": args.subject,
+                    "port": args.port,
+                    "baud": args.baud,
+                    "duration_seconds": round(time.monotonic() - started, 3),
+                    "messages": lines_written,
+                    **experiment_metadata(),
+                },
+            )
 
-    print(f"Saved {lines_written} messages to {output_path}")
+    if output_path is not None:
+        print(f"Saved {lines_written} messages to {output_path}")
     return 0
 
 

@@ -8,6 +8,8 @@ characters.
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
 import os
 from pathlib import Path
@@ -24,34 +26,40 @@ import pybullet_data
 import pygame
 import tkinter as tk
 from kinematics import calculate_ik_angles, is_reachable
+from sim.controller_params import (
+    ARM_MOTOR_FORCE_NM, ARM_POSITION_GAIN, ARM_VELOCITY_GAIN,
+    FINGER_MOTOR_FORCE_NM, FINGER_POSITION_GAIN, FINGER_VELOCITY_GAIN,
+    FINGER_PREVIEW_SPEED_RAD_S,
+)
+from sim.dynamics import ArmDynamics
 from sim.joint_limits import (
     FINGER_LIMITS_DEG,
     RIGHT_ARM_HARDWARE_SIGN,
     RIGHT_ARM_LIMITS_DEG,
     max_velocity_rad_s,
 )
+from sim.robot_model import RIGHT_GRIP_OFFSET_M
+
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--mode", choices=("kinematic", "dynamic"), default="kinematic",
+                    help="Direct joint preview or gravity-and-motor physics mode")
+parser.add_argument("--telemetry-out", type=Path,
+                    help="Write dynamic-mode state and torque snapshots as JSON lines")
+args = parser.parse_args()
+DYNAMIC_MODE = args.mode == "dynamic"
+if args.telemetry_out is not None and not DYNAMIC_MODE:
+    parser.error("--telemetry-out requires --mode dynamic")
 
 
 SIMULATION_FREQUENCY_HZ = 60
 PHYSICS_SUBSTEPS = 4
 TARGET_GRASP_DISTANCE_M = 0.10
 TARGET_NORMAL_MASS_KG = 0.1
-TARGET_GRASPED_MASS_KG = 0.01
 FINGER_MODEL_RANGE_RAD = 1.5
-HAND_GRIP_OFFSET_M = (0.105, 0.0, 0.0)
+HAND_GRIP_OFFSET_M = RIGHT_GRIP_OFFSET_M
 
-ARM_MOTOR_FORCE_NM = {
-    "shoulder_x": 15.0,
-    "shoulder_y": 20.0,
-    "shoulder_z": 20.0,
-    "elbow_x": 10.0,
-    "wrist_rotation": 4.0,
-}
-ARM_POSITION_GAIN = 0.05
-ARM_VELOCITY_GAIN = 1.0
-FINGER_MOTOR_FORCE = 2.0
-FINGER_POSITION_GAIN = 0.1
-FINGER_VELOCITY_GAIN = 1.0
+FINGER_CURL_PER_SECOND = 3.0
 FINGER_JOINT_TOKENS = ("thumb", "index", "middle", "ring", "pinky")
 
 READY_POSE_DEG = {
@@ -64,7 +72,7 @@ READY_POSE_DEG = {
 CAMERA_MODES = ("overview", "shoulder", "hand")
 
 
-# --- 1. Arm command model ---------------------------------------------------
+# Arm commands
 
 
 def clamp(value: float, min_value: float, max_value: float) -> float:
@@ -274,7 +282,7 @@ def get_angles_rad(arm: LimbArm) -> dict[str, float]:
     return angles_rad
 
 
-# --- 2. PyBullet mapping and motor commands --------------------------------
+# PyBullet mapping
 
 
 def sync_to_pybullet(
@@ -296,18 +304,17 @@ def sync_to_pybullet(
             continue
         joint_index = joint_name_to_index[name]
         is_finger = any(token in name for token in FINGER_JOINT_TOKENS)
-        force = FINGER_MOTOR_FORCE if is_finger else ARM_MOTOR_FORCE_NM[name]
+        force = FINGER_MOTOR_FORCE_NM if is_finger else ARM_MOTOR_FORCE_NM[name]
         p_gain = FINGER_POSITION_GAIN if is_finger else ARM_POSITION_GAIN
         v_gain = FINGER_VELOCITY_GAIN if is_finger else ARM_VELOCITY_GAIN
-        if is_finger:
-            finger = name.split("_", maxsplit=1)[0]
-            finger_limit = FINGER_LIMITS_DEG[finger]
-            motion_range = finger_limit.upper - finger_limit.lower
-            max_velocity = FINGER_MODEL_RANGE_RAD * finger_limit.speed_positive / motion_range
-        else:
-            max_velocity = max_velocity_rad_s(name)
+        max_velocity = FINGER_PREVIEW_SPEED_RAD_S if is_finger else max_velocity_rad_s(name)
 
         if use_motors:
+            urdf_joint = cli.getJointInfo(body_id, joint_index)
+            if urdf_joint[10] > 0:
+                force = min(force, urdf_joint[10])
+            if urdf_joint[11] > 0:
+                max_velocity = min(max_velocity, urdf_joint[11])
             cli.setJointMotorControl2(
                 bodyIndex=body_id,
                 jointIndex=joint_index,
@@ -358,7 +365,7 @@ def build_joint_index_map(robot_id: int, client) -> dict[str, int]:
         joint_info = client.getJointInfo(robot_id, joint_index)
         urdf_name = joint_info[1].decode("utf-8")
         logical_name = URDF_TO_LOGICAL_JOINT.get(urdf_name)
-        if logical_name:
+        if logical_name and joint_info[2] == client.JOINT_REVOLUTE:
             joint_map[logical_name] = joint_index
 
     print("--- Joint map (controller -> PyBullet) ---")
@@ -401,11 +408,12 @@ def resolve_link_index(
     raise KeyError(f"No link found for '{name_fragment}'")
 
 
-# --- 3. Runtime paths and PyBullet setup -----------------------------------
+# PyBullet scene
 simulator_dir = os.path.abspath(os.path.dirname(__file__))
 model_dir = os.path.abspath(os.path.join(simulator_dir, "..", "sim"))
 urdf_path = os.path.join(model_dir, "arm", "right_arm.urdf")
 
+print(f"Simulator mode: {args.mode}")
 print(f"Simulator directory: {simulator_dir}")
 print(f"URDF path: {urdf_path}")
 
@@ -417,7 +425,6 @@ except p.error as error:
 if physics_client < 0:
     raise SystemExit("Could not connect to the PyBullet GUI.")
 
-# Keep the scene clean until camera buffers are needed.
 preview_visible = False
 p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
 for preview in (
@@ -438,7 +445,6 @@ p.setPhysicsEngineParameter(
 p.loadURDF("plane.urdf")
 p.loadURDF("table/table.urdf", [0, 0.8, -0.2], useFixedBase=True)
 
-# Keep the target in place until the hand grasps it.
 target_start_position = [0.2, 0.6, 0.5]
 target_start_orientation = p.getQuaternionFromEuler([0, 0, 0])
 target_body = None
@@ -504,7 +510,6 @@ p.resetDebugVisualizerCamera(
 
 
 
-# --- 4. Load the arm and configure contact -------------------------------
 try:
     print("Attempting to load robot...")
     base_orientation = p.getQuaternionFromEuler([0, 0, 0])
@@ -543,6 +548,10 @@ try:
             spinningFriction=0.1,
             rollingFriction=0.001,
         )
+        if p.getJointInfo(robot_body, joint_index)[2] != p.JOINT_FIXED:
+            p.setJointMotorControl2(
+                robot_body, joint_index, p.VELOCITY_CONTROL, force=0.0
+            )
 
 except p.error as error:
     print("\n--- ERROR LOADING ROBOT ---")
@@ -551,7 +560,7 @@ except p.error as error:
     p.disconnect()
     raise SystemExit(1) from error
 
-# --- 5. Controls and sensor windows ----------------------------------------
+# Controls and dashboard
 print("Initializing 'brain'...")
 
 arm = LimbArm()
@@ -559,6 +568,7 @@ set_ready_pose(arm)
 manual_motion = ManualMotion()
 joint_indices = build_joint_index_map(robot_body, p)
 sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
+dynamics = ArmDynamics(robot_body, p)
 link_indices_by_name = build_link_name_index_map(robot_body, p)
 
 try:
@@ -587,25 +597,21 @@ except KeyError as error:
     print("Links found:", list(link_indices_by_name.keys()))
     hand_link_index = wrist_link_index = elbow_link_index = -1
 
-# Build the sensor dashboard before Pygame takes keyboard focus.
 print("Initializing sensor window (Tkinter)...")
 sensor_window = tk.Tk()
 sensor_window.title("LIMB Sensor Dashboard")
-sensor_window.geometry("460x390+35+55")
+sensor_window.geometry("490x445+35+55")
 sensor_window.protocol("WM_DELETE_WINDOW", sensor_window.withdraw)
 
-# StringVar objects let the simulation update values without recreating labels.
 sensor_vars = {}
 tk_font = ("Consolas", 11)
 tk_font_bold = ("Consolas", 12, "bold")
 
-# Joint-angle and motor-torque readings.
 joint_frame = tk.Frame(sensor_window, padx=10, pady=10)
 joint_frame.pack(fill='x')
 
-tk.Label(joint_frame, text="--- JOINT SENSORS ---", font=tk_font_bold).pack(anchor='w')
+tk.Label(joint_frame, text="--- JOINT POSE (Simulated) ---", font=tk_font_bold).pack(anchor='w')
 
-# Short display labels map to the controller's logical joint names.
 joint_names_map = {
     "Upper rot": "shoulder_x",
     "Shoulder UD": "shoulder_y",
@@ -634,7 +640,7 @@ row.pack(anchor='w')
 
 for name, key in joint_names_map.items():
     sensor_vars[f"{key}_angle"] = tk.StringVar(value="--.- deg")
-    sensor_vars[f"{key}_torque"] = tk.StringVar(value="--.- Nm")
+    sensor_vars[f"{key}_torque"] = tk.StringVar(value="N/A")
 
     row = tk.Frame(joint_frame)
     tk.Label(row, text=f"{name}:", width=13, font=tk_font_bold).pack(side=tk.LEFT)
@@ -654,7 +660,6 @@ for name, key in joint_names_map.items():
     ).pack(side=tk.LEFT)
     row.pack(anchor='w')
 
-# Hand orientation represented as a simulated IMU.
 imu_frame = tk.Frame(sensor_window, padx=10, pady=10)
 imu_frame.pack(fill='x')
 
@@ -667,19 +672,25 @@ tk.Label(imu_frame, textvariable=sensor_vars["imu_roll"], font=tk_font).pack(anc
 tk.Label(imu_frame, textvariable=sensor_vars["imu_pitch"], font=tk_font).pack(anchor='w')
 tk.Label(imu_frame, textvariable=sensor_vars["imu_yaw"], font=tk_font).pack(anchor='w')
 
-# Values that approximate future EMG and pressure integrations.
 bio_frame = tk.Frame(sensor_window, padx=10, pady=10)
 bio_frame.pack(fill='x')
 
 tk.Label(bio_frame, text="--- BIO-SENSORS (Simulated) ---", font=tk_font_bold).pack(anchor='w')
-sensor_vars["emg_shoulder"] = tk.StringVar(value="EMG Shoulder: --.-")
+sensor_vars["emg_shoulder"] = tk.StringVar(value="EMG: open BLE live preview")
 sensor_vars["pressure_hand"] = tk.StringVar(value="Hand Pressure: N/A")
 
 tk.Label(bio_frame, textvariable=sensor_vars["emg_shoulder"], font=tk_font).pack(anchor='w')
 tk.Label(bio_frame, textvariable=sensor_vars["pressure_hand"], font=tk_font).pack(anchor='w')
 
+physics_frame = tk.Frame(sensor_window, padx=10, pady=6)
+physics_frame.pack(fill='x')
+tk.Label(physics_frame, text="--- PHYSICS (URDF ESTIMATE) ---", font=tk_font_bold).pack(anchor='w')
+sensor_vars["gravity_effort"] = tk.StringVar(value="Gravity hold: --")
+sensor_vars["grip_speed"] = tk.StringVar(value="Grip speed: --")
+tk.Label(physics_frame, textvariable=sensor_vars["gravity_effort"], font=tk_font).pack(anchor='w')
+tk.Label(physics_frame, textvariable=sensor_vars["grip_speed"], font=tk_font).pack(anchor='w')
 
-# The Pygame HUD receives keyboard input and shows the detailed arm state.
+
 print("Initializing Pygame interface...")
 os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "35,500")
 pygame.init()
@@ -714,10 +725,12 @@ def draw_control_row(y: int, keys_text: str, label: str, value: str, x: int = 32
     draw_text(label, (x + 106, y + 3), (207, 216, 230), font_small)
     draw_text(value, (x + 285, y + 3), (121, 214, 168), font_small)
 
-# --- 6. Simulation loop ----------------------------------------------------
+# Main loop
 running = True
 hud_visible = True
+grasp_transform = None
 grasp_constraint = None
+auto_grasp_pending = False
 reach_line_id = -1
 target_text_id = -1
 
@@ -728,8 +741,6 @@ default_cam_target = [0, 0.35, 0.45]
 notice_text = "Ready - click this window to control the arm"
 notice_until_ms = 0
 
-# Seed display values before the first frame. This also makes an immediate F or
-# Tab key press safe before the first sensor-read pass has completed.
 default_position = (0.0, 0.0, 0.0)
 default_orientation = (0.0, 0.0, 0.0)
 hand_position = default_position
@@ -737,12 +748,26 @@ wrist_position = default_position
 elbow_position = default_position
 imu_euler_rad = default_orientation
 measured_angles_deg = {name: 0.0 for name in joint_indices}
-torques = {name: 0.0 for name in joint_indices}
+measured_motor_torque = {name: 0.0 for name in joint_indices}
+physics_snapshot = None
+frame_number = 0
+telemetry_file = None
+if args.telemetry_out is not None:
+    args.telemetry_out.parent.mkdir(parents=True, exist_ok=True)
+    telemetry_file = args.telemetry_out.open("w", encoding="utf-8")
+    print(f"Physics telemetry: {args.telemetry_out}")
+
+
+def set_target_robot_collision(enabled: bool) -> None:
+    """A constrained payload should not collide with the hand carrying it."""
+    for link_index in range(-1, p.getNumJoints(robot_body)):
+        p.setCollisionFilterPair(
+            robot_body, target_body, link_index, -1, int(enabled)
+        )
 
 
 while running and p.isConnected():
 
-    # Read the world positions before controls use them.
     try:
         target_position, _ = p.getBasePositionAndOrientation(target_body)
         robot_position, _ = p.getBasePositionAndOrientation(robot_body)
@@ -755,7 +780,6 @@ while running and p.isConnected():
     target_z_relative = target_position[2] - robot_position[2]
     target_relative_position = (target_x_relative, target_y_relative, target_z_relative)
 
-    # Handle one-time key presses.
     reset_requested = False
     interact_requested = False
     camera_changed = False
@@ -814,15 +838,38 @@ while running and p.isConnected():
                     notice_text = "Sensor dashboard hidden"
                 notice_until_ms = pygame.time.get_ticks() + 1800
 
+    # The scene can receive focus instead of the separate Pygame controller.
+    # Accept the essential task keys from either window.
+    bullet_events = p.getKeyboardEvents()
+
+    def bullet_key_down(letter: str) -> bool:
+        return any(
+            bullet_events.get(ord(key), 0) & p.KEY_IS_DOWN
+            for key in (letter.lower(), letter.upper())
+        )
+
+    def bullet_key_triggered(letter: str) -> bool:
+        return any(
+            bullet_events.get(ord(key), 0) & p.KEY_WAS_TRIGGERED
+            for key in (letter.lower(), letter.upper())
+        )
+
+    if bullet_events.get(ord(" "), 0) & p.KEY_WAS_TRIGGERED:
+        interact_requested = True
+    if bullet_key_triggered("r"):
+        reset_requested = True
+
     keys = pygame.key.get_pressed()
     if keys[pygame.K_ESCAPE]:
         running = False
 
-    # Reset the arm, target, and any active grasp.
     if reset_requested:
+        auto_grasp_pending = False
+        grasp_transform = None
         if grasp_constraint is not None:
             p.removeConstraint(grasp_constraint)
             grasp_constraint = None
+            set_target_robot_collision(True)
         if target_anchor_constraint is not None:
             p.removeConstraint(target_anchor_constraint)
             target_anchor_constraint = None
@@ -850,8 +897,7 @@ while running and p.isConnected():
         notice_text = "Arm and target reset"
         notice_until_ms = pygame.time.get_ticks() + 2200
 
-    # H steers the shoulder and elbow toward the target.
-    if keys[pygame.K_h]:
+    if keys[pygame.K_h] or bullet_key_down("h") or auto_grasp_pending:
         try:
             relative_x, relative_y, relative_z = target_relative_position
             horizontal_distance = math.hypot(relative_x, relative_y)
@@ -890,22 +936,27 @@ while running and p.isConnected():
             notice_text = f"Target cannot be reached: {error}"
             notice_until_ms = pygame.time.get_ticks() + 1800
 
-    # F and G control the fingers. Space handles the nearby object.
-    hand_step = 1.0 / SIMULATION_FREQUENCY_HZ
-    delta_hand = (hand_step if keys[pygame.K_f] else 0) + (
-        -hand_step if keys[pygame.K_g] else 0
+    hand_step = FINGER_CURL_PER_SECOND / SIMULATION_FREQUENCY_HZ
+    delta_hand = (hand_step if keys[pygame.K_f] or bullet_key_down("f") else 0) + (
+        -hand_step if keys[pygame.K_g] or bullet_key_down("g") else 0
     )
     if delta_hand:
         new_value = arm.hand.curl + delta_hand
         arm.hand.curl = clamp(new_value, arm.hand.min_curl, arm.hand.max_curl)
 
-    if interact_requested and grasp_constraint is None and hand_link_index != -1:
+    if (interact_requested or auto_grasp_pending) and grasp_transform is None and hand_link_index != -1:
         dx = target_position[0] - hand_position[0]
         dy = target_position[1] - hand_position[1]
         dz = target_position[2] - hand_position[2]
         contact_dist = math.sqrt(dx**2 + dy**2 + dz**2)
 
-        if contact_dist < TARGET_GRASP_DISTANCE_M:
+        if interact_requested and auto_grasp_pending:
+            auto_grasp_pending = False
+            notice_text = "Assisted grasp canceled"
+            notice_until_ms = pygame.time.get_ticks() + 1800
+            print(notice_text)
+        elif contact_dist < TARGET_GRASP_DISTANCE_M:
+            auto_grasp_pending = False
             if target_anchor_constraint is not None:
                 p.removeConstraint(target_anchor_constraint)
                 target_anchor_constraint = None
@@ -926,38 +977,57 @@ while running and p.isConnected():
                 target_orientation_world,
             )
 
-            # Reduce target mass and disable its collisions while constrained.
-            p.changeDynamics(target_body, -1, mass=TARGET_GRASPED_MASS_KG)
-            p.setCollisionFilterGroupMask(
-                target_body,
-                -1,
-                collisionFilterGroup=0,
-                collisionFilterMask=0,
-            )
-
-            grasp_constraint = p.createConstraint(
-                parentBodyUniqueId=robot_body,
-                parentLinkIndex=hand_link_index,
-                childBodyUniqueId=target_body,
-                childLinkIndex=-1,
-                jointType=p.JOINT_FIXED,
-                jointAxis=[0, 0, 0],
-                parentFramePosition=target_position_in_hand,
-                parentFrameOrientation=target_orientation_in_hand,
-                childFramePosition=[0, 0, 0],
-                childFrameOrientation=[0, 0, 0, 1],
-            )
-            p.changeConstraint(grasp_constraint, maxForce=200)
+            if DYNAMIC_MODE:
+                set_target_robot_collision(False)
+                # PyBullet constraints use the parent link's inertial (CoM)
+                # frame; the display transform above uses its visual link frame.
+                inverse_com_position, inverse_com_orientation = p.invertTransform(
+                    hand_state[0], hand_state[1]
+                )
+                target_position_in_com, target_orientation_in_com = p.multiplyTransforms(
+                    inverse_com_position,
+                    inverse_com_orientation,
+                    target_position_world,
+                    target_orientation_world,
+                )
+                grasp_constraint = p.createConstraint(
+                    robot_body, hand_link_index, target_body, -1,
+                    p.JOINT_FIXED, (0, 0, 0),
+                    target_position_in_com, (0, 0, 0),
+                    target_orientation_in_com, (0, 0, 0, 1),
+                )
+                p.changeConstraint(grasp_constraint, maxForce=100, erp=0.8)
+            else:
+                # Direct preview uses a hand-relative pose to keep the small
+                # target visually stable during joint resets.
+                p.changeDynamics(target_body, -1, mass=0.0)
+                p.setCollisionFilterGroupMask(
+                    target_body,
+                    -1,
+                    collisionFilterGroup=0,
+                    collisionFilterMask=0,
+                )
+            grasp_transform = (target_position_in_hand, target_orientation_in_hand)
             arm.hand.curl = max(arm.hand.curl, 0.7)
             notice_text = "Target grabbed"
             notice_until_ms = pygame.time.get_ticks() + 1800
-        else:
-            notice_text = f"Move closer to grab ({contact_dist:.2f} m away)"
-            notice_until_ms = pygame.time.get_ticks() + 1800
+            print(notice_text)
+        elif interact_requested:
+            can_reach, reason = is_reachable(target_relative_position)
+            if can_reach:
+                auto_grasp_pending = True
+                notice_text = f"Reaching for target ({contact_dist:.2f} m away)"
+            else:
+                notice_text = reason.title()
+            notice_until_ms = pygame.time.get_ticks() + 2200
+            print(notice_text)
 
-    elif (interact_requested or keys[pygame.K_g]) and grasp_constraint is not None:
-        p.removeConstraint(grasp_constraint)
-        grasp_constraint = None
+    elif (interact_requested or keys[pygame.K_g] or bullet_key_down("g")) and grasp_transform is not None:
+        grasp_transform = None
+        if grasp_constraint is not None:
+            p.removeConstraint(grasp_constraint)
+            grasp_constraint = None
+            set_target_robot_collision(True)
 
         p.changeDynamics(target_body, -1, mass=TARGET_NORMAL_MASS_KG)
         p.setCollisionFilterGroupMask(
@@ -969,12 +1039,13 @@ while running and p.isConnected():
         p.resetBaseVelocity(target_body, linearVelocity=[0, 0, -0.2])
         notice_text = "Target released"
         notice_until_ms = pygame.time.get_ticks() + 1800
+        print(notice_text)
 
     speed_mult = 1.0
     if keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
         speed_mult = 0.25
 
-    if keys[pygame.K_h]:
+    if keys[pygame.K_h] or bullet_key_down("h") or auto_grasp_pending:
         manual_motion.reset()
     else:
         delta_should_y = manual_motion.step(
@@ -1028,35 +1099,53 @@ while running and p.isConnected():
         set_elbow(arm, x=delta_elbow_x, mode="rel")
         set_wrist(arm, delta_wrist, mode="rel")
 
-    # --- B. Synchronization and Physics ---
     if not p.isConnected():
         running = False
         continue
 
-    sync_to_pybullet(
-        arm=arm,
-        body_id=robot_body,
-        joint_name_to_index=joint_indices,
-        client=p,
-        use_motors=True
-    )
+    if DYNAMIC_MODE:
+        sync_to_pybullet(
+            arm=arm, body_id=robot_body, joint_name_to_index=joint_indices,
+            client=p, use_motors=True,
+        )
+        p.stepSimulation()
+    else:
+        # Direct preview keeps the light finger links visually stable.
+        p.stepSimulation()
+        sync_to_pybullet(
+            arm=arm, body_id=robot_body, joint_name_to_index=joint_indices,
+            client=p, use_motors=False,
+        )
+        p.performCollisionDetection()
 
-    p.stepSimulation()
-
-    # Read the simulated sensors after stepping physics.
-    torques = {}
     measured_angles_deg = {}
-    default_torque = 0.0
 
     try:
         for name, index in joint_indices.items():
             state = p.getJointState(robot_body, index)
             measured_angles_deg[name] = rad_to_deg(state[0])
-            torques[name] = state[3]
+            measured_motor_torque[name] = state[3] if DYNAMIC_MODE else 0.0
     except p.error:
         for name in joint_indices:
-            torques[name] = default_torque
             measured_angles_deg[name] = 0.0
+            measured_motor_torque[name] = 0.0
+
+    frame_number += 1
+    if DYNAMIC_MODE and frame_number % 12 == 0:
+        commanded_q, _, _ = dynamics.joint_state()
+        column_for_joint = {joint: column for column, joint in enumerate(dynamics.joints)}
+        for name, angle in get_angles_rad(arm).items():
+            joint = joint_indices.get(name)
+            if joint in column_for_joint:
+                commanded_q[column_for_joint[joint]] = angle
+        physics_snapshot = dynamics.snapshot(
+            commanded_positions=commanded_q,
+            payload_kg=TARGET_NORMAL_MASS_KG if grasp_constraint is not None else 0.0,
+            time_s=frame_number / SIMULATION_FREQUENCY_HZ,
+        )
+        if telemetry_file is not None:
+            telemetry_file.write(json.dumps(physics_snapshot) + "\n")
+            telemetry_file.flush()
 
     try:
         if hand_link_index != -1:
@@ -1086,6 +1175,13 @@ while running and p.isConnected():
     except p.error:
         hand_position = wrist_position = elbow_position = default_position
         imu_euler_rad = default_orientation
+
+    if not DYNAMIC_MODE and grasp_transform is not None and hand_link_index != -1:
+        hand_state = p.getLinkState(robot_body, hand_link_index)
+        target_position, target_orientation = p.multiplyTransforms(
+            hand_state[4], hand_state[5], *grasp_transform
+        )
+        p.resetBasePositionAndOrientation(target_body, target_position, target_orientation)
 
     if camera_mode == "overview" and camera_changed:
         p.resetDebugVisualizerCamera(
@@ -1117,10 +1213,6 @@ while running and p.isConnected():
         name: hardware_value(name, measured_angles_deg.get(name, 0.0))
         for name in ARM_JOINT_NAMES
     }
-    hardware_torques = {
-        name: hardware_value(name, torques.get(name, 0.0))
-        for name in ARM_JOINT_NAMES
-    }
 
     dx = target_position[0] - hand_position[0]
     dy = target_position[1] - hand_position[1]
@@ -1134,11 +1226,10 @@ while running and p.isConnected():
         status_color = (255, 119, 119)
         status_text = reachability_message.title()
 
-    # Draw the keyboard guide and live state.
     screen.fill((15, 21, 31))
     draw_text("LIMB Arm Controller", (20, 14), (245, 248, 252), font_title)
     draw_text(
-        "Smooth controls with the real joint limits and speeds",
+        f"{args.mode.title()} mode | controls use the mapped joint limits and speeds",
         (21, 50),
         (151, 164, 183),
         font_small,
@@ -1194,7 +1285,7 @@ while running and p.isConnected():
         162,
         "SPACE",
         "Grab / release target",
-        "holding" if grasp_constraint is not None else "ready",
+        "holding" if grasp_transform is not None else "reaching" if auto_grasp_pending else "ready",
         action_x,
     )
     draw_control_row(202, "H", "Hold for auto reach", "IK", action_x)
@@ -1205,7 +1296,7 @@ while running and p.isConnected():
     draw_text(status_text, (36, 366), status_color, font)
     current_notice = notice_text if pygame.time.get_ticks() < notice_until_ms else ""
     if not pygame.key.get_focused():
-        current_notice = "Click this controller window before using the keys"
+        current_notice = "Click controller for arm keys; Space, F/G, H, R also work in the scene"
     elif not current_notice:
         current_notice = (
             "Ctrl: precise  |  T: target guide  |  P: camera previews  |  "
@@ -1213,7 +1304,6 @@ while running and p.isConnected():
         )
     draw_text(current_notice, (36, 394), (164, 178, 198), font_small)
 
-    # Draw a short-lived reach line and distance label in PyBullet.
     if hud_visible and hand_link_index != -1:
         reach_line_id = p.addUserDebugLine(
             hand_position,
@@ -1237,28 +1327,28 @@ while running and p.isConnected():
 
     pygame.display.flip()
 
-    # Mirror sensor readings in the separate Tkinter dashboard.
     try:
         for key in joint_names_map.values():
             sensor_vars[f"{key}_angle"].set(f"{hardware_angles_deg[key]:.1f} deg")
-            sensor_vars[f"{key}_torque"].set(f"{hardware_torques[key]:.2f} Nm")
+            sensor_vars[f"{key}_torque"].set(
+                f"{measured_motor_torque[key]:.2f} Nm" if DYNAMIC_MODE else "N/A"
+            )
 
-        # Update IMU
+        if physics_snapshot is not None:
+            shoulder_column = dynamics.names.index("jRightShoulder_roty")
+            gravity_hold = physics_snapshot["gravity_torque_Nm"][shoulder_column]
+            velocity = physics_snapshot["end_effector"]["velocity_m_s"]
+            grip_speed = math.sqrt(sum(component**2 for component in velocity))
+            sensor_vars["gravity_effort"].set(f"Shoulder gravity hold: {gravity_hold:.2f} Nm")
+            sensor_vars["grip_speed"].set(f"Grip speed: {grip_speed:.3f} m/s")
+
         sensor_vars["imu_roll"].set(f"Roll:  {rad_to_deg(imu_euler_rad[0]):.1f}")
         sensor_vars["imu_pitch"].set(f"Pitch: {rad_to_deg(imu_euler_rad[1]):.1f}")
         sensor_vars["imu_yaw"].set(f"Yaw:   {rad_to_deg(imu_euler_rad[2]):.1f}")
 
-        simulated_emg = (
-            abs(torques.get("shoulder_x", 0))
-            + abs(torques.get("shoulder_y", 0))
-            + abs(torques.get("shoulder_z", 0))
-        ) / 3
-        sensor_vars["emg_shoulder"].set(
-            f"EMG Shoulder: {simulated_emg:.2f} (Sim-Torque)"
-        )
         pressure_status = (
             "CONTACT (simulated)"
-            if grasp_constraint is not None
+            if grasp_transform is not None
             else "N/A (No Object)"
         )
         sensor_vars["pressure_hand"].set(f"Hand Pressure: {pressure_status}")
@@ -1272,7 +1362,6 @@ while running and p.isConnected():
     clock.tick(SIMULATION_FREQUENCY_HZ)
 
 
-# --- 7. Shutdown -----------------------------------------------------------
 print("Simulation finished.")
 try:
     sensor_window.destroy()
@@ -1280,5 +1369,7 @@ except tk.TclError:
     pass
 
 pygame.quit()
+if telemetry_file is not None:
+    telemetry_file.close()
 if p.isConnected():
     p.disconnect()

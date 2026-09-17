@@ -24,6 +24,18 @@ from record_ble_sensors import BleRecorder, record, SENSOR_UUIDS
 
 
 class LabeledBleCaptureTests(unittest.TestCase):
+    def test_live_preview_decoder_needs_no_session_files(self) -> None:
+        samples = []
+        recorder = BleRecorder(None, lambda sensor, sequence, channels: samples.append(
+            (sensor, sequence, channels)
+        ))
+        recorder.handle("emg", bytearray(struct.pack("<HIQ80H", 1, 7, 123, *range(80))))
+        recorder.handle("imu", bytearray(struct.pack("<HIQ12h", 1, 8, 124, *range(12))))
+        recorder.close()
+        self.assertEqual([sensor for sensor, _, _ in samples], ["emg", "imu"])
+        self.assertEqual(len(samples[0][2]), 2)
+        self.assertEqual(samples[1][2][1][0][0], 0.006)
+
     def test_old_single_sensor_packets_make_complete_capture(self) -> None:
         with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
             session = Path(temporary)

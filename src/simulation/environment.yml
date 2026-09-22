@@ -1,0 +1,20 @@
+name: aurora-simulation
+channels:
+  - conda-forge
+dependencies:
+  # Python and simulation versions verified on Windows.
+  - python=3.10
+  - numpy=1.26.4
+  - scipy=1.15.2
+  - pybullet=3.25
+  - pip
+  - pip:
+      # The conda-forge Windows build failed to load SDL in the tested setup.
+      - pygame==2.6.1
+      - onnxruntime==1.23.2
+      - bleak==0.22.3
+      - pyserial==3.5
+      # Hardware libraries import correctly; device tests are pending.
+      - depthai==3.10.0
+      - opencv-contrib-python==4.10.0.84
+      - mediapipe==0.10.14

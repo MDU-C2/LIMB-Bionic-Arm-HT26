@@ -1,6 +1,14 @@
 __pycache__/
 *.py[cod]
 .venv/
+venv/
 artifacts/.matplotlib/
 artifacts/models/*
 !artifacts/models/.gitkeep
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+outputs/
+*.log
+.DS_Store
+Thumbs.db

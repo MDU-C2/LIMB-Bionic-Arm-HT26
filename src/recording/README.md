@@ -8,13 +8,15 @@ duration, device, and output folder in **Recording**.
 | --- | --- | --- |
 | `record_ble_sensors.py` | LIMB BLE notifications | `packets.jsonl`, `emg.csv`, `imu.csv`, `piezo.csv`, `meta.json` |
 | `record_serial_sensors.py` | Newline-based serial messages | `serial.jsonl`, `meta.json` |
-| `record_oak_pose.py` | OAK-D video and six arm/trunk landmarks | `video.mp4`, `pose.json`, `meta.json` |
+| `record_oak_pose.py` | OAK-D video, arm/trunk points, and selected hand landmarks | `video.mp4`, `pose.json`, `meta.json` |
 
 BLE and serial create a session when recording starts. Duration `0` records
 until stopped; labeled BLE capture ends after 80 windows. OAK-D opens a live
-camera first, showing only the selected shoulder, elbow, and wrist over the
+camera first, showing the selected shoulder, elbow, wrist, hand, and fingers over the
 unflipped image. Press R or click **START REC** to record, repeat to stop, and
-press Q to close. Its `pose.json` saves six arm/trunk points and angle estimates.
+press Q to close. Its `pose.json` saves the six arm/trunk points, 21 hand
+landmarks, arm angles, and finger flexion estimates. The hand closest to the
+selected pose wrist is used, so the other hand and face are not drawn.
 Motion AI playback requires the optional `--depth` mode for 3D points.
 
 ## Labeled BLE capture

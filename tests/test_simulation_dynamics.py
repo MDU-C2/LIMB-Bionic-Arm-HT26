@@ -15,9 +15,12 @@ import math
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "simulation"))
 
 from sim.dynamics import ArmDynamics
+from sim.controller_params import ARM_ACTUATOR_INFO, ARM_MOTOR_FORCE_NM
+from sim.contact_feedback import estimate_contact_force_n
 from sim.robot_model import RIGHT_ARM_JOINTS, RIGHT_GRIP_OFFSET_M, inspect_model, load_right_arm
 from interactive.kinematics import calculate_ik_angles
-from sim.joint_limits import RIGHT_ARM_LIMITS_DEG
+from interactive.torque_graph import TorqueHistory
+from sim.joint_limits import RIGHT_ARM_LIMITS_DEG, finger_joint_angles_rad
 
 
 class SimulationDynamicsTests(unittest.TestCase):
@@ -191,6 +194,66 @@ class SimulationDynamicsTests(unittest.TestCase):
         shoulder_deg, elbow_deg = calculate_ik_angles(math.hypot(x, y), z - 0.7)
         self.assertLess(abs(shoulder_deg - math.degrees(q[1])), 3.0)
         self.assertLess(abs(elbow_deg - math.degrees(q[3])), 3.0)
+
+    def test_finger_model_curls_thumb_toward_the_fingers(self) -> None:
+        finger_angles = finger_joint_angles_rad(0.20)
+        self.assertLess(finger_angles["thumb_1"], 0.0)
+        self.assertGreater(finger_angles["index_1"], 0.0)
+        self.assertLess(finger_joint_angles_rad(2.0)["index_1"], math.radians(86.0))
+
+    def test_fingertip_force_uses_contact_or_penetration_signal(self) -> None:
+        self.assertEqual(estimate_contact_force_n(0.0, 0.001, 500.0), 0.0)
+        self.assertEqual(estimate_contact_force_n(1.2, 0.0, 500.0), 1.2)
+        self.assertEqual(estimate_contact_force_n(0.0, -0.002, 500.0), 1.0)
+        with self.assertRaises(ValueError):
+            estimate_contact_force_n(0.0, 0.0, -1.0)
+
+    def test_cylindrical_target_reaches_two_fingertip_contact_zones(self) -> None:
+        q = np.zeros(self.dynamics.dof)
+        q[:5] = np.radians((-18.4349, 35.1667, 0.0, -46.3460, 20.0))
+        self.reset_pose(q)
+        joints_by_name = {
+            p.getJointInfo(self.robot, index)[1].decode("utf-8"): index
+            for index in range(p.getNumJoints(self.robot))
+        }
+        for logical_name, angle_rad in finger_joint_angles_rad(0.68).items():
+            urdf_name = logical_name.replace("_", "_joint_", 1)
+            joint_index = joints_by_name.get(urdf_name)
+            if joint_index is not None and p.getJointInfo(self.robot, joint_index)[2] == p.JOINT_REVOLUTE:
+                p.resetJointState(self.robot, joint_index, angle_rad)
+
+        cylinder = p.createCollisionShape(p.GEOM_CYLINDER, radius=0.04, height=0.10)
+        target = p.createMultiBody(
+            baseMass=0.0,
+            baseCollisionShapeIndex=cylinder,
+            basePosition=(0.2, 0.6, 0.5),
+        )
+        p.performCollisionDetection()
+        active_fingertips = set()
+        for point in p.getContactPoints(self.robot, target):
+            link_name = p.getJointInfo(self.robot, point[3])[12].decode("utf-8")
+            if link_name.endswith("_link_3") and estimate_contact_force_n(
+                point[9], point[8], 500.0
+            ) >= 0.15:
+                active_fingertips.add(link_name)
+        self.assertGreaterEqual(len(active_fingertips), 2)
+
+    def test_each_simulated_arm_joint_has_actuator_metadata(self) -> None:
+        self.assertEqual(set(ARM_ACTUATOR_INFO), set(ARM_MOTOR_FORCE_NM))
+        for actuator in ARM_ACTUATOR_INFO.values():
+            self.assertTrue(actuator["model"])
+            self.assertTrue(actuator["published_rating"])
+
+
+class TorqueHistoryTests(unittest.TestCase):
+    def test_history_keeps_recent_samples_and_scales_graph_points(self) -> None:
+        history = TorqueHistory(("shoulder", "elbow"), max_samples=3)
+        for value in (1.0, 2.0, 3.0, 4.0):
+            history.append({"shoulder": value, "elbow": -value})
+        self.assertEqual(list(history.values["shoulder"]), [2.0, 3.0, 4.0])
+        points = history.points("shoulder", 0, 100, 0, 100, limit=4.0)
+        self.assertEqual(points[0::2], [0.0, 50.0, 100.0])
+        self.assertEqual(points[-1], 0.0)
 
 
 if __name__ == "__main__":

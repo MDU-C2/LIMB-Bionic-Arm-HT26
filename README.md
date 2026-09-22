@@ -28,6 +28,7 @@ The GUI opens PyBullet, camera, and sensor previews in separate windows.
 
 See the [simulation guide](docs/SIMULATION.md),
 [robot dynamics](docs/SIMULATION_DYNAMICS.md),
+[motor inventory](docs/MOTORS.md),
 [sensor data guide](docs/SENSOR_DATA.md), and
 [GUI development guide](src/gui/README.md).
 

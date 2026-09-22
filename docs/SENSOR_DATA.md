@@ -11,7 +11,7 @@ they are not confirmed device specifications or calibrated control settings.
 | Cuff EMG | Raw ADC values, channel, packet sequence and time | Did muscle activity increase before a grip? What are the rest and grip RMS distributions? |
 | Cuff IMU | Acceleration and angular velocity for each available sensor channel | Did the user move the upper or lower arm, and in which direction? |
 | Piezo | Raw cuff piezo samples | Did mechanical contact or movement coincide with EMG changes? |
-| OAK-D | Original camera video and six arm/trunk keypoints; optional stereo depth | What elbow and shoulder angles occurred during the mug task? |
+| OAK-D | Original video, six arm/trunk keypoints, 21 selected-hand landmarks, and optional stereo depth | What arm and finger motion occurred during the mug task? |
 | Robot pressure | Hand contact/force, if the robot firmware exposes it | Was the object actually contacted or slipping? This is **not** currently in the BLE or OAK-D recorder. |
 
 The 2025 report describes a 4 kHz EMG stream, 100 Hz IMU stream, and 1 kHz
@@ -34,12 +34,16 @@ shoulder, left elbow, left wrist, right shoulder, and both hips. The shoulder
 and hip points define a trunk coordinate frame. From this, his method derives
 elbow flexion, shoulder flexion, shoulder abduction, and a forearm-based proxy
 for shoulder lateral/medial rotation. The proxy is not a direct measurement of
-humeral axial rotation. Wrist and finger motion were outside his study.
+humeral axial rotation. Wrist and finger motion were outside his study, so the
+hand measurements below are an AURORA extension rather than part of Oscar's method.
 
-The current live view draws only the selected shoulder, elbow, and wrist. It
-uses all six points internally and saves them under
+The current live view draws the selected shoulder, elbow, wrist, and the 21
+landmarks of the hand nearest that wrist. It uses all six body points internally and saves them under
 `pose.json.observations[*].keypoints_2d`, along with the four estimated angles
-when available. The default angle source is MediaPipe's **monocular world-pose
+when available. Hand points are saved under `hand_keypoints_2d`; 15 joint
+flexion proxies and five mean finger-curl values are also saved. These hand
+values come from MediaPipe estimates and require validation for quantitative
+biomechanics. The default arm-angle source is MediaPipe's **monocular world-pose
 estimate**, labelled as such in the preview and JSON; do not treat these values
 as measured stereo coordinates. Keep both shoulders, both hips, the selected
 arm, and the mug in the full camera frame for a seated trial. The displayed
@@ -77,9 +81,9 @@ Close the BLE window or use **Stop active program** to stop the other sources.
   piezo mean, packet rates, sequence-gap counts, and stale-stream status. These are diagnostic
   displays, not calibrated grip decisions. IMU scaling depends on firmware;
   treat the displayed numbers as device-scaled values until verified.
-- OAK-D runs color and MediaPipe pose tracking in the live view. It shows only
-  the selected arm's shoulder, elbow, and wrist markers (left by default), plus
-  useful joint angles. Frame the seated subject, both shoulders, both hips,
+- OAK-D runs color, pose, and hand tracking in the live view. It shows only
+  the selected arm and the hand connected to its wrist (left by default), plus
+  arm angles and finger-curl estimates. Frame the seated subject, both shoulders, both hips,
   selected arm, and mug. If the camera points at a ceiling, it reports no person.
   The camera picture keeps its original orientation, and labels are drawn on
   that frame so the text remains readable. It saves nothing until REC.

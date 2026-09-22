@@ -6,6 +6,7 @@ AURORA.
 | Document | Contents |
 | --- | --- |
 | [Simulation and recording](SIMULATION.md) | Installation, controls, data capture, Motion AI, limits, and troubleshooting. |
+| [Motor inventory](MOTORS.md) | HT25 BOM quantities, firmware motor mapping, ratings, and torque interpretation. |
 | [Development resources](resources.md) | Project, vendor, and standards references inherited from LIMB. |
 
 Subsystem documentation should be added when its implementation is selected.

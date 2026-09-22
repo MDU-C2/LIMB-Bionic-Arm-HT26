@@ -1,4 +1,4 @@
-"""Record the six upper-body points used for Oscar's left-arm angles."""
+"""Record selected arm, hand, and finger motion from an OAK-D camera."""
 
 from __future__ import annotations
 
@@ -20,6 +20,23 @@ ANGLE_LABELS = (
     ("shoulder_abduction", "Shoulder abd"),
     ("shoulder_rotation_proxy", "Rotation proxy"),
 )
+HAND_LANDMARK_NAMES = (
+    "wrist",
+    "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb_tip",
+    "index_mcp", "index_pip", "index_dip", "index_tip",
+    "middle_mcp", "middle_pip", "middle_dip", "middle_tip",
+    "ring_mcp", "ring_pip", "ring_dip", "ring_tip",
+    "pinky_mcp", "pinky_pip", "pinky_dip", "pinky_tip",
+)
+FINGER_CHAINS = {
+    "thumb": (0, 1, 2, 3, 4),
+    "index": (0, 5, 6, 7, 8),
+    "middle": (0, 9, 10, 11, 12),
+    "ring": (0, 13, 14, 15, 16),
+    "pinky": (0, 17, 18, 19, 20),
+}
+PALM_CONNECTIONS = ((0, 5), (5, 9), (9, 13), (13, 17), (17, 0))
+TIP_LABELS = {4: "T", 8: "I", 12: "M", 16: "R", 20: "P"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -139,6 +156,102 @@ def arm_angles_deg(points: dict[str, object], side: str, np) -> dict[str, float 
     }
 
 
+def select_hand_near_wrist(hand_results, pose_wrist, max_distance: float = 0.25):
+    """Select the detected hand that belongs to the highlighted pose wrist."""
+    detected = getattr(hand_results, "multi_hand_landmarks", None) or []
+    if not detected:
+        return None
+    distances = [
+        ((hand.landmark[0].x - pose_wrist.x) ** 2
+         + (hand.landmark[0].y - pose_wrist.y) ** 2) ** 0.5
+        for hand in detected
+    ]
+    index = min(range(len(distances)), key=distances.__getitem__)
+    if distances[index] > max_distance:
+        return None
+    world_hands = getattr(hand_results, "multi_hand_world_landmarks", None) or []
+    world = world_hands[index] if index < len(world_hands) else None
+    return index, detected[index], world, distances[index]
+
+
+def finger_angles_deg(landmarks, np) -> tuple[dict[str, float], dict[str, float]]:
+    """Return joint flexion proxies and a mean curl value for each finger."""
+    points = np.asarray([[point.x, point.y, point.z] for point in landmarks], dtype=float)
+
+    def flexion(first: int, joint: int, last: int) -> float:
+        incoming = points[first] - points[joint]
+        outgoing = points[last] - points[joint]
+        lengths = float(np.linalg.norm(incoming) * np.linalg.norm(outgoing))
+        if lengths < 1e-9:
+            return 0.0
+        interior = np.degrees(np.arccos(np.clip(np.dot(incoming, outgoing) / lengths, -1.0, 1.0)))
+        return round(float(180.0 - interior), 1)
+
+    names = ("mcp", "pip", "dip")
+    angles: dict[str, float] = {}
+    curls: dict[str, float] = {}
+    for finger, chain in FINGER_CHAINS.items():
+        values = [flexion(chain[i - 1], chain[i], chain[i + 1]) for i in range(1, 4)]
+        joint_names = ("cmc", "mcp", "ip") if finger == "thumb" else names
+        angles.update({f"{finger}_{name}": value for name, value in zip(joint_names, values)})
+        curls[finger] = round(sum(values) / len(values), 1)
+    return angles, curls
+
+
+def add_hand_tracking(output, observation, sample, hand_results, pose_wrist,
+                      depth, width: int, height: int, cv2, np) -> bool:
+    """Draw and save only the hand connected to the selected arm."""
+    selected = select_hand_near_wrist(hand_results, pose_wrist)
+    if selected is None:
+        return False
+    _, hand, world, distance = selected
+    landmarks = hand.landmark
+    pixels = [
+        (min(width - 1, max(0, int(point.x * width))),
+         min(height - 1, max(0, int(point.y * height))))
+        for point in landmarks
+    ]
+    for chain in FINGER_CHAINS.values():
+        for first, second in zip(chain, chain[1:]):
+            cv2.line(output, pixels[first], pixels[second], (80, 235, 105), 2)
+    for first, second in PALM_CONNECTIONS:
+        cv2.line(output, pixels[first], pixels[second], (80, 235, 105), 2)
+    for index, xy in enumerate(pixels):
+        cv2.circle(output, xy, 3 if index not in TIP_LABELS else 5, (60, 220, 90), -1)
+        if index in TIP_LABELS:
+            cv2.putText(output, TIP_LABELS[index], (xy[0] + 5, xy[1] - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, (60, 220, 90), 1)
+
+    angle_points = world.landmark if world is not None else landmarks
+    angles, curls = finger_angles_deg(angle_points, np)
+    observation["hand_visible"] = True
+    observation["hand_selection"] = "nearest_selected_arm_wrist"
+    observation["hand_wrist_distance_normalized"] = round(float(distance), 5)
+    observation["hand_keypoints_2d"] = {
+        name: [round(float(point.x), 5), round(float(point.y), 5), round(float(point.z), 5)]
+        for name, point in zip(HAND_LANDMARK_NAMES, landmarks)
+    }
+    observation["finger_angles_deg"] = angles
+    observation["finger_curl_deg"] = curls
+    observation["finger_angle_source"] = (
+        "mediapipe_hand_world_estimate" if world is not None else "mediapipe_normalized_hand_estimate"
+    )
+
+    if sample is not None:
+        depth_points = []
+        for index, (name, point) in enumerate(zip(HAND_LANDMARK_NAMES, landmarks)):
+            measured = camera_point(point, depth, width, height, np)
+            if measured is not None:
+                depth_points.append({
+                    "id": index, "name": name, "x": measured[0],
+                    "y": measured[1], "depth_m": measured[2],
+                })
+        if depth_points:
+            sample["hand"] = depth_points
+            sample["finger_angles_deg"] = angles
+    return True
+
+
 def camera_xyz(point: list[float], intrinsics) -> list[float]:
     """Deproject an RGB pixel and aligned depth using camera calibration."""
     x, y, depth_m = point
@@ -177,18 +290,18 @@ def build_pipeline(dai, use_depth: bool = False):
     )
 
 
-def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None):
-    """Track six anatomical points and draw readable labels on the unflipped frame."""
+def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, hands=None):
+    """Track the selected arm and its hand on the unflipped frame."""
     height, width = frame.shape[:2]
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = pose.process(rgb)
     output = frame.copy()
     observation = {
         "person_visible": False, "arm_visible": False,
-        "reference_visible": False, "depth_valid": False,
+        "hand_visible": False, "reference_visible": False, "depth_valid": False,
     }
     if not results.pose_landmarks:
-        return output, "No person visible - frame subject, left arm and hips", None, observation
+        return output, f"No person visible - frame subject, {side} arm and hips", None, observation
 
     ids = landmark_ids(mp.solutions.pose, side)
     landmarks = results.pose_landmarks.landmark
@@ -263,6 +376,13 @@ def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None):
                     observation["angles_deg"] = stereo_angles
                     observation["angle_source"] = "stereo"
 
+    if hands is not None:
+        hand_results = hands.process(rgb)
+        add_hand_tracking(
+            output, observation, sample, hand_results, selected[f"{side}_wrist"],
+            depth, width, height, cv2, np,
+        )
+
     if not observation["reference_visible"]:
         status = f"{side.title()} arm tracked | frame both shoulders and hips for angles"
     elif "angles_deg" not in observation:
@@ -270,6 +390,7 @@ def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None):
     else:
         source = "stereo" if observation["angle_source"] == "stereo" else "estimated 3D"
         status = f"{side.title()} arm tracked | angles from {source}"
+    status += " | hand/fingers tracked" if observation["hand_visible"] else " | show selected hand"
     return output, status, sample, observation
 
 
@@ -348,6 +469,10 @@ class CameraSession:
                 "rotation proxy follow Oscar's "
                 "six-point trunk frame; mediapipe_world_estimate is monocular"
             ),
+            "hand_note": (
+                "The hand nearest the selected pose wrist supplies 21 MediaPipe "
+                "landmarks and finger flexion proxies; these are model estimates"
+            ),
         }, indent=2), encoding="utf-8")
         write_metadata(self.session, {
             "source": "oak_pose", "subject": self.subject, "side": self.side,
@@ -357,6 +482,7 @@ class CameraSession:
             "video_frames": self.video_frames, "video_fps": VIDEO_FPS,
             "stereo_depth_enabled": self.depth_enabled,
             "video_mirrored": False,
+            "hand_tracking": "selected_arm_nearest_wrist_21_landmarks",
             "cup_detector": "unavailable_no_model", **experiment_metadata(),
         })
         print(f"REC saved: {self.session} ({len(self.pose_frames)} depth-backed pose frames)")
@@ -365,11 +491,11 @@ class CameraSession:
 def draw_window(frame, status: str, session: CameraSession, cv2, np, observation=None):
     """Render a clickable REC button below the camera image."""
     height, width = frame.shape[:2]
-    canvas = np.zeros((height + 136, width, 3), dtype=np.uint8)
+    canvas = np.zeros((height + 164, width, 3), dtype=np.uint8)
     canvas[:height] = frame
     canvas[height:] = (26, 31, 37)
     active = session.recording
-    button = (width - 168, height + 88, width - 16, height + 128)
+    button = (width - 168, height + 116, width - 16, height + 156)
     cv2.rectangle(canvas, (button[0], button[1]), (button[2], button[3]),
                   (40, 40, 210) if active else (35, 55, 205), -1)
     cv2.putText(canvas, "STOP REC" if active else "START REC",
@@ -392,9 +518,18 @@ def draw_window(frame, status: str, session: CameraSession, cv2, np, observation
                 cv2.FONT_HERSHEY_SIMPLEX, 0.47, (90, 200, 255), 1)
     cv2.putText(canvas, angle_lines[1], (12, height + 73),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.47, (90, 200, 255), 1)
-    cv2.putText(canvas, "Cup detector: model unavailable", (12, height + 97),
+    curls = (observation or {}).get("finger_curl_deg")
+    if curls:
+        finger_line = "Finger curl T/I/M/R/P: " + "/".join(
+            f"{curls[name]:.0f}" for name in ("thumb", "index", "middle", "ring", "pinky")
+        )
+    else:
+        finger_line = "Finger curl: show the selected hand"
+    cv2.putText(canvas, finger_line, (12, height + 97),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.47, (80, 220, 110), 1)
+    cv2.putText(canvas, "Cup detector: model unavailable", (12, height + 121),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.47, (160, 180, 200), 1)
-    cv2.putText(canvas, "R: record / stop    Q: close", (12, height + 121),
+    cv2.putText(canvas, "R: record / stop    Q: close", (12, height + 149),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.48, (190, 190, 190), 1)
     if active:
         cv2.circle(canvas, (width - 108, 26), 8, (25, 25, 240), -1)
@@ -445,14 +580,19 @@ def main() -> int:
 
     latest_depth = None
     pose = None
+    hands = None
     try:
         pose = mp.solutions.pose.Pose(
             static_image_mode=False, model_complexity=args.pose_model,
             min_detection_confidence=0.5, min_tracking_confidence=0.5
         )
+        hands = mp.solutions.hands.Hands(
+            static_image_mode=False, max_num_hands=2, model_complexity=0,
+            min_detection_confidence=0.5, min_tracking_confidence=0.5,
+        )
         cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(WINDOW, on_mouse)
-        print(f"Live OAK-D tracking: subject's {args.side} shoulder, elbow and wrist.")
+        print(f"Live OAK-D tracking: subject's {args.side} arm, hand and fingers.")
         print("Camera video is unflipped; anatomical landmark selection uses the raw frame.")
         print("Cup detection needs a model; no cup model is present in this repository.")
         if not args.depth:
@@ -467,7 +607,8 @@ def main() -> int:
                 frame = frame_message.getCvFrame()
                 if frame is not None:
                     image, status, sample, observation = analyze_frame(
-                        frame, latest_depth, pose, mp, cv2, np, args.side, intrinsics
+                        frame, latest_depth, pose, mp, cv2, np, args.side,
+                        intrinsics, hands,
                     )
                     session.add_frame(image, sample, observation)
                     canvas, controls["button"] = draw_window(
@@ -495,6 +636,8 @@ def main() -> int:
         session.stop()
         if pose is not None:
             pose.close()
+        if hands is not None:
+            hands.close()
         cv2.destroyAllWindows()
         stop = getattr(pipeline, "stop", None)
         if callable(stop):

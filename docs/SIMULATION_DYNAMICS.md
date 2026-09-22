@@ -12,6 +12,11 @@ Wrist bend and deviation are fixed. The [older HT25 simulation](https://github.c
 described seven arm DOFs. `sim/joint_limits.py` holds the current
 firmware-derived limits, which are also encoded in the URDFs.
 
+The old BOM's seven arm motors are not the same as seven verified joints. It
+lists three NEMA17, two NEMA23, and two HV2060MG motors, while the final firmware
+only maps two HV2060MG shoulder motors and two NEMA17 motors to arm joints. See
+the [motor inventory](MOTORS.md) for the evidence and unresolved assignments.
+
 `interactive/kinematics.py` keeps a planar two-link IK approximation. The old
 HT25 [control-layer FK and Jacobian](https://github.com/MDU-C2/LIMB-HT25/blob/main/src/layers/control/control_layer.py)
 assume a different shoulder rotation order. The loaded URDF supplies FK and
@@ -32,9 +37,18 @@ needed before using torque or payload results for hardware decisions.
 
 The GUI's **Simulation** tab has a Physics mode checkbox. In Physics mode,
 the target is held by a constraint and its mass affects the arm. The dashboard
-shows PyBullet motor torque and estimated shoulder gravity torque. The
+shows current PyBullet motor effort, a ten-second graph for all five arm
+motors, and estimated shoulder gravity torque. The graph is simulation output;
+it is not a measurement from the physical actuators. The
 estimate adds a 0.1 kg point payload while grasping. Motor requests are capped
 by the URDF effort and speed fields.
+
+The grasp closes at a limited speed and requires contact on at least two of the
+five fingertip links. It preserves the cup's pose at the moment of contact.
+The dashboard's fingertip values are virtual haptic signals: Physics mode uses
+normal contact force, while Direct mode estimates a signal from collision
+penetration. They are useful for control logic and visualization but are not
+calibrated pressure sensor measurements.
 
 Run either mode directly:
 
@@ -43,7 +57,10 @@ micromamba run -n aurora-simulation python src/simulation/interactive/limb_simul
 micromamba run -n aurora-simulation python src/simulation/interactive/limb_simulator.py --mode dynamic
 ```
 
-Add `--telemetry-out outputs/simulation/physics.jsonl` to save time, joint
+Add `--torque-out outputs/simulation/torque.csv` for a long-format CSV that
+names each movement and its firmware-mapped motor. The GUI can create a
+timestamped file automatically. Add
+`--telemetry-out outputs/simulation/physics.jsonl` to save time, joint
 states and commands, motor torque, grip pose and velocity, Jacobians, mass
 matrix, and dynamics terms. Arrays contain five arm joints followed by finger
 joints. Position control has no commanded torque, so that field is null.

@@ -46,6 +46,7 @@ MOVEMENT_MODEL = (
 DEFAULT_TRAJECTORY = Path("examples/simulation/demo")
 DEFAULT_RECORDINGS_DIRECTORY = Path("outputs/recordings")
 DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/references")
+DEFAULT_SIMULATION_OUTPUT_DIRECTORY = Path("outputs/simulation")
 DOCUMENTATION_FILE = REPOSITORY_ROOT / "docs" / "SIMULATION.md"
 GUI_DOCUMENTATION_FILE = GUI_DIR / "README.md"
 
@@ -326,6 +327,7 @@ class ProjectGui(ttk.Frame):
         self.trajectory_path = tk.StringVar(value=str(DEFAULT_TRAJECTORY))
         self.loop_playback = tk.BooleanVar(value=True)
         self.dynamic_simulation = tk.BooleanVar(value=False)
+        self.save_simulation_torque = tk.BooleanVar(value=True)
         self.refit_dmp = tk.BooleanVar(value=False)
         self.motion_recording = tk.StringVar()
         self.motion_references = tk.StringVar(value=str(DEFAULT_REFERENCE_DIRECTORY))
@@ -571,6 +573,12 @@ class ProjectGui(ttk.Frame):
             variable=self.dynamic_simulation,
             style="Card.TCheckbutton",
         ).grid(row=3, column=0, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(
+            interactive,
+            text="Save torque CSV in outputs/simulation",
+            variable=self.save_simulation_torque,
+            style="Card.TCheckbutton",
+        ).grid(row=4, column=0, sticky="w", pady=(4, 0))
 
         playback = self._card(
             tab,
@@ -1291,6 +1299,10 @@ class ProjectGui(ttk.Frame):
             return
         command = [str(self.simulation_python), "-u", str(INTERACTIVE_SIMULATION_SCRIPT)]
         command += ["--mode", "dynamic" if self.dynamic_simulation.get() else "kinematic"]
+        if self.dynamic_simulation.get() and self.save_simulation_torque.get():
+            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S}.csv"
+            torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name
+            command += ["--torque-out", str(torque_output)]
         self._start_program(
             "Interactive task simulator",
             "simulation",

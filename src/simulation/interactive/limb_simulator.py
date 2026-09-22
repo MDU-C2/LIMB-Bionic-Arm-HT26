@@ -9,6 +9,7 @@ characters.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import os
@@ -27,18 +28,20 @@ import pygame
 import tkinter as tk
 from kinematics import calculate_ik_angles, is_reachable
 from sim.controller_params import (
-    ARM_MOTOR_FORCE_NM, ARM_POSITION_GAIN, ARM_VELOCITY_GAIN,
+    ARM_ACTUATOR_INFO, ARM_MOTOR_FORCE_NM, ARM_POSITION_GAIN, ARM_VELOCITY_GAIN,
     FINGER_MOTOR_FORCE_NM, FINGER_POSITION_GAIN, FINGER_VELOCITY_GAIN,
     FINGER_PREVIEW_SPEED_RAD_S,
 )
+from sim.contact_feedback import estimate_contact_force_n
 from sim.dynamics import ArmDynamics
 from sim.joint_limits import (
-    FINGER_LIMITS_DEG,
     RIGHT_ARM_HARDWARE_SIGN,
     RIGHT_ARM_LIMITS_DEG,
+    finger_joint_angles_rad,
     max_velocity_rad_s,
 )
 from sim.robot_model import RIGHT_GRIP_OFFSET_M
+from torque_graph import TorqueGraph
 
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -46,18 +49,28 @@ parser.add_argument("--mode", choices=("kinematic", "dynamic"), default="kinemat
                     help="Direct joint preview or gravity-and-motor physics mode")
 parser.add_argument("--telemetry-out", type=Path,
                     help="Write dynamic-mode state and torque snapshots as JSON lines")
+parser.add_argument("--torque-out", type=Path,
+                    help="Write a readable dynamic-mode arm torque CSV")
 args = parser.parse_args()
 DYNAMIC_MODE = args.mode == "dynamic"
-if args.telemetry_out is not None and not DYNAMIC_MODE:
-    parser.error("--telemetry-out requires --mode dynamic")
+if (args.telemetry_out is not None or args.torque_out is not None) and not DYNAMIC_MODE:
+    parser.error("--telemetry-out and --torque-out require --mode dynamic")
 
 
 SIMULATION_FREQUENCY_HZ = 60
 PHYSICS_SUBSTEPS = 4
-TARGET_GRASP_DISTANCE_M = 0.10
+TARGET_RADIUS_M = 0.04
+TARGET_HEIGHT_M = 0.10
+SAFE_REACH_DISTANCE_M = 0.10
 TARGET_NORMAL_MASS_KG = 0.1
-FINGER_MODEL_RANGE_RAD = 1.5
 HAND_GRIP_OFFSET_M = RIGHT_GRIP_OFFSET_M
+MIN_GRASP_CURL = 0.10
+MAX_GRASP_CURL = 0.75
+MIN_GRASP_FINGERTIPS = 2
+FINGERTIP_CONTACT_FORCE_N = 0.15
+CONTACT_STIFFNESS_N_PER_M = 500.0
+AUTO_GRASP_CURL_PER_SECOND = 0.6
+AUTO_GRASP_WRIST_DEG = 20.0
 
 FINGER_CURL_PER_SECOND = 3.0
 FINGER_JOINT_TOKENS = ("thumb", "index", "middle", "ring", "pinky")
@@ -275,10 +288,7 @@ def get_angles_rad(arm: LimbArm) -> dict[str, float]:
     """Return requested arm and finger joint angles in radians."""
     degs = get_angles_deg(arm)
     angles_rad = {k: deg_to_rad(v) for k, v in degs.items()}
-    for finger in FINGER_LIMITS_DEG:
-        joint_angle = FINGER_MODEL_RANGE_RAD * arm.hand.curl
-        for segment in range(1, 4):
-            angles_rad[f"{finger}_{segment}"] = joint_angle
+    angles_rad.update(finger_joint_angles_rad(arm.hand.curl))
     return angles_rad
 
 
@@ -356,6 +366,11 @@ URDF_TO_LOGICAL_JOINT = {
 ARM_JOINT_NAMES = frozenset(
     {"shoulder_x", "shoulder_y", "shoulder_z", "elbow_x", "wrist_rotation"}
 )
+LOGICAL_TO_URDF_JOINT = {
+    logical: urdf
+    for urdf, logical in URDF_TO_LOGICAL_JOINT.items()
+    if logical in ARM_JOINT_NAMES
+}
 
 
 def build_joint_index_map(robot_id: int, client) -> dict[str, int]:
@@ -447,39 +462,25 @@ p.loadURDF("table/table.urdf", [0, 0.8, -0.2], useFixedBase=True)
 
 target_start_position = [0.2, 0.6, 0.5]
 target_start_orientation = p.getQuaternionFromEuler([0, 0, 0])
-target_body = None
-cup_urdf_path = os.path.join(pybullet_data.getDataPath(), "dinnerware", "cup_small.urdf")
-if os.path.isfile(cup_urdf_path):
-    try:
-        target_body = p.loadURDF(
-            cup_urdf_path,
-            target_start_position,
-            target_start_orientation,
-            useFixedBase=False,
-        )
-        print(f"Cup loaded (ID: {target_body}) at {target_start_position}")
-    except p.error as error:
-        print(f"Cup asset could not be loaded ({error}); using the test target.")
-
-if target_body is None:
-    print("Dinnerware cup unavailable; creating the red test target.")
-    half_extents = [0.03, 0.03, 0.05]
-    collision_shape = p.createCollisionShape(
-        shapeType=p.GEOM_BOX,
-        halfExtents=half_extents,
-    )
-    visual_shape = p.createVisualShape(
-        shapeType=p.GEOM_BOX,
-        halfExtents=half_extents,
-        rgbaColor=[1, 0.2, 0.2, 1],
-    )
-    target_body = p.createMultiBody(
-        baseMass=TARGET_NORMAL_MASS_KG,
-        baseCollisionShapeIndex=collision_shape,
-        baseVisualShapeIndex=visual_shape,
-        basePosition=target_start_position,
-    )
-    print(f"Replacement cube (ID: {target_body}) placed at {target_start_position}")
+cup_collision_shape = p.createCollisionShape(
+    shapeType=p.GEOM_CYLINDER,
+    radius=TARGET_RADIUS_M,
+    height=TARGET_HEIGHT_M,
+)
+cup_visual_shape = p.createVisualShape(
+    shapeType=p.GEOM_CYLINDER,
+    radius=TARGET_RADIUS_M,
+    length=TARGET_HEIGHT_M,
+    rgbaColor=[0.9, 0.12, 0.08, 1.0],
+)
+target_body = p.createMultiBody(
+    baseMass=TARGET_NORMAL_MASS_KG,
+    baseCollisionShapeIndex=cup_collision_shape,
+    baseVisualShapeIndex=cup_visual_shape,
+    basePosition=target_start_position,
+    baseOrientation=target_start_orientation,
+)
+print(f"Cylindrical cup (ID: {target_body}) placed at {target_start_position}")
 
 
 def anchor_target_to_world() -> int:
@@ -597,10 +598,23 @@ except KeyError as error:
     print("Links found:", list(link_indices_by_name.keys()))
     hand_link_index = wrist_link_index = elbow_link_index = -1
 
+finger_contact_link_indices = {
+    index
+    for name, index in link_indices_by_name.items()
+    if any(finger in name.lower() for finger in FINGER_JOINT_TOKENS)
+}
+fingertip_link_indices = {
+    finger: link_indices_by_name.get(f"{finger}_link_3", -1)
+    for finger in FINGER_JOINT_TOKENS
+}
+hand_contact_link_indices = set(finger_contact_link_indices)
+if hand_link_index >= 0:
+    hand_contact_link_indices.add(hand_link_index)
+
 print("Initializing sensor window (Tkinter)...")
 sensor_window = tk.Tk()
 sensor_window.title("LIMB Sensor Dashboard")
-sensor_window.geometry("490x445+35+55")
+sensor_window.geometry("500x805+35+35")
 sensor_window.protocol("WM_DELETE_WINDOW", sensor_window.withdraw)
 
 sensor_vars = {}
@@ -660,6 +674,15 @@ for name, key in joint_names_map.items():
     ).pack(side=tk.LEFT)
     row.pack(anchor='w')
 
+torque_graph = TorqueGraph(
+    sensor_window,
+    tk,
+    {key: name for name, key in joint_names_map.items()},
+    torque_limit_nm=max(ARM_MOTOR_FORCE_NM.values()),
+    sample_rate_hz=SIMULATION_FREQUENCY_HZ,
+)
+torque_graph.redraw(DYNAMIC_MODE)
+
 imu_frame = tk.Frame(sensor_window, padx=10, pady=10)
 imu_frame.pack(fill='x')
 
@@ -677,10 +700,19 @@ bio_frame.pack(fill='x')
 
 tk.Label(bio_frame, text="--- BIO-SENSORS (Simulated) ---", font=tk_font_bold).pack(anchor='w')
 sensor_vars["emg_shoulder"] = tk.StringVar(value="EMG: open BLE live preview")
-sensor_vars["pressure_hand"] = tk.StringVar(value="Hand Pressure: N/A")
+sensor_vars["pressure_hand"] = tk.StringVar(value="Fingertip contact: 0/5")
 
 tk.Label(bio_frame, textvariable=sensor_vars["emg_shoulder"], font=tk_font).pack(anchor='w')
 tk.Label(bio_frame, textvariable=sensor_vars["pressure_hand"], font=tk_font).pack(anchor='w')
+for finger in FINGER_JOINT_TOKENS:
+    sensor_vars[f"pressure_{finger}"] = tk.StringVar(
+        value=f"{finger.title():6}: 0.00 N  [----------]"
+    )
+    tk.Label(
+        bio_frame,
+        textvariable=sensor_vars[f"pressure_{finger}"],
+        font=tk_font,
+    ).pack(anchor='w')
 
 physics_frame = tk.Frame(sensor_window, padx=10, pady=6)
 physics_frame.pack(fill='x')
@@ -731,6 +763,9 @@ hud_visible = True
 grasp_transform = None
 grasp_constraint = None
 auto_grasp_pending = False
+auto_grasp_phase = "reach"
+h_contact_stop = False
+latched_fingertip_force_n = {finger: 0.0 for finger in FINGER_JOINT_TOKENS}
 reach_line_id = -1
 target_text_id = -1
 
@@ -757,6 +792,33 @@ if args.telemetry_out is not None:
     telemetry_file = args.telemetry_out.open("w", encoding="utf-8")
     print(f"Physics telemetry: {args.telemetry_out}")
 
+torque_csv_file = None
+torque_csv_writer = None
+if args.torque_out is not None:
+    args.torque_out.parent.mkdir(parents=True, exist_ok=True)
+    torque_csv_file = args.torque_out.open("w", newline="", encoding="utf-8")
+    torque_csv_writer = csv.DictWriter(
+        torque_csv_file,
+        fieldnames=(
+            "time_s",
+            "logical_joint",
+            "movement",
+            "urdf_joint",
+            "motor_model",
+            "mapping_source",
+            "published_motor_rating",
+            "angle_deg",
+            "velocity_deg_s",
+            "applied_motor_torque_Nm",
+            "gravity_torque_Nm",
+            "inverse_dynamics_torque_Nm",
+            "simulation_effort_limit_Nm",
+            "payload_kg",
+        ),
+    )
+    torque_csv_writer.writeheader()
+    print(f"Torque CSV: {args.torque_out}")
+
 
 def set_target_robot_collision(enabled: bool) -> None:
     """A constrained payload should not collide with the hand carrying it."""
@@ -764,6 +826,36 @@ def set_target_robot_collision(enabled: bool) -> None:
         p.setCollisionFilterPair(
             robot_body, target_body, link_index, -1, int(enabled)
         )
+
+
+def target_contact_feedback() -> tuple[set[int], dict[str, float]]:
+    """Return cup contacts and virtual force values at the five fingertips."""
+    force_by_finger = {finger: 0.0 for finger in FINGER_JOINT_TOKENS}
+    try:
+        points = p.getContactPoints(bodyA=robot_body, bodyB=target_body)
+    except p.error:
+        return set(), force_by_finger
+
+    contact_links = {point[3] for point in points if point[3] >= 0}
+    finger_by_link = {
+        link_index: finger
+        for finger, link_index in fingertip_link_indices.items()
+        if link_index >= 0
+    }
+    for point in points:
+        finger = finger_by_link.get(point[3])
+        if finger is None:
+            continue
+        contact_force = estimate_contact_force_n(
+            normal_force_n=float(point[9]),
+            contact_distance_m=float(point[8]),
+            stiffness_n_per_m=CONTACT_STIFFNESS_N_PER_M,
+        )
+        force_by_finger[finger] = min(
+            20.0,
+            force_by_finger[finger] + contact_force,
+        )
+    return contact_links, force_by_finger
 
 
 while running and p.isConnected():
@@ -779,6 +871,7 @@ while running and p.isConnected():
     target_y_relative = target_position[1] - robot_position[1]
     target_z_relative = target_position[2] - robot_position[2]
     target_relative_position = (target_x_relative, target_y_relative, target_z_relative)
+    hand_target_distance = math.dist(hand_position, target_position)
 
     reset_requested = False
     interact_requested = False
@@ -865,7 +958,12 @@ while running and p.isConnected():
 
     if reset_requested:
         auto_grasp_pending = False
+        auto_grasp_phase = "reach"
+        h_contact_stop = False
         grasp_transform = None
+        latched_fingertip_force_n = {
+            finger: 0.0 for finger in FINGER_JOINT_TOKENS
+        }
         if grasp_constraint is not None:
             p.removeConstraint(grasp_constraint)
             grasp_constraint = None
@@ -897,7 +995,40 @@ while running and p.isConnected():
         notice_text = "Arm and target reset"
         notice_until_ms = pygame.time.get_ticks() + 2200
 
-    if keys[pygame.K_h] or bullet_key_down("h") or auto_grasp_pending:
+    current_contact_links, fingertip_force_n = target_contact_feedback()
+    hand_target_contact = bool(current_contact_links & hand_contact_link_indices)
+    active_fingertips = {
+        finger
+        for finger, force_n in fingertip_force_n.items()
+        if force_n >= FINGERTIP_CONTACT_FORCE_N
+    }
+
+    h_reach_requested = keys[pygame.K_h] or bullet_key_down("h")
+    if not h_reach_requested:
+        h_contact_stop = False
+    elif (
+        (hand_target_contact or hand_target_distance <= SAFE_REACH_DISTANCE_M)
+        and not h_contact_stop
+    ):
+        h_contact_stop = True
+        notice_text = "Safe reach distance reached - H movement stopped"
+        notice_until_ms = pygame.time.get_ticks() + 1800
+
+    if auto_grasp_pending and auto_grasp_phase == "open":
+        if arm.hand.curl <= 0.01:
+            arm.hand.curl = 0.0
+            auto_grasp_phase = "reach"
+    elif (
+        auto_grasp_pending
+        and auto_grasp_phase == "reach"
+        and (hand_target_contact or hand_target_distance <= SAFE_REACH_DISTANCE_M)
+    ):
+        auto_grasp_phase = "close"
+        notice_text = "Cup reached - closing fingers"
+        notice_until_ms = pygame.time.get_ticks() + 1800
+
+    auto_reach_active = auto_grasp_pending and auto_grasp_phase == "reach"
+    if (h_reach_requested and not h_contact_stop) or auto_reach_active:
         try:
             relative_x, relative_y, relative_z = target_relative_position
             horizontal_distance = math.hypot(relative_x, relative_y)
@@ -932,40 +1063,60 @@ while running and p.isConnected():
                 x=step_toward(arm.elbow.angle_x, target_elbow_x, "elbow_x"),
                 mode="abs",
             )
+            if auto_reach_active:
+                set_wrist(
+                    arm,
+                    step_toward(
+                        arm.wrist.rotation,
+                        AUTO_GRASP_WRIST_DEG,
+                        "wrist_rotation",
+                    ),
+                    mode="abs",
+                )
         except ValueError as error:
             notice_text = f"Target cannot be reached: {error}"
             notice_until_ms = pygame.time.get_ticks() + 1800
 
-    hand_step = FINGER_CURL_PER_SECOND / SIMULATION_FREQUENCY_HZ
-    delta_hand = (hand_step if keys[pygame.K_f] or bullet_key_down("f") else 0) + (
-        -hand_step if keys[pygame.K_g] or bullet_key_down("g") else 0
-    )
-    if delta_hand:
-        new_value = arm.hand.curl + delta_hand
-        arm.hand.curl = clamp(new_value, arm.hand.min_curl, arm.hand.max_curl)
+    if auto_grasp_pending and auto_grasp_phase in {"open", "close"}:
+        auto_hand_step = AUTO_GRASP_CURL_PER_SECOND / SIMULATION_FREQUENCY_HZ
+        if auto_grasp_phase == "open":
+            arm.hand.curl = max(0.0, arm.hand.curl - auto_hand_step)
+        else:
+            arm.hand.curl = min(MAX_GRASP_CURL, arm.hand.curl + auto_hand_step)
+    else:
+        hand_step = FINGER_CURL_PER_SECOND / SIMULATION_FREQUENCY_HZ
+        delta_hand = (hand_step if keys[pygame.K_f] or bullet_key_down("f") else 0) + (
+            -hand_step if keys[pygame.K_g] or bullet_key_down("g") else 0
+        )
+        if delta_hand:
+            new_value = arm.hand.curl + delta_hand
+            arm.hand.curl = clamp(new_value, arm.hand.min_curl, arm.hand.max_curl)
 
     if (interact_requested or auto_grasp_pending) and grasp_transform is None and hand_link_index != -1:
-        dx = target_position[0] - hand_position[0]
-        dy = target_position[1] - hand_position[1]
-        dz = target_position[2] - hand_position[2]
-        contact_dist = math.sqrt(dx**2 + dy**2 + dz**2)
-
         if interact_requested and auto_grasp_pending:
             auto_grasp_pending = False
+            auto_grasp_phase = "reach"
             notice_text = "Assisted grasp canceled"
             notice_until_ms = pygame.time.get_ticks() + 1800
             print(notice_text)
-        elif contact_dist < TARGET_GRASP_DISTANCE_M:
+        elif (
+            auto_grasp_pending
+            and auto_grasp_phase == "close"
+            and arm.hand.curl >= MIN_GRASP_CURL
+            and len(active_fingertips) >= MIN_GRASP_FINGERTIPS
+        ):
             auto_grasp_pending = False
+            auto_grasp_phase = "reach"
+            latched_fingertip_force_n = dict(fingertip_force_n)
+            target_position_world, target_orientation_world = (
+                p.getBasePositionAndOrientation(target_body)
+            )
             if target_anchor_constraint is not None:
                 p.removeConstraint(target_anchor_constraint)
                 target_anchor_constraint = None
             hand_state = p.getLinkState(robot_body, hand_link_index)
             hand_pos_world = hand_state[4]
             hand_orn_world = hand_state[5]
-            target_position_world, target_orientation_world = (
-                p.getBasePositionAndOrientation(target_body)
-            )
             inverse_hand_position, inverse_hand_orientation = p.invertTransform(
                 hand_pos_world,
                 hand_orn_world,
@@ -979,8 +1130,6 @@ while running and p.isConnected():
 
             if DYNAMIC_MODE:
                 set_target_robot_collision(False)
-                # PyBullet constraints use the parent link's inertial (CoM)
-                # frame; the display transform above uses its visual link frame.
                 inverse_com_position, inverse_com_orientation = p.invertTransform(
                     hand_state[0], hand_state[1]
                 )
@@ -996,10 +1145,13 @@ while running and p.isConnected():
                     target_position_in_com, (0, 0, 0),
                     target_orientation_in_com, (0, 0, 0, 1),
                 )
-                p.changeConstraint(grasp_constraint, maxForce=100, erp=0.8)
+                contact_force_n = sum(latched_fingertip_force_n.values())
+                p.changeConstraint(
+                    grasp_constraint,
+                    maxForce=max(10.0, min(40.0, 10.0 * contact_force_n)),
+                    erp=0.5,
+                )
             else:
-                # Direct preview uses a hand-relative pose to keep the small
-                # target visually stable during joint resets.
                 p.changeDynamics(target_body, -1, mass=0.0)
                 p.setCollisionFilterGroupMask(
                     target_body,
@@ -1008,22 +1160,43 @@ while running and p.isConnected():
                     collisionFilterMask=0,
                 )
             grasp_transform = (target_position_in_hand, target_orientation_in_hand)
-            arm.hand.curl = max(arm.hand.curl, 0.7)
-            notice_text = "Target grabbed"
+            notice_text = (
+                f"Grip held at contact pose ({len(active_fingertips)} fingertips)"
+            )
             notice_until_ms = pygame.time.get_ticks() + 1800
             print(notice_text)
+        elif (
+            auto_grasp_pending
+            and auto_grasp_phase == "close"
+            and arm.hand.curl >= MAX_GRASP_CURL
+        ):
+            auto_grasp_pending = False
+            auto_grasp_phase = "reach"
+            notice_text = (
+                f"Grip failed: {len(active_fingertips)}/{MIN_GRASP_FINGERTIPS} "
+                "fingertip contacts"
+            )
+            notice_until_ms = pygame.time.get_ticks() + 2600
+            print(notice_text)
         elif interact_requested:
-            can_reach, reason = is_reachable(target_relative_position)
-            if can_reach:
+            target_reachable, target_reason = is_reachable(target_relative_position)
+            if target_reachable:
                 auto_grasp_pending = True
-                notice_text = f"Reaching for target ({contact_dist:.2f} m away)"
+                if arm.hand.curl > 0.01:
+                    auto_grasp_phase = "open"
+                else:
+                    auto_grasp_phase = "reach"
+                notice_text = f"Safe reach started ({hand_target_distance:.2f} m away)"
             else:
-                notice_text = reason.title()
+                notice_text = target_reason.title()
             notice_until_ms = pygame.time.get_ticks() + 2200
             print(notice_text)
 
     elif (interact_requested or keys[pygame.K_g] or bullet_key_down("g")) and grasp_transform is not None:
         grasp_transform = None
+        latched_fingertip_force_n = {
+            finger: 0.0 for finger in FINGER_JOINT_TOKENS
+        }
         if grasp_constraint is not None:
             p.removeConstraint(grasp_constraint)
             grasp_constraint = None
@@ -1045,7 +1218,7 @@ while running and p.isConnected():
     if keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
         speed_mult = 0.25
 
-    if keys[pygame.K_h] or bullet_key_down("h") or auto_grasp_pending:
+    if h_reach_requested or auto_grasp_pending:
         manual_motion.reset()
     else:
         delta_should_y = manual_motion.step(
@@ -1131,6 +1304,10 @@ while running and p.isConnected():
             measured_motor_torque[name] = 0.0
 
     frame_number += 1
+    if DYNAMIC_MODE:
+        torque_graph.append(measured_motor_torque)
+    if frame_number % 6 == 0:
+        torque_graph.redraw(DYNAMIC_MODE)
     if DYNAMIC_MODE and frame_number % 12 == 0:
         commanded_q, _, _ = dynamics.joint_state()
         column_for_joint = {joint: column for column, joint in enumerate(dynamics.joints)}
@@ -1146,6 +1323,42 @@ while running and p.isConnected():
         if telemetry_file is not None:
             telemetry_file.write(json.dumps(physics_snapshot) + "\n")
             telemetry_file.flush()
+        if torque_csv_writer is not None:
+            snapshot_columns = {
+                name: column
+                for column, name in enumerate(physics_snapshot["joint_names"])
+            }
+            for logical_name in joint_names_map.values():
+                urdf_name = LOGICAL_TO_URDF_JOINT[logical_name]
+                column = snapshot_columns[urdf_name]
+                actuator = ARM_ACTUATOR_INFO[logical_name]
+                torque_csv_writer.writerow(
+                    {
+                        "time_s": f"{physics_snapshot['time_s']:.6f}",
+                        "logical_joint": logical_name,
+                        "movement": actuator["movement"],
+                        "urdf_joint": urdf_name,
+                        "motor_model": actuator["model"],
+                        "mapping_source": actuator["mapping"],
+                        "published_motor_rating": actuator["published_rating"],
+                        "angle_deg": f"{math.degrees(physics_snapshot['q_rad'][column]):.6f}",
+                        "velocity_deg_s": (
+                            f"{math.degrees(physics_snapshot['qd_rad_s'][column]):.6f}"
+                        ),
+                        "applied_motor_torque_Nm": (
+                            f"{physics_snapshot['motor_torque_Nm'][column]:.6f}"
+                        ),
+                        "gravity_torque_Nm": (
+                            f"{physics_snapshot['gravity_torque_Nm'][column]:.6f}"
+                        ),
+                        "inverse_dynamics_torque_Nm": (
+                            f"{physics_snapshot['inverse_dynamics_torque_Nm'][column]:.6f}"
+                        ),
+                        "simulation_effort_limit_Nm": f"{ARM_MOTOR_FORCE_NM[logical_name]:.6f}",
+                        "payload_kg": f"{physics_snapshot['payload_kg']:.6f}",
+                    }
+                )
+            torque_csv_file.flush()
 
     try:
         if hand_link_index != -1:
@@ -1285,10 +1498,16 @@ while running and p.isConnected():
         162,
         "SPACE",
         "Grab / release target",
-        "holding" if grasp_transform is not None else "reaching" if auto_grasp_pending else "ready",
+        "holding" if grasp_transform is not None else auto_grasp_phase if auto_grasp_pending else "ready",
         action_x,
     )
-    draw_control_row(202, "H", "Hold for auto reach", "IK", action_x)
+    draw_control_row(
+        202,
+        "H",
+        "Hold for safe approach",
+        "stopped" if h_contact_stop else "reach",
+        action_x,
+    )
     draw_control_row(242, "C or 1-3", "Change camera", camera_mode, action_x)
     draw_control_row(282, "R", "Reset arm and target", "", action_x)
 
@@ -1346,12 +1565,30 @@ while running and p.isConnected():
         sensor_vars["imu_pitch"].set(f"Pitch: {rad_to_deg(imu_euler_rad[1]):.1f}")
         sensor_vars["imu_yaw"].set(f"Yaw:   {rad_to_deg(imu_euler_rad[2]):.1f}")
 
-        pressure_status = (
-            "CONTACT (simulated)"
-            if grasp_transform is not None
-            else "N/A (No Object)"
+        displayed_fingertip_force_n = {
+            finger: max(
+                fingertip_force_n[finger],
+                latched_fingertip_force_n[finger]
+                if grasp_transform is not None
+                else 0.0,
+            )
+            for finger in FINGER_JOINT_TOKENS
+        }
+        displayed_contacts = sum(
+            force_n >= FINGERTIP_CONTACT_FORCE_N
+            for force_n in displayed_fingertip_force_n.values()
         )
-        sensor_vars["pressure_hand"].set(f"Hand Pressure: {pressure_status}")
+        total_contact_force_n = sum(displayed_fingertip_force_n.values())
+        sensor_vars["pressure_hand"].set(
+            f"Virtual fingertip contact: {displayed_contacts}/5  "
+            f"total {total_contact_force_n:.2f} N"
+        )
+        for finger, force_n in displayed_fingertip_force_n.items():
+            filled = round(min(force_n / 2.0, 1.0) * 10)
+            bar = "#" * filled + "-" * (10 - filled)
+            sensor_vars[f"pressure_{finger}"].set(
+                f"{finger.title():6}: {force_n:5.2f} N  [{bar}]"
+            )
 
         sensor_window.update()
 
@@ -1371,5 +1608,7 @@ except tk.TclError:
 pygame.quit()
 if telemetry_file is not None:
     telemetry_file.close()
+if torque_csv_file is not None:
+    torque_csv_file.close()
 if p.isConnected():
     p.disconnect()

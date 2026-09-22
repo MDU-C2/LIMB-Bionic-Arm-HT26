@@ -44,6 +44,20 @@ FINGER_LIMITS_DEG = {
 }
 
 
+def finger_joint_angles_rad(curl: float) -> dict[str, float]:
+    """Map a normalized hand curl to the visual finger joints."""
+    if not math.isfinite(curl):
+        raise ValueError("finger curl must be finite")
+    curl = max(0.0, min(1.0, curl))
+    angles = {
+        f"{finger}_{segment}": math.radians(limit.upper) * curl
+        for finger, limit in FINGER_LIMITS_DEG.items()
+        for segment in range(1, 4)
+    }
+    angles["thumb_1"] = -0.5 * curl
+    return angles
+
+
 def _reverse(limit: JointLimit) -> JointLimit:
     """Reverse a hardware angle for an opposite URDF axis."""
     return JointLimit(

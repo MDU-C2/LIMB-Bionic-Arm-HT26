@@ -38,11 +38,19 @@ F/G, H, and R also work while the PyBullet scene has focus.
 | Reset the arm and target | R |
 | Quit | Escape |
 
-Space reaches for a reachable target and grasps it within 10 cm; press again to
-cancel or release. Direct mode positions joints for a responsive preview.
+H uses one smooth reach and stops before the hand enters the cup. Space opens
+the hand, follows the same reach while orienting the wrist to the cylinder,
+and closes the fingers gradually. A hold only engages after at least two
+virtual fingertips contact the cup. The hold keeps
+the cup at its contact pose; it does not reposition the cup inside the hand.
+Press Space again to cancel or release. Direct mode positions joints for a
+responsive preview.
 Select **Physics mode** in the GUI, or pass `--mode dynamic`, for gravity,
-motors, and payload effects. Add
-`--telemetry-out outputs/simulation/physics.jsonl` to save diagnostics. See
+motors, and payload effects. The sensor dashboard plots the last ten seconds
+of PyBullet motor torque for the three shoulder joints, elbow, and wrist. The
+GUI saves a readable torque CSV in `outputs/simulation` when its save option is
+selected. Add `--torque-out outputs/simulation/torque.csv` on the command line,
+or `--telemetry-out outputs/simulation/physics.jsonl` for full diagnostics. See
 the [robot dynamics guide](SIMULATION_DYNAMICS.md) for the model and limits.
 
 Press P to show the simulated camera buffers.
@@ -63,6 +71,13 @@ These limits come from LIMB-HT25 firmware and need checking against the current
 arm. Update `src/simulation/sim/joint_limits.py` and both URDFs together after
 measurement.
 
+The sensor dashboard shows contact signals for all five simulated fingertip
+collision links. Physics mode uses PyBullet's normal force. Direct mode also
+uses a penetration-based proxy because it has no dynamic contact response.
+These values are uncalibrated simulation signals. The HT25 BOM lists three
+pressure-sensitive resistors, so their physical fingertip placement still
+needs verification.
+
 Physics-mode torque values come from PyBullet motors; gravity-hold effort is an
 inverse-dynamics estimate. The URDF mass and inertia remain unverified.
 
@@ -70,8 +85,8 @@ inverse-dynamics estimate. The URDF mass and inertia remain unverified.
 
 Use **Sensors** for BLE/serial live previews or the OAK-D camera. Recordings
 start only when requested; the camera has its own REC control. The camera shows
-the selected shoulder, elbow, and wrist and saves six arm/trunk points and
-angle estimates. Motion AI pose playback requires optional stereo depth, which
+the selected arm and its 21 hand landmarks and saves arm and finger angle
+estimates. Motion AI pose playback requires optional stereo depth, which
 still needs a device retest. See the [recording guide](../src/recording/README.md)
 and [sensor data guide](SENSOR_DATA.md) for formats and experiment details.
 

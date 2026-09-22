@@ -43,28 +43,33 @@ FINGER_LIMITS_DEG = {
     "pinky": JointLimit(0.0, 90.0, 120.0, 120.0),
 }
 
-# Closed-hand targets are defined per phalanx. Applying one finger's complete
-# actuator range to every joint makes the combined bend far too large and lets
-# the meshes fold through each other.
-FINGER_CLOSED_POSE_DEG = {
-    "thumb": (-20.0, 25.0, 20.0),
-    "index": (85.0, 85.0, 0.0),
-    "middle": (90.0, 90.0, 0.0),
-    "ring": (55.0, 65.0, 40.0),
-    "pinky": (60.0, 65.0, 40.0),
-}
-
-
 def finger_joint_angles_rad(curl: float) -> dict[str, float]:
-    """Map a normalized hand curl to the visual finger joints."""
+    """Map hand curl to a stable open-to-grip pose for the imported hand."""
     if not math.isfinite(curl):
         raise ValueError("finger curl must be finite")
-    curl = max(0.0, min(1.0, curl))
-    return {
-        f"{finger}_{segment}": math.radians(angle_deg) * curl
-        for finger, closed_pose in FINGER_CLOSED_POSE_DEG.items()
-        for segment, angle_deg in enumerate(closed_pose, start=1)
+    curl = max(0.0, min(1.5, curl))
+    progress = curl / 1.5
+    angles = {
+        # LIMB-HT25 omits the thumb; drive all three joints here so it closes
+        # with the hand instead of staying fixed or flapping under gravity.
+        "thumb_1": -0.10 - 0.38 * progress,
+        "thumb_2": 1.10 * progress,
+        "thumb_3": 0.60 * progress,
+        "index_1": 1.15 * progress,
+        "index_2": 0.95 * progress,
+        "middle_1": 1.18 * progress,
+        "middle_2": 0.98 * progress,
+        # Starting at zero avoids the LIMB-HT25 -1.4 radian open-hand kink.
+        # LIMB-HT25 effectively ends at 1.5 - 1.4 = 0.1 rad here. Keeping
+        # this base joint nearly straight stops the last two fingers dropping.
+        "ring_1": 0.10 * progress,
+        "ring_2": 0.90 * progress,
+        "ring_3": 0.55 * progress,
+        "pinky_1": 0.10 * progress,
+        "pinky_2": 0.85 * progress,
+        "pinky_3": 0.50 * progress,
     }
+    return angles
 
 
 def _reverse(limit: JointLimit) -> JointLimit:

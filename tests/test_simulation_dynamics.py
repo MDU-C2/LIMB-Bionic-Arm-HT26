@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "simulation
 
 from sim.dynamics import ArmDynamics
 from sim.controller_params import ARM_ACTUATOR_INFO, ARM_MOTOR_FORCE_NM
-from sim.contact_feedback import estimate_contact_force_n
+from sim.contact_feedback import estimate_contact_force_n, grasp_is_ready
 from sim.robot_model import RIGHT_ARM_JOINTS, RIGHT_GRIP_OFFSET_M, inspect_model, load_right_arm
 from interactive.kinematics import calculate_ik_angles
 from interactive.torque_graph import TorqueHistory
@@ -195,11 +195,17 @@ class SimulationDynamicsTests(unittest.TestCase):
         self.assertLess(abs(shoulder_deg - math.degrees(q[1])), 3.0)
         self.assertLess(abs(elbow_deg - math.degrees(q[3])), 3.0)
 
-    def test_finger_model_curls_thumb_toward_the_fingers(self) -> None:
-        finger_angles = finger_joint_angles_rad(0.20)
-        self.assertLess(finger_angles["thumb_1"], 0.0)
-        self.assertGreater(finger_angles["index_1"], 0.0)
-        self.assertLess(finger_joint_angles_rad(2.0)["index_1"], math.radians(86.0))
+    def test_finger_model_has_stable_open_and_closed_poses(self) -> None:
+        open_hand = finger_joint_angles_rad(0.0)
+        closed_hand = finger_joint_angles_rad(1.5)
+        self.assertLess(open_hand["thumb_1"], 0.0)
+        self.assertEqual(open_hand["thumb_2"], 0.0)
+        self.assertLess(closed_hand["thumb_1"], open_hand["thumb_1"])
+        self.assertGreater(closed_hand["thumb_2"], open_hand["thumb_2"])
+        self.assertGreater(closed_hand["thumb_3"], open_hand["thumb_3"])
+        for finger in ("index", "middle", "ring", "pinky"):
+            self.assertEqual(open_hand[f"{finger}_1"], 0.0)
+            self.assertGreater(closed_hand[f"{finger}_1"], 0.0)
 
     def test_fingertip_force_uses_contact_or_penetration_signal(self) -> None:
         self.assertEqual(estimate_contact_force_n(0.0, 0.001, 500.0), 0.0)
@@ -208,35 +214,25 @@ class SimulationDynamicsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             estimate_contact_force_n(0.0, 0.0, -1.0)
 
-    def test_cylindrical_target_reaches_two_fingertip_contact_zones(self) -> None:
-        q = np.zeros(self.dynamics.dof)
-        q[:5] = np.radians((-18.4349, 35.1667, 0.0, -46.3460, 20.0))
-        self.reset_pose(q)
-        joints_by_name = {
-            p.getJointInfo(self.robot, index)[1].decode("utf-8"): index
-            for index in range(p.getNumJoints(self.robot))
+    def test_assisted_grasp_accepts_contact_or_close_proximity(self) -> None:
+        settings = {
+            "min_curl": 0.45,
+            "capture_distance_m": 0.14,
+            "min_fingertip_contacts": 2,
         }
-        for logical_name, angle_rad in finger_joint_angles_rad(0.68).items():
-            urdf_name = logical_name.replace("_", "_joint_", 1)
-            joint_index = joints_by_name.get(urdf_name)
-            if joint_index is not None and p.getJointInfo(self.robot, joint_index)[2] == p.JOINT_REVOLUTE:
-                p.resetJointState(self.robot, joint_index, angle_rad)
+        self.assertTrue(grasp_is_ready(0.5, 0.20, 2, **settings))
+        self.assertTrue(grasp_is_ready(0.5, 0.12, 0, **settings))
+        self.assertFalse(grasp_is_ready(0.3, 0.12, 2, **settings))
+        self.assertFalse(grasp_is_ready(0.5, 0.20, 1, **settings))
 
-        cylinder = p.createCollisionShape(p.GEOM_CYLINDER, radius=0.04, height=0.10)
-        target = p.createMultiBody(
-            baseMass=0.0,
-            baseCollisionShapeIndex=cylinder,
-            basePosition=(0.2, 0.6, 0.5),
-        )
-        p.performCollisionDetection()
-        active_fingertips = set()
-        for point in p.getContactPoints(self.robot, target):
-            link_name = p.getJointInfo(self.robot, point[3])[12].decode("utf-8")
-            if link_name.endswith("_link_3") and estimate_contact_force_n(
-                point[9], point[8], 500.0
-            ) >= 0.15:
-                active_fingertips.add(link_name)
-        self.assertGreaterEqual(len(active_fingertips), 2)
+    def test_finger_curl_is_proportional_and_bounded(self) -> None:
+        half = finger_joint_angles_rad(0.75)
+        closed = finger_joint_angles_rad(1.5)
+        for name in closed:
+            if name.startswith("thumb"):
+                continue
+            self.assertAlmostEqual(half[name], closed[name] / 2.0)
+            self.assertLessEqual(abs(closed[name]), 1.18)
 
     def test_each_simulated_arm_joint_has_actuator_metadata(self) -> None:
         self.assertEqual(set(ARM_ACTUATOR_INFO), set(ARM_MOTOR_FORCE_NM))

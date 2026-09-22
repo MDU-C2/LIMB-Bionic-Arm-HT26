@@ -32,7 +32,7 @@ from sim.controller_params import (
     FINGER_MOTOR_FORCE_NM, FINGER_POSITION_GAIN, FINGER_VELOCITY_GAIN,
     FINGER_PREVIEW_SPEED_RAD_S,
 )
-from sim.contact_feedback import estimate_contact_force_n
+from sim.contact_feedback import estimate_contact_force_n, grasp_is_ready
 from sim.dynamics import ArmDynamics
 from sim.joint_limits import (
     RIGHT_ARM_HARDWARE_SIGN,
@@ -62,10 +62,13 @@ PHYSICS_SUBSTEPS = 4
 TARGET_RADIUS_M = 0.04
 TARGET_HEIGHT_M = 0.10
 SAFE_REACH_DISTANCE_M = 0.10
+# The HUD rounds to two decimals. A little margin avoids showing 0.20 m while
+# rejecting the manual F grip because the unrounded distance is just above it.
+GRASP_CAPTURE_DISTANCE_M = 0.25
 TARGET_NORMAL_MASS_KG = 0.1
 HAND_GRIP_OFFSET_M = RIGHT_GRIP_OFFSET_M
-MIN_GRASP_CURL = 0.10
-MAX_GRASP_CURL = 0.75
+MIN_GRASP_CURL = 0.45
+MAX_GRASP_CURL = 1.5
 MIN_GRASP_FINGERTIPS = 2
 FINGERTIP_CONTACT_FORCE_N = 0.15
 CONTACT_STIFFNESS_N_PER_M = 500.0
@@ -206,7 +209,7 @@ class Hand:
         """Initialize the hand in an open pose."""
         self.curl = 0.0  # 0.0 is open; 1.0 is a closed fist.
         self.min_curl = 0.0
-        self.max_curl = 1.0
+        self.max_curl = 1.5  # Original LIMB-HT25 hand travel, in radians.
 
 
 class LimbArm:
@@ -571,6 +574,20 @@ joint_indices = build_joint_index_map(robot_body, p)
 sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
 dynamics = ArmDynamics(robot_body, p)
 link_indices_by_name = build_link_name_index_map(robot_body, p)
+
+# Keep the project name attached to the orange upper-arm shell. Debug text is
+# used instead of modifying the STL so the source mesh remains reusable.
+upper_arm_link_index = link_indices_by_name.get("right_upper_arm", -1)
+if upper_arm_link_index >= 0:
+    p.addUserDebugText(
+        "AURORA",
+        textPosition=[0.13, -0.045, 0.035],
+        textColorRGB=[0.03, 0.03, 0.03],
+        textSize=1.25,
+        lifeTime=0,
+        parentObjectUniqueId=robot_body,
+        parentLinkIndex=upper_arm_link_index,
+    )
 
 try:
     hand_link_name, hand_link_index = resolve_link_index(
@@ -1092,18 +1109,33 @@ while running and p.isConnected():
             new_value = arm.hand.curl + delta_hand
             arm.hand.curl = clamp(new_value, arm.hand.min_curl, arm.hand.max_curl)
 
-    if (interact_requested or auto_grasp_pending) and grasp_transform is None and hand_link_index != -1:
+    # Match LIMB-HT25 manual handling: holding F inside 20 cm closes the hand
+    # and immediately secures the object. Space keeps the assisted workflow.
+    manual_grasp_requested = (
+        (keys[pygame.K_f] or bullet_key_down("f"))
+        and hand_target_distance <= GRASP_CAPTURE_DISTANCE_M
+    )
+
+    if (
+        interact_requested or auto_grasp_pending or manual_grasp_requested
+    ) and grasp_transform is None and hand_link_index != -1:
         if interact_requested and auto_grasp_pending:
             auto_grasp_pending = False
             auto_grasp_phase = "reach"
             notice_text = "Assisted grasp canceled"
             notice_until_ms = pygame.time.get_ticks() + 1800
             print(notice_text)
-        elif (
+        elif manual_grasp_requested or (
             auto_grasp_pending
             and auto_grasp_phase == "close"
-            and arm.hand.curl >= MIN_GRASP_CURL
-            and len(active_fingertips) >= MIN_GRASP_FINGERTIPS
+            and grasp_is_ready(
+                arm.hand.curl,
+                hand_target_distance,
+                len(active_fingertips),
+                min_curl=MIN_GRASP_CURL,
+                capture_distance_m=GRASP_CAPTURE_DISTANCE_M,
+                min_fingertip_contacts=MIN_GRASP_FINGERTIPS,
+            )
         ):
             auto_grasp_pending = False
             auto_grasp_phase = "reach"
@@ -1161,7 +1193,9 @@ while running and p.isConnected():
                 )
             grasp_transform = (target_position_in_hand, target_orientation_in_hand)
             notice_text = (
-                f"Grip held at contact pose ({len(active_fingertips)} fingertips)"
+                "Manual F grip secured"
+                if manual_grasp_requested
+                else f"Grip secured ({len(active_fingertips)} fingertip contacts)"
             )
             notice_until_ms = pygame.time.get_ticks() + 1800
             print(notice_text)

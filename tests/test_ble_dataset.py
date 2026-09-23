@@ -35,6 +35,12 @@ class LabeledBleCaptureTests(unittest.TestCase):
         self.assertEqual([sensor for sensor, _, _ in samples], ["emg", "imu"])
         self.assertEqual(len(samples[0][2]), 2)
         self.assertEqual(samples[1][2][1][0][0], 0.006)
+        self.assertEqual(recorder.imu_units, ("g", "dps"))
+
+        current = BleRecorder(None)
+        current.handle("imu", bytearray(struct.pack("<I6f", 9, 1000, 0, 0, 500, 0, 0)))
+        self.assertEqual(current.imu_units, ("mg", "mdps"))
+        current.close()
 
     def test_old_single_sensor_packets_make_complete_capture(self) -> None:
         with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):

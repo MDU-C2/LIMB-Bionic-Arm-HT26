@@ -1,23 +1,13 @@
-# Simulation and recording
+# Simulation
 
-Start the control center:
+Start the GUI and open **Simulation**:
 
 ```powershell
-micromamba create -f src/simulation/environment.yml
 micromamba run -n aurora-simulation python src/gui/app.py
 ```
 
-## Interactive simulator
-
-Open **Simulation** and select **Open full simulator**, or run:
-
-```powershell
-micromamba run -n aurora-simulation python src/simulation/interactive/limb_simulator.py
-```
-
-Three coordinated windows open: the PyBullet scene, the keyboard controller,
-and the sensor dashboard. Click the controller for arm movement keys. Space,
-F/G, H, and R also work while the PyBullet scene has focus.
+**Open full simulator** starts the PyBullet scene, the keyboard controller, and
+the simulated sensor display.
 
 | Action | Keys |
 | --- | --- |
@@ -26,99 +16,24 @@ F/G, H, and R also work while the PyBullet scene has focus.
 | Upper-arm rotation | Q / E |
 | Elbow bend/extend | Up / Down |
 | Wrist rotation | Left / Right |
-| Precise movement | Ctrl |
 | Close/open fingers | F / G |
-| Reach for and grab / release a target | Space |
-| Move toward the target with IK | H |
-| Toggle target guide | T |
-| Cycle cameras | C or Tab |
-| Select camera | 1 / 2 / 3 |
-| Toggle camera preview panels | P |
-| Show/hide sensor dashboard | I |
-| Reset the arm and target | R |
+| Reach, grab, or release | Space |
+| Move toward the target | H |
+| Change camera | C or Tab |
+| Show camera panels | P |
+| Show sensor display | I |
+| Reset | R |
 | Quit | Escape |
 
-H uses one smooth reach and stops before the hand enters the cup. Space opens
-the hand, follows the same reach while orienting the wrist to the cylinder,
-and closes the fingers gradually. A hold only engages after at least two
-virtual fingertips contact the cup. The hold keeps
-the cup at its contact pose; it does not reposition the cup inside the hand.
-Press Space again to cancel or release. Direct mode positions joints for a
-responsive preview.
-Select **Physics mode** in the GUI, or pass `--mode dynamic`, for gravity,
-motors, and payload effects. The sensor dashboard plots the last ten seconds
-of PyBullet motor torque for the three shoulder joints, elbow, and wrist. The
-GUI saves a readable torque CSV in `outputs/simulation` when its save option is
-selected. Add `--torque-out outputs/simulation/torque.csv` on the command line,
-or `--telemetry-out outputs/simulation/physics.jsonl` for full diagnostics. See
-the [robot dynamics guide](SIMULATION_DYNAMICS.md) for the model and limits.
+The GUI can start the simulator in direct mode or physics mode. Physics mode
+uses gravity, motor control, collision, and simulated torque/contact values.
 
-Press P to show the simulated camera buffers.
+The same tab can play trajectories from `examples/simulation/demo/` or another
+folder containing a supported NPZ file. **Manual joint control** opens sliders
+for inspecting individual joints.
 
-## Joint model
+The **Motion AI** tab can play compatible OAK-D pose recordings and run the
+experimental movement-recognition model.
 
-The URDF has five driven arm motions:
-
-| Actuator | Range | Maximum speed | Acceleration |
-| --- | ---: | ---: | ---: |
-| Shoulder up/down | 0 to 90 deg | +10 / -20 deg/s | 15 deg/s² |
-| Shoulder left/right | 5 to 40 deg | +20 / -10 deg/s | 15 deg/s² |
-| Upper-arm rotation | -60 to 60 deg | 40 deg/s | 20 deg/s² |
-| Elbow | 0 to 60 deg | 40 deg/s | 20 deg/s² |
-| Lower-arm rotation | 0 to 140 deg | 100 deg/s | Not specified |
-
-These limits come from LIMB-HT25 firmware and need checking against the current
-arm. Update `src/simulation/sim/joint_limits.py` and both URDFs together after
-measurement.
-
-The sensor dashboard shows contact signals for all five simulated fingertip
-collision links. Physics mode uses PyBullet's normal force. Direct mode also
-uses a penetration-based proxy because it has no dynamic contact response.
-These values are uncalibrated simulation signals. The HT25 BOM lists three
-pressure-sensitive resistors, so their physical fingertip placement still
-needs verification.
-
-Physics-mode torque values come from PyBullet motors; gravity-hold effort is an
-inverse-dynamics estimate. The URDF mass and inertia remain unverified.
-
-## Record sensors and camera pose
-
-Use **Sensors** for BLE/serial live previews or the OAK-D camera. Recordings
-start only when requested; the camera has its own REC control. The camera shows
-the selected arm and its 21 hand landmarks and saves arm and finger angle
-estimates. Motion AI pose playback requires optional stereo depth, which
-still needs a device retest. See the [recording guide](../src/recording/README.md)
-and [sensor data guide](SENSOR_DATA.md) for formats and experiment details.
-
-## Trajectory tools
-
-Loop the included example trajectory:
-
-```powershell
-micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --loop
-```
-
-Open the left-arm joint sliders:
-
-```powershell
-micromamba run -n aurora-simulation python src/simulation/sim/manual_sim.py
-```
-
-The sliders set joints directly, including lower-arm rotation.
-
-Run a trajectory without a window as an installation check:
-
-```powershell
-micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --headless
-```
-
-Playback accepts `q_gen_rad` with shape `(T, 4)` and a positive `dt` in an NPZ
-file. `--refit` fits a DMP from recorded angles. Joint values and playback
-speed follow the configured limits.
-
-Camera-pose tools can also run directly:
-
-```powershell
-micromamba run -n aurora-simulation python src/simulation/ai/pose_recording_sim.py recording.json
-micromamba run -n aurora-simulation python src/simulation/ai/movement_recognition.py recording.json --references path/to/references
-```
+Live cuff values do not control the simulated arm yet. The current sensor
+previews and simulation run separately.

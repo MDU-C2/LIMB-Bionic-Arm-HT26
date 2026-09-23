@@ -45,6 +45,12 @@ def parse_args() -> argparse.Namespace:
         "--preview", action="store_true",
         help="Show live EMG and IMU feedback without saving a session.",
     )
+    parser.add_argument(
+        "--preview-sensor",
+        choices=("all", "emg", "imu", "piezo"),
+        default="all",
+        help="Choose which BLE sensor window to open first.",
+    )
     parser.add_argument("--scan-timeout", type=float, default=12.0)
     parser.add_argument("--subject", default=os.environ.get("AURORA_SUBJECT", "session"))
     parser.add_argument(
@@ -71,6 +77,7 @@ class BleRecorder:
     ) -> None:
         self.session = session
         self.sample_sink = sample_sink
+        self.imu_units = ("device units", "device units")
         self.counts = {name: 0 for name in SENSOR_UUIDS}
         self.raw_file = (
             (session / "packets.jsonl").open("w", encoding="utf-8", buffering=1)
@@ -197,15 +204,18 @@ class BleRecorder:
             _, sequence, device_time, *raw = struct.unpack("<HIQ12h", data)
             samples = [(0, [value / 1000.0 for value in raw[:6]])]
             samples.append((1, [value / 1000.0 for value in raw[6:]]))
+            self.imu_units = ("g", "dps")
         elif len(data) == struct.calcsize("<9fI"):
             *values, sequence = struct.unpack("<9fI", data)
             device_time = ""
             samples = [(0, list(values))]
+            self.imu_units = ("firmware units", "firmware units")
         elif len(data) >= 28 and (len(data) - 4) % 24 == 0:
             sequence = int.from_bytes(data[:4], "little")
             device_time = ""
             values = struct.unpack(f"<{(len(data) - 4) // 4}f", data[4:])
             samples = [(0, list(values[index : index + 6])) for index in range(0, len(values), 6)]
+            self.imu_units = ("mg", "mdps")
         else:
             raise ValueError("unknown IMU packet layout")
 

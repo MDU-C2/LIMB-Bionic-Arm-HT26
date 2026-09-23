@@ -1,19 +1,16 @@
-# Computer-side software
+# Source code
 
-`src` contains the maintained programs that run on a project computer.
-
-| Directory | Responsibility |
-| --- | --- |
-| [`gui/`](gui/) | Tkinter launcher, process supervision, and tool discovery. |
-| [`recording/`](recording/) | BLE, serial, and OAK-D data capture. |
-| [`simulation/`](simulation/) | Interactive PyBullet scene, trajectories, pose mapping, and Motion AI. |
-
-Start the software through the project GUI:
+Start the current software through the GUI:
 
 ```powershell
 micromamba run -n aurora-simulation python src/gui/app.py
 ```
 
-Microcontroller applications belong in `firmware`, experiments that are not
-part of the runtime belong in `research`, and generated recordings belong
-under `outputs/recordings` or external project storage.
+| Folder | Contents |
+| --- | --- |
+| `gui/` | Desktop interface and program control. |
+| `recording/` | Sensor and camera previews and recordings. |
+| `simulation/` | Arm simulation, trajectories, and Motion AI. |
+| `ml/` | Movement-data capture and model training. |
+
+Generated recordings and simulation output belong in `outputs/`, not `src/`.

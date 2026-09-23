@@ -30,8 +30,13 @@ def safe_label(value: str) -> str:
 def create_session_directory(source: str, subject: str) -> Path:
     """Create one timestamped folder below the selected output directory."""
     output = Path(os.environ.get("AURORA_OUTPUT_DIR", DEFAULT_OUTPUT)).expanduser()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    session = output / f"{timestamp}_{safe_label(subject)}_{source}"
+    batch_value = os.environ.get("AURORA_SESSION_ID", "").strip()
+    timestamp = (
+        safe_label(batch_value)
+        if batch_value
+        else datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    )
+    session = output / f"{timestamp}_{safe_label(subject)}_{safe_label(source)}"
     session.mkdir(parents=True, exist_ok=False)
     return session
 
@@ -46,6 +51,8 @@ def experiment_metadata() -> dict[str, str]:
     return {
         "trial_id": os.environ.get("AURORA_TRIAL_ID", "").strip(),
         "test_type": os.environ.get("AURORA_TEST_TYPE", "").strip(),
+        "session_id": os.environ.get("AURORA_SESSION_ID", "").strip(),
+        "batch_sources": os.environ.get("AURORA_BATCH_SOURCES", "").strip(),
     }
 
 

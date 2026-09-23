@@ -26,6 +26,11 @@ def parse_args() -> argparse.Namespace:
         help="Print live serial messages without creating a recording session.",
     )
     parser.add_argument(
+        "--preview-window",
+        action="store_true",
+        help="Show a live serial log and graphs without saving a session.",
+    )
+    parser.add_argument(
         "--duration",
         type=float,
         default=env_float("AURORA_DURATION_SECONDS", 0.0),
@@ -59,27 +64,44 @@ def main() -> int:
         print("Baud must be positive and duration cannot be negative.")
         return 2
 
-    session = None if args.preview else create_session_directory("serial", args.subject)
+    preview_window = getattr(args, "preview_window", False)
+    preview_mode = args.preview or preview_window
+    session = None if preview_mode else create_session_directory("serial", args.subject)
     output_path = None if session is None else session / "serial.jsonl"
     started = time.monotonic()
     lines_written = 0
-    print(f"{'Previewing' if args.preview else 'Recording'} {args.port} at {args.baud} baud")
+    print(f"{'Previewing' if preview_mode else 'Recording'} {args.port} at {args.baud} baud")
     if session is not None:
         print(f"Saving to {session}")
     else:
         print("Preview mode does not create a session folder or save messages.")
+
+    preview = None
+    if preview_window:
+        try:
+            from serial_preview import SerialPreview
+
+            preview = SerialPreview(args.port, args.baud)
+        except Exception as error:
+            print(f"Could not open serial preview window: {error}")
+            return 2
 
     try:
         with serial.Serial(args.port, args.baud, timeout=0.2) as device:
             output = output_path.open("w", encoding="utf-8", buffering=1) if output_path else None
             try:
                 while args.duration == 0 or time.monotonic() - started < args.duration:
+                    if preview is not None and not preview.refresh():
+                        break
                     raw = device.readline()
                     if not raw:
                         continue
                     text = raw.decode("utf-8", errors="replace").strip()
-                    if args.preview:
-                        print(f"[{utc_now()}] {text}")
+                    if preview_mode:
+                        timestamp = utc_now()
+                        print(f"[{timestamp}] {text}")
+                        if preview is not None:
+                            preview.add_line(timestamp, text)
                         continue
                     record: dict[str, object] = {
                         "host_time": utc_now(),
@@ -104,6 +126,8 @@ def main() -> int:
         print(f"Serial recording failed: {error}")
         return 1
     finally:
+        if preview is not None:
+            preview.close()
         if session is not None:
             write_metadata(
                 session,

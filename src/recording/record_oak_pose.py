@@ -47,6 +47,12 @@ def parse_args() -> argparse.Namespace:
                         help="Subject's arm to highlight and save (default: left).")
     parser.add_argument("--preview", action="store_true",
                         help="Compatibility option; live preview is always shown first.")
+    parser.add_argument(
+        "--auto-start",
+        action="store_true",
+        default=os.environ.get("AURORA_AUTO_START", "").strip() == "1",
+        help="Start saving immediately after the camera and tracking models are ready.",
+    )
     parser.add_argument("--depth", action="store_true",
                         help="Enable stereo depth for 3D playback points (experimental on this OAK-D).")
     parser.add_argument("--pose-model", type=int, choices=(0, 1, 2), default=1,
@@ -597,6 +603,8 @@ def main() -> int:
         print("Cup detection needs a model; no cup model is present in this repository.")
         if not args.depth:
             print("Stereo depth is off; use --depth to attempt depth-backed playback points.")
+        if getattr(args, "auto_start", False):
+            session.start()
         while pipeline.isRunning():
             if depth_queue is not None:
                 depth_message = depth_queue.tryGet()

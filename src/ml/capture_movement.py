@@ -17,7 +17,8 @@ import depthai as dai
 import mediapipe as mp
 
 
-DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "ml" / "data" / "training"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_OUTPUT = REPOSITORY_ROOT / "data" / "movement" / "training"
 
 
 def arguments() -> argparse.Namespace:

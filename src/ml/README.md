@@ -1,26 +1,24 @@
-# Movement model training
+# Movement model
 
-This is the minimal training subset migrated from `KarlFallman/LIMB1`. It trains
-a GRU embedding model that learns which recorded body/hand movements belong to
-the same person. The included dataset contains 100 JSON recordings from five
-users; it contains landmarks and depth values, not images.
+This folder contains the movement-data capture and GRU training code. It was
+moved from the Applied Artificial Intelligence student project.
 
-From the repository root, install the ML-only dependencies and start training:
+The current dataset is in `data/movement/training/`.
 
-```powershell
-python -m pip install -r src/ml/requirements.txt
-python src/ml/train_gru.py
-```
-
-The best checkpoint, an ONNX export, and the metrics plot are written under
-`artifacts/models/`. Training automatically uses CUDA when it is available.
-For a quick smoke test, set the epoch count through an environment variable:
+## Capture a movement
 
 ```powershell
-$env:LIMB_EPOCHS = 1
-python src/ml/train_gru.py
+micromamba run -n aurora-simulation python src/ml/capture_movement.py --user-id 6 --side right
 ```
 
-Expected JSON fields are `user_id`, `sequence`, and `data`. Each frame in
-`data` has `shoulder`, `elbow`, and up to 21 `hand` landmarks with `id`, `x`,
-`y`, and `depth_m`.
+Press `Space` to start and press it again to save.
+
+## Train the model
+
+```powershell
+micromamba run -n aurora-simulation python -m pip install -r src/ml/requirements.txt
+micromamba run -n aurora-simulation python src/ml/train_gru.py
+```
+
+Training output is written below `artifacts/models/`. The model and dataset are
+experimental and are not a medical or identification result.

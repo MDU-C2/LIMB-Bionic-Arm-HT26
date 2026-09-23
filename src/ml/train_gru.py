@@ -314,7 +314,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
-    folder = os.path.join(SCRIPT_DIR, "data", "training")
+    folder = os.path.join(REPOSITORY_ROOT, "data", "movement", "training")
     if not os.path.exists(folder):
         print(f"Error: Folder not found -> {folder}")
         return

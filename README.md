@@ -1,36 +1,44 @@
-# AURORA – Adaptive User Robotic Rehabilitation Arm
+# AURORA - Adaptive User Robotic Rehabilitation Arm
 
-AURORA continues the LIMB robotic-arm work at Mälardalen University. It
-provides a local control center for simulation, motion playback, and sensor
-recording.
+AURORA is a student project at Mälardalen University. This repository currently
+contains the computer-side software for sensor previews, recording, camera
+tracking, movement data, and robot simulation.
 
-## What works
+The physical hardware files and finished robot firmware are not included yet.
 
-- PyBullet arm simulation with direct preview and physics modes, joint sliders,
-  and DMP trajectory playback.
-- BLE, serial, and OAK-D live previews and recording.
-- Camera-pose playback and experimental movement recognition.
+## Run the program
 
-The current camera, cuff, and firmware still need device validation. The
-as-built robot model and firmware are not yet in this repository.
-
-## Quick start
-
-Install [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html),
-then run these commands from the repository root:
+Open PowerShell in the repository root:
 
 ```powershell
 micromamba create -f src/simulation/environment.yml
 micromamba run -n aurora-simulation python src/gui/app.py
 ```
 
-The GUI opens PyBullet, camera, and sensor previews in separate windows.
+The GUI can:
 
-See the [simulation guide](docs/SIMULATION.md),
-[robot dynamics](docs/SIMULATION_DYNAMICS.md),
-[motor inventory](docs/MOTORS.md),
-[sensor data guide](docs/SENSOR_DATA.md), and
-[GUI development guide](src/gui/README.md).
+- preview EMG, IMU, piezo, OAK-D camera, and serial data;
+- keep several preview windows open at the same time;
+- record BLE sensors, camera data, and serial data as one session;
+- run the interactive PyBullet arm simulation;
+- play saved trajectories and camera poses; and
+- run the experimental movement-recognition tools.
 
-The model and parts of the simulator derive from
-[MDU-C2/LIMB-HT25](https://github.com/MDU-C2/LIMB-HT25).
+## Main folders
+
+| Folder | Contents |
+| --- | --- |
+| `src/gui/` | The desktop application. |
+| `src/recording/` | BLE, camera, and serial preview and recording tools. |
+| `src/simulation/` | PyBullet simulation and Motion AI tools. |
+| `src/ml/` | Movement-data capture and model training. |
+| `data/` | The movement training data currently included in the project. |
+| `docs/` | Short usage guides. |
+| `tests/` | Automated software tests. |
+
+Generated recordings are written below `outputs/recordings/` and should not be
+committed to Git.
+
+More details are in the [GUI guide](src/gui/README.md),
+[recording guide](src/recording/README.md), and
+[simulation guide](src/simulation/README.md).

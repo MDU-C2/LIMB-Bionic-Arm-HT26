@@ -19,9 +19,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"
 
 import record_oak_pose
 import record_serial_sensors
+from ble_preview import imu_tilt_degrees, relative_angle
+from serial_preview import numeric_values
 
 
 class SensorPreviewTests(unittest.TestCase):
+    def test_serial_preview_finds_numeric_values_in_json(self) -> None:
+        self.assertEqual(
+            numeric_values('{"emg": 42, "imu": {"x": -1.5}, "ready": true}'),
+            {"emg": 42.0, "imu.x": -1.5},
+        )
+        self.assertEqual(numeric_values("3.25"), {"value": 3.25})
+        self.assertEqual(numeric_values("device ready"), {})
+
+    def test_imu_tilt_exposes_arm_rotation_without_integrating_acceleration(self) -> None:
+        self.assertEqual(imu_tilt_degrees([0.0, 0.0, 1.0]), (0.0, 0.0))
+        pitch, roll = imu_tilt_degrees([0.0, 1.0, 0.0])
+        self.assertAlmostEqual(pitch, 0.0)
+        self.assertAlmostEqual(roll, 90.0)
+        pitch, roll = imu_tilt_degrees([1.0, 0.0, 0.0])
+        self.assertAlmostEqual(pitch, -90.0)
+        self.assertAlmostEqual(roll, 0.0)
+        self.assertIsNone(imu_tilt_degrees([0.0, 0.0, 0.0]))
+        self.assertAlmostEqual(relative_angle(-179.0, 179.0), 2.0)
+
     def test_left_arm_points_keep_camera_orientation_before_recording(self) -> None:
         point = lambda x, y: types.SimpleNamespace(x=x, y=y, visibility=0.9)
         body = types.SimpleNamespace(landmark=[

@@ -1,62 +1,49 @@
-# Sensor recording
+# Sensor previews and recording
 
-The control center discovers all three recorders and starts them from the
-**Recording** tab. Choose a source in **Sensors**, then set the subject,
-duration, device, and output folder in **Recording**.
+The GUI can preview and record these sources:
 
-| Program | Input | Session files |
+| Source | Preview | Recorded files |
 | --- | --- | --- |
-| `record_ble_sensors.py` | LIMB BLE notifications | `packets.jsonl`, `emg.csv`, `imu.csv`, `piezo.csv`, `meta.json` |
-| `record_serial_sensors.py` | Newline-based serial messages | `serial.jsonl`, `meta.json` |
-| `record_oak_pose.py` | OAK-D video, arm/trunk points, and selected hand landmarks | `video.mp4`, `pose.json`, `meta.json` |
+| EMG | Raw signal and recent activity | `emg.csv` |
+| IMU | Acceleration, gyroscope, and arm tilt | `imu.csv` |
+| Piezo | Contact and vibration signal | `piezo.csv` |
+| OAK-D | RGB video, body pose, and hand landmarks | `video.mp4`, `pose.json` |
+| Serial | Lines received from a selected port | `serial.jsonl` |
 
-BLE and serial create a session when recording starts. Duration `0` records
-until stopped; labeled BLE capture ends after 80 windows. OAK-D opens a live
-camera first, showing the selected shoulder, elbow, wrist, hand, and fingers over the
-unflipped image. Press R or click **START REC** to record, repeat to stop, and
-press Q to close. Its `pose.json` saves the six arm/trunk points, 21 hand
-landmarks, arm angles, and finger flexion estimates. The hand closest to the
-selected pose wrist is used, so the other hand and face are not drawn.
-Motion AI playback requires the optional `--depth` mode for 3D points.
+BLE recordings also keep `packets.jsonl`. Every recorder writes `meta.json`.
 
-## Labeled BLE capture
+## Preview the sensors
 
-Select the BLE recorder, check **Labeled BLE capture**, and enter a movement
-label. The old dataset uses `1` for holding and `2` for resting. After a
-three-second countdown, Activity and the status banner guide 20 rest windows,
-40 movement windows, and 20 rest windows. Each window contains ten consecutive
-BLE packets (about 100 ms); a complete capture stops automatically.
+Open the **Sensors** tab. EMG, IMU, piezo, camera, and serial each have their own
+button and window. Several windows can be open at the same time.
 
-The session also contains `raw_data/<subject>/EMG` and `IMU` CSVs in the old
-wide format. Complete captures add three files under
-`labeled_data/<subject>/segmented_emg`: initial rest, movement, and final rest.
-The first sensor channel uses the old filename layout; a second channel, when
-present, ends in `_ch2`. Original packets and decoded stream CSVs are saved in
-the same session. If packets or IMU windows are missing, the capture is marked
-incomplete and no labeled segments are generated. Review captures before
-using them for training.
+The three cuff windows share one connection to `LIMBServer`. Closing one BLE
+window does not close the other two. Closing the last BLE window ends the BLE
+connection.
 
-Use **Open live (no recording)** for BLE/serial and **Open camera** for OAK-D.
-The camera saves nothing until REC. Enter `--depth` in the GUI's optional
-arguments to try stereo playback points; this mode needs a device retest after
-DepthAI stream errors. `--pose-model 2` selects a heavier MediaPipe model.
-See the [sensor data guide](../../docs/SENSOR_DATA.md) for interpretation.
+The IMU window shows pitch and roll from gravity. Use **Zero tilt** while the
+cuff is still. Twisting the arm appears in the gyroscope graph, but it cannot
+give a stable absolute yaw angle without a magnetometer.
 
-The programs can also be started from the repository root:
+A piezoelectric sensor creates an electrical signal when it is bent, tapped, or
+vibrated. The piezo preview is useful for seeing contact and changes. It is not
+a calibrated force measurement.
 
-```powershell
-micromamba run -n aurora-simulation python src/recording/record_ble_sensors.py --device LIMBServer --subject S01 --duration 30
-micromamba run -n aurora-simulation python src/recording/record_ble_sensors.py --device LIMBServer --subject S01 --dataset-label 1
-micromamba run -n aurora-simulation python src/recording/record_serial_sensors.py --port COM5 --baud 115200 --subject S01 --duration 30
-micromamba run -n aurora-simulation python src/recording/record_oak_pose.py --side left --subject S01 --duration 30
-```
+## Record a session
 
-Use `--help` for other options. GUI environment variables are in the
-[GUI guide](../gui/README.md). The BLE decoder preserves original packets;
-serial recording preserves raw lines. Validate both against current firmware.
-Cup detection is unavailable because the older project's model is not in this
-repository; frame the full seated subject and mug when recording.
+1. Close the preview windows.
+2. Open **Recording**.
+3. Select BLE, OAK-D, serial, or a combination.
+4. Enter the subject, trial, test type, and duration.
+5. Press **Start selected sources**.
+6. Press **Stop recording sources** when the trial is finished.
 
-Participant recordings may contain identifiable or health-related data. Store
-them according to the project's approved data plan and do not commit them to
-Git; `outputs/` is ignored by default.
+BLE records EMG, IMU, and piezo together. The selected sources receive the same
+session ID and write separate folders below `outputs/recordings/`. Their clocks
+are not hardware-synchronized.
+
+The OAK-D records automatically when it is part of a batch. In a camera-only
+preview, press `R` or **START REC** to begin recording and `Q` to close it.
+
+See [the sensor guide](../../docs/SENSOR_DATA.md) for the current ESP32 and IMU
+test setup.

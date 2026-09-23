@@ -50,8 +50,15 @@ needs to be retested on the project camera.
 
 ## Serial data
 
-Choose the serial port and baud rate in **Recording**, then use **Open live log**
-in **Sensors**. The program expects newline-separated messages.
+The USB-connected ESP32/LSM6DSO32 firmware under
+`firmware/imu_i2c_scanner` sends newline-separated JSON at 115200 baud. On GUI
+startup, the **Connected ESP32 + LSM6DSO32** card in **Sensors** automatically
+opens the first detected port and displays ESP32 uptime/free heap, IMU
+temperature, acceleration in g, and angular velocity in degrees per second.
+
+Use **Connect / reconnect** after selecting a different port under Recording.
+If the card says that access is denied, close PlatformIO, Arduino, or another
+serial monitor that has the COM port open; the GUI retries every two seconds.
 
 ## Record camera and sensors together
 

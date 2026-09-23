@@ -1,0 +1,45 @@
+{
+    "configurations": [
+        {
+            "name": "AURORA ESP32-C3 (PlatformIO)",
+            "includePath": [
+                "${workspaceFolder}/firmware/imu_i2c_scanner/src",
+                "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/cores/esp32",
+                "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/variants/esp32c3",
+                "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
+                "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32c3/qio_qspi/include",
+                "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32c3/include/**",
+                "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/**"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/firmware/imu_i2c_scanner/src",
+                    "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/cores/esp32",
+                    "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/variants/esp32c3",
+                    "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
+                    "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32c3/qio_qspi/include",
+                    "${env:USERPROFILE}/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32c3/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "defines": [
+                "PLATFORMIO=60200",
+                "ARDUINO_ESP32C3_DEV",
+                "ARDUINO_USB_MODE=1",
+                "ARDUINO_USB_CDC_ON_BOOT=1",
+                "ARDUINO_ARCH_ESP32",
+                "ESP32",
+                "F_CPU=160000000L",
+                "ARDUINO=10812",
+                "ARDUINO_VARIANT=\"esp32c3\""
+            ],
+            "compilerPath": "${env:USERPROFILE}/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++.exe",
+            "compilerArgs": [
+                "-march=rv32imc"
+            ],
+            "cStandard": "gnu99",
+            "cppStandard": "gnu++11"
+        }
+    ],
+    "version": 4
+}

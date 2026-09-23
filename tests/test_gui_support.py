@@ -19,20 +19,37 @@ sys.path.insert(0, str(ROOT / "src" / "recording"))
 from common import create_session_directory, experiment_metadata
 from project_support import discover_recording_programs
 from process_manager import ManagedProcess, ProcessManagerMixin
-from recording_tab import SENSOR_PREVIEWS, batch_arguments
+from recording_tab import RecordingTabMixin, SENSOR_PREVIEWS, batch_arguments
+from serial_sensor import decode_sensor_packet
 
 
 class RecordingBatchTests(unittest.TestCase):
-    def test_each_ble_sensor_has_its_own_preview_entry(self) -> None:
+    def test_esp32_imu_packet_is_ready_for_the_live_dashboard(self) -> None:
+        packet = decode_sensor_packet(
+            '{"device":"ESP32-C3","uptime_ms":1200,"imu":{"connected":true,'
+            '"accel_g":{"x":0.1,"y":-0.2,"z":1.0}}}'
+        )
+        self.assertEqual(packet["device"], "ESP32-C3")
+        self.assertEqual(packet["imu"]["accel_g"]["z"], 1.0)
+        self.assertIsNone(decode_sensor_packet("ESP-ROM: boot message"))
+        self.assertEqual(
+            RecordingTabMixin._format_axes(
+                "Acceleration", packet["imu"]["accel_g"], "g", 3
+            ),
+            "Acceleration: X 0.100, Y -0.200, Z 1.000 g",
+        )
+
+    def test_usb_imu_and_ble_sensors_route_to_the_correct_transports(self) -> None:
         previews = {preview_id: filename for preview_id, filename, *_rest in SENSOR_PREVIEWS}
         self.assertEqual(
-            {name: previews[name] for name in ("emg", "imu", "piezo")},
+            {name: previews[name] for name in ("emg", "piezo", "ble_imu")},
             {
                 "emg": "record_ble_sensors.py",
-                "imu": "record_ble_sensors.py",
                 "piezo": "record_ble_sensors.py",
+                "ble_imu": "record_ble_sensors.py",
             },
         )
+        self.assertEqual(previews["imu"], "record_serial_sensors.py")
 
     def test_running_preview_can_receive_another_window_request(self) -> None:
         child_input = io.StringIO()

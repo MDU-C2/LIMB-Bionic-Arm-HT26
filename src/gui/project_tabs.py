@@ -209,6 +209,9 @@ class ProjectTabsMixin:
         ):
             return
 
+        if action in {"flash", "monitor"}:
+            self._stop_serial_dashboard()
+
         if project.system == "ESP-IDF":
             command = ["idf.py"]
             if action in {"flash", "monitor"}:

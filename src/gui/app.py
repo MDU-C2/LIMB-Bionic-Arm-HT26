@@ -117,6 +117,8 @@ class ProjectGui(
         self.serial_port.trace_add("write", lambda *_: self._update_controls())
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.after(100, self._drain_log_queue)
+        self.after(100, self._drain_serial_sensor_events)
+        self.after(500, self._start_serial_dashboard_if_available)
 
     # Window and tabs
 
@@ -488,6 +490,7 @@ class ProjectGui(
         """Stop active work when allowed, then close the application."""
         if not self._close_processes():
             return
+        self._stop_serial_dashboard()
         self.window.destroy()
 
 

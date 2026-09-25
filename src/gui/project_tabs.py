@@ -12,11 +12,9 @@ from project_support import (
     GUI_DOCUMENTATION_FILE,
     INK,
     INTERACTIVE_SIMULATION_SCRIPT,
-    MANUAL_SIMULATION_SCRIPT,
     MOVEMENT_MODEL,
     MOVEMENT_RECOGNITION_SCRIPT,
     REPOSITORY_ROOT,
-    SIMULATION_SCRIPT,
     discover_firmware_projects,
     display_path,
     environment_name,
@@ -38,9 +36,8 @@ class ProjectTabsMixin:
         tab.columnconfigure(0, weight=1)
         self._heading(
             tab,
-            "Build and flash the robot",
-            "Use an ESP-IDF or PlatformIO project under firmware when the robot "
-            "software is added.",
+            "Build and flash the ESP32",
+            "The firmware follows the ESP-IDF layout used by LIMB-HT25.",
         )
         card = self._card(
             tab,
@@ -171,7 +168,7 @@ class ProjectTabsMixin:
         project = self.firmware_projects.get(self.firmware_project.get())
         if project is None:
             self.firmware_status.configure(
-                text="No ESP-IDF or PlatformIO firmware project is present under firmware yet."
+                text="No ESP-IDF firmware project is present under firmware yet."
             )
         elif shutil.which(project.executable):
             self.firmware_status.configure(
@@ -212,18 +209,10 @@ class ProjectTabsMixin:
         if action in {"flash", "monitor"}:
             self._stop_serial_dashboard()
 
-        if project.system == "ESP-IDF":
-            command = ["idf.py"]
-            if action in {"flash", "monitor"}:
-                command.extend(["-p", port])
-            command.append(action)
-        else:
-            if action == "build":
-                command = ["pio", "run"]
-            elif action == "flash":
-                command = ["pio", "run", "-t", "upload", "--upload-port", port]
-            else:
-                command = ["pio", "device", "monitor", "-p", port]
+        command = ["idf.py"]
+        if action in {"flash", "monitor"}:
+            command.extend(["-p", port])
+        command.append(action)
 
         self._start_program(
             f"Firmware {action}",
@@ -238,8 +227,6 @@ class ProjectTabsMixin:
         """Render current dependency, program, and tool availability."""
         simulation_ready = (
             INTERACTIVE_SIMULATION_SCRIPT.is_file()
-            and SIMULATION_SCRIPT.is_file()
-            and MANUAL_SIMULATION_SCRIPT.is_file()
             and self.simulation_python is not None
         )
         motion_ai_ready = (
@@ -262,7 +249,6 @@ class ProjectTabsMixin:
             f"Recording programs: {len(self.recording_programs)} found",
             f"Firmware projects: {len(self.firmware_projects)} found",
             f"ESP-IDF command: {'Available' if shutil.which('idf.py') else 'Not found'}",
-            f"PlatformIO command: {'Available' if shutil.which('pio') else 'Not found'}",
             f"Active programs: {active}",
             "",
             "PORTABILITY\n",
@@ -270,10 +256,10 @@ class ProjectTabsMixin:
             "The GUI can run from any clone location without path edits.",
             "",
             "SUPPORTED ENTRY POINTS\n",
-            "Simulation: interactive task scene, trajectory playback, and joint sliders",
+            "Simulation: interactive task scene with keyboard or live camera + IMU control",
             "Motion AI: pose-recording playback and GRU profile recognition",
-            "Recording: BLE sensors, serial sensors, and OAK-D pose capture",
-            "Firmware: ESP-IDF CMake projects or PlatformIO projects under firmware",
+            "Recording: dual-IMU serial data and OAK-D pose capture",
+            "Firmware: ESP-IDF CMake projects under firmware",
             "Recording settings are passed to record*.py and capture*.py programs",
         ]
         self.info_text.configure(state="normal")

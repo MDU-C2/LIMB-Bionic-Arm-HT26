@@ -12,3 +12,6 @@ outputs/
 *.log
 .DS_Store
 Thumbs.db
+firmware/**/build/
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old

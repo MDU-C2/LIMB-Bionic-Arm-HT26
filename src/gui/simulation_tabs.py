@@ -7,15 +7,14 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from project_support import (
+    DEFAULT_RECORDINGS_DIRECTORY,
+    DEFAULT_REFERENCE_DIRECTORY,
     DEFAULT_SIMULATION_OUTPUT_DIRECTORY,
     INTERACTIVE_SIMULATION_SCRIPT,
-    MANUAL_SIMULATION_SCRIPT,
     MOVEMENT_RECOGNITION_SCRIPT,
     POSE_RECORDING_SCRIPT,
     REPOSITORY_ROOT,
-    SIMULATION_SCRIPT,
     display_path,
-    has_trajectory_data,
     project_path,
 )
 
@@ -24,12 +23,12 @@ class SimulationTabsMixin:
     """Build and run simulation and motion-analysis tools."""
 
     def _build_simulation_tab(self, tab: ttk.Frame) -> None:
-        """Populate controls for the interactive and trajectory simulators."""
+        """Populate keyboard and live-sensor controls for the interactive simulator."""
         tab.columnconfigure(0, weight=1)
         self._heading(
             tab,
             "LIMB simulation",
-            "Run the full arm task simulator, play recordings, or inspect joints manually.",
+            "Use the interactive task scene with keyboard control or live camera + IMUs.",
         )
 
         interactive = self._card(
@@ -41,7 +40,7 @@ class SimulationTabsMixin:
         )
         self.interactive_button = ttk.Button(
             interactive,
-            text="Open full simulator",
+            text="Start with keyboard",
             style="Accent.TButton",
             command=self.start_interactive_simulation,
         )
@@ -59,64 +58,71 @@ class SimulationTabsMixin:
             style="Card.TCheckbutton",
         ).grid(row=4, column=0, sticky="w", pady=(4, 0))
 
-        playback = self._card(
+        fusion = self._card(
             tab,
             3,
-            "Trajectory playback",
-            "Select a trial folder containing a saved rollout or angles.npz.",
+            "Interactive simulator with live sensors",
+            "Open the same table-and-target scene, show the camera monitor, and control "
+            "the arm from the OAK-D plus shoulder and wrist IMUs.",
         )
-        path_row = ttk.Frame(playback, style="Card.TFrame")
-        path_row.grid(row=2, column=0, sticky="ew")
-        path_row.columnconfigure(0, weight=1)
-        ttk.Entry(path_row, textvariable=self.trajectory_path).grid(row=0, column=0, sticky="ew")
-        ttk.Button(path_row, text="Browse", command=self._browse_trajectory).grid(
-            row=0, column=1, padx=(8, 0)
+        fusion_settings = ttk.Frame(fusion, style="Card.TFrame")
+        fusion_settings.grid(row=2, column=0, sticky="ew")
+        fusion_settings.columnconfigure(0, weight=1)
+        ttk.Label(fusion_settings, text="ESP32 port", style="Card.TLabel").grid(
+            row=0, column=0, sticky="w"
         )
+        self.fusion_port_box = ttk.Combobox(
+            fusion_settings, textvariable=self.recording_serial_port
+        )
+        self.fusion_port_box.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(fusion_settings, text="Baud", style="Card.TLabel").grid(
+            row=0, column=1, sticky="w", padx=(12, 0)
+        )
+        ttk.Entry(
+            fusion_settings, textvariable=self.recording_serial_baud, width=10
+        ).grid(row=1, column=1, padx=(12, 0), pady=(4, 0))
+        ttk.Label(fusion_settings, text="Camera correction", style="Card.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(12, 0)
+        )
+        ttk.Entry(
+            fusion_settings, textvariable=self.fusion_camera_weight, width=10
+        ).grid(row=1, column=2, padx=(12, 0), pady=(4, 0))
+        ttk.Label(fusion_settings, text="Tracked arm", style="Card.TLabel").grid(
+            row=0, column=3, sticky="w", padx=(12, 0)
+        )
+        ttk.Combobox(
+            fusion_settings,
+            textvariable=self.recording_camera_side,
+            values=("left", "right"),
+            state="readonly",
+            width=9,
+        ).grid(row=1, column=3, padx=(12, 0), pady=(4, 0))
 
-        options = ttk.Frame(playback, style="Card.TFrame")
-        options.grid(row=3, column=0, sticky="w", pady=(12, 0))
-        ttk.Checkbutton(
-            options,
-            text="Loop playback",
-            variable=self.loop_playback,
-            style="Card.TCheckbutton",
-        ).pack(side="left", padx=(0, 18))
-        ttk.Checkbutton(
-            options,
-            text="Refit DMP from angles",
-            variable=self.refit_dmp,
-            style="Card.TCheckbutton",
-        ).pack(side="left")
-
-        playback_actions = ttk.Frame(playback, style="Card.TFrame")
-        playback_actions.grid(row=4, column=0, sticky="w", pady=(14, 0))
-        self.playback_button = ttk.Button(
-            playback_actions,
-            text="Play trajectory",
+        fusion_actions = ttk.Frame(fusion, style="Card.TFrame")
+        fusion_actions.grid(row=3, column=0, sticky="w", pady=(12, 0))
+        self.fusion_button = ttk.Button(
+            fusion_actions,
+            text="Start live interactive control",
             style="Accent.TButton",
-            command=self.start_simulation,
+            command=self.start_live_sensor_fusion,
         )
-        self.playback_button.pack(side="left", padx=(0, 8))
+        self.fusion_button.pack(side="left", padx=(0, 8))
         ttk.Button(
-            playback_actions,
-            text="Open data folder",
-            style="Secondary.TButton",
-            command=lambda: self._open_user_path(self.trajectory_path.get()),
+            fusion_actions,
+            text="Open IMU monitor",
+            command=self.open_sensor_window,
+        ).pack(side="left", padx=(0, 8))
+        ttk.Button(
+            fusion_actions,
+            text="Open camera monitor",
+            command=self.open_camera_monitor,
+        ).pack(side="left", padx=(0, 14))
+        ttk.Checkbutton(
+            fusion_actions,
+            text="Use stereo depth",
+            variable=self.fusion_depth,
+            style="Card.TCheckbutton",
         ).pack(side="left")
-
-        manual = self._card(
-            tab,
-            4,
-            "Manual joint control",
-            "Open the arm model and move elbow and shoulder joints with degree sliders.",
-        )
-        self.manual_button = ttk.Button(
-            manual,
-            text="Open joint sliders",
-            style="Accent.TButton",
-            command=self.start_manual_simulation,
-        )
-        self.manual_button.grid(row=2, column=0, sticky="w")
 
     def _build_motion_ai_tab(self, tab: ttk.Frame) -> None:
         """Populate movement recognition and camera-pose playback controls."""
@@ -196,14 +202,6 @@ class SimulationTabsMixin:
             variable=self.loop_pose_playback,
             style="Card.TCheckbutton",
         ).pack(side="left")
-
-    def _browse_trajectory(self) -> None:
-        """Choose a trajectory directory and store a portable path."""
-        current = project_path(self.trajectory_path.get())
-        initial = current if current.is_dir() else REPOSITORY_ROOT
-        selected = filedialog.askdirectory(title="Select trajectory folder", initialdir=initial)
-        if selected:
-            self.trajectory_path.set(display_path(Path(selected)))
 
     def _browse_motion_recording(self) -> None:
         """Choose a pose-recording JSON file."""
@@ -303,55 +301,66 @@ class SimulationTabsMixin:
             "Interactive task simulator",
             "simulation",
             command,
+            parallel=all(
+                process.kind == "preview" for process in self._active_processes()
+            ),
         )
 
-    def start_simulation(self) -> None:
-        """Validate the selected data and launch trajectory playback."""
+    def start_live_sensor_fusion(self) -> None:
+        """Launch the interactive task scene under camera and dual-IMU control."""
         if self.simulation_python is None:
             messagebox.showerror(
                 "Simulation environment missing",
                 "Create aurora-simulation from src/simulation/environment.yml, then refresh Info.",
             )
             return
-        trajectory_value = self.trajectory_path.get().strip()
-        if not trajectory_value:
-            messagebox.showerror("Trajectory required", "Choose a trajectory folder first.")
+        port = self.recording_serial_port.get().strip()
+        if not port:
+            messagebox.showerror("Serial port required", "Choose the ESP32 serial port first.")
             return
-        trajectory = project_path(trajectory_value)
-        if not trajectory.is_dir():
-            messagebox.showerror("Trajectory not found", f"Folder not found:\n{trajectory}")
+        try:
+            baud = int(self.recording_serial_baud.get().strip() or "115200")
+            weight = float(self.fusion_camera_weight.get().strip())
+            if baud <= 0 or not 0.0 <= weight <= 1.0:
+                raise ValueError("Baud must be positive and camera correction must be 0 to 1.")
+        except ValueError as error:
+            messagebox.showerror("Invalid fusion settings", str(error))
             return
-        if not has_trajectory_data(trajectory):
-            messagebox.showerror(
-                "Trajectory data not found",
-                "The selected folder has no supported angles or DMP rollout NPZ file.",
+        camera_preview = self.processes.get("preview:record_oak_pose.py")
+        if camera_preview is not None and camera_preview.process.poll() is None:
+            messagebox.showinfo(
+                "Camera already in use",
+                "Close the standalone camera monitor before starting live control. "
+                "The interactive simulator opens its own camera monitor.",
             )
             return
+        self._stop_serial_dashboard()
+        if self.imu_monitor is not None and self.imu_monitor.exists:
+            self.imu_monitor.close()
+            self.imu_monitor = None
         command = [
             str(self.simulation_python),
             "-u",
-            str(SIMULATION_SCRIPT),
-            "--path",
-            str(trajectory.resolve()),
+            str(INTERACTIVE_SIMULATION_SCRIPT),
+            "--mode",
+            "dynamic" if self.dynamic_simulation.get() else "kinematic",
+            "--control",
+            "camera-imu",
+            "--port",
+            port,
+            "--baud",
+            str(baud),
+            "--side",
+            self.recording_camera_side.get(),
+            "--camera-weight",
+            str(weight),
         ]
-        if self.loop_playback.get():
-            command.append("--loop")
-        if self.refit_dmp.get():
-            command.append("--refit")
-        self._start_program("Trajectory playback", "simulation", command)
-
-    def start_manual_simulation(self) -> None:
-        """Launch the lightweight PyBullet joint-slider tool."""
-        if self.simulation_python is None:
-            messagebox.showerror(
-                "Simulation environment missing",
-                "Create aurora-simulation from src/simulation/environment.yml, then refresh Info.",
-            )
-            return
-        self._start_program(
-            "Manual simulation",
-            "simulation",
-            [str(self.simulation_python), "-u", str(MANUAL_SIMULATION_SCRIPT)],
-        )
+        if self.fusion_depth.get():
+            command.append("--depth")
+        if self.dynamic_simulation.get() and self.save_simulation_torque.get():
+            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S}.csv"
+            torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name
+            command += ["--torque-out", str(torque_output)]
+        self._start_program("Interactive live sensor control", "simulation", command)
 
     # Recording programs

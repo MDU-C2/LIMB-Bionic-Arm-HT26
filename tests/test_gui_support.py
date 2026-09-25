@@ -15,41 +15,98 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "gui"))
 sys.path.insert(0, str(ROOT / "src" / "recording"))
+sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
 
 from common import create_session_directory, experiment_metadata
+from imu_protocol import extract_imus
 from project_support import discover_recording_programs
 from process_manager import ManagedProcess, ProcessManagerMixin
-from recording_tab import RecordingTabMixin, SENSOR_PREVIEWS, batch_arguments
+from recording_tab import DEFAULT_BATCH_SOURCES, batch_arguments
+from sensor_fusion import (
+    DualImuArmEstimator,
+    fuse_control_angles,
+    interactive_control_targets,
+)
 from serial_sensor import decode_sensor_packet
 
 
 class RecordingBatchTests(unittest.TestCase):
-    def test_esp32_imu_packet_is_ready_for_the_live_dashboard(self) -> None:
+    def test_esp32_dual_imu_packet_has_physical_roles(self) -> None:
         packet = decode_sensor_packet(
-            '{"device":"ESP32-C3","uptime_ms":1200,"imu":{"connected":true,'
-            '"accel_g":{"x":0.1,"y":-0.2,"z":1.0}}}'
+            '{"device":"ESP32-C3","uptime_ms":1200,"imus":{'
+            '"shoulder":{"connected":true,"address":"0x6A",'
+            '"accel_g":{"x":0.1,"y":-0.2,"z":1.0},'
+            '"gyro_dps":{"x":1,"y":2,"z":3}},'
+            '"wrist":{"connected":true,"address":"0x6B",'
+            '"accel_g":{"x":0,"y":0,"z":1},'
+            '"gyro_dps":{"x":0,"y":0,"z":0}}}}'
         )
         self.assertEqual(packet["device"], "ESP32-C3")
-        self.assertEqual(packet["imu"]["accel_g"]["z"], 1.0)
+        sensors = extract_imus(packet)
+        self.assertEqual(sensors["shoulder"]["address"], "0x6A")
+        self.assertEqual(sensors["wrist"]["accel_g"]["z"], 1.0)
         self.assertIsNone(decode_sensor_packet("ESP-ROM: boot message"))
+
+    def test_default_capture_uses_camera_and_dual_imu_serial(self) -> None:
         self.assertEqual(
-            RecordingTabMixin._format_axes(
-                "Acceleration", packet["imu"]["accel_g"], "g", 3
-            ),
-            "Acceleration: X 0.100, Y -0.200, Z 1.000 g",
+            DEFAULT_BATCH_SOURCES,
+            {"record_oak_pose.py", "record_serial_sensors.py"},
         )
 
-    def test_usb_imu_and_ble_sensors_route_to_the_correct_transports(self) -> None:
-        previews = {preview_id: filename for preview_id, filename, *_rest in SENSOR_PREVIEWS}
-        self.assertEqual(
-            {name: previews[name] for name in ("emg", "piezo", "ble_imu")},
+    def test_limb25_dual_packet_is_normalized_from_si_units(self) -> None:
+        packet = {
+            "imu1": {
+                "accel": {"x": 0.0, "y": 0.0, "z": 9.80665},
+                "gyro": {"x": 0.0, "y": 0.0, "z": 3.141592653589793},
+            },
+            "imu2": {
+                "accel": {"x": 0.0, "y": 0.0, "z": 9.80665},
+                "gyro": {"x": 0.0, "y": 0.0, "z": 0.0},
+            },
+        }
+        sensors = extract_imus(packet)
+        self.assertAlmostEqual(sensors["shoulder"]["accel_g"]["z"], 1.0)
+        self.assertAlmostEqual(sensors["shoulder"]["gyro_dps"]["z"], 180.0)
+
+    def test_dual_imu_estimator_calibrates_and_camera_corrects(self) -> None:
+        estimator = DualImuArmEstimator(alpha=0.0)
+        level = {
+            role: {
+                "connected": True,
+                "accel_g": {"x": 0.0, "y": 0.0, "z": 1.0},
+                "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+            }
+            for role in ("shoulder", "wrist")
+        }
+        self.assertEqual(estimator.update(level, 0.02)["elbow_flexion"], 0.0)
+        moved = {role: dict(sensor) for role, sensor in level.items()}
+        moved["wrist"] = {
+            **level["wrist"],
+            "accel_g": {"x": 1.0, "y": 0.0, "z": 0.0},
+        }
+        imu = estimator.update(moved, 0.02)
+        self.assertAlmostEqual(imu["elbow_flexion"], 90.0)
+        fused = fuse_control_angles(imu, {"elbow_flexion": 70.0}, 0.25)
+        self.assertAlmostEqual(fused["elbow_flexion"], 85.0)
+
+    def test_fused_angles_map_to_interactive_right_arm_signs(self) -> None:
+        targets = interactive_control_targets(
             {
-                "emg": "record_ble_sensors.py",
-                "piezo": "record_ble_sensors.py",
-                "ble_imu": "record_ble_sensors.py",
+                "elbow_flexion": 35.0,
+                "shoulder_flexion": 40.0,
+                "shoulder_abduction": 20.0,
+                "shoulder_rotation_proxy": -15.0,
+            }
+        )
+        self.assertEqual(
+            targets,
+            {
+                "elbow_x": -35.0,
+                "shoulder_y": 40.0,
+                "shoulder_z": -20.0,
+                "shoulder_x": -15.0,
             },
         )
-        self.assertEqual(previews["imu"], "record_serial_sensors.py")
 
     def test_running_preview_can_receive_another_window_request(self) -> None:
         child_input = io.StringIO()

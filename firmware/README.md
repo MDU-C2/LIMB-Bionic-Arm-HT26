@@ -1,9 +1,12 @@
 # Firmware
 
-Verified AURORA firmware is not included yet.
+`dual_imu_serial/` is the current ESP-IDF target for the ESP32-C3-Zero. It reads
+the shoulder LSM6DSO32 at `0x6A` and wrist LSM6DSO32 at `0x6B` on one I2C bus,
+then sends one role-named JSON packet over USB serial.
 
-The current BLE software expects a device named `LIMBServer` with EMG, IMU, and
-piezo characteristics. The legacy cuff firmware used during development is in
-`LIMB-HT25/src/esp32/human_lower_arm_module` in the older LIMB25 repository.
+The implementation follows the verified ESP-IDF IMU register setup in
+LIMB-HT25. Generated build and editor files are intentionally not part of this
+repository.
 
-See [the sensor guide](../docs/SENSOR_DATA.md) for the current test setup.
+See [the sensor guide](../docs/SENSOR_DATA.md) and the
+[firmware README](dual_imu_serial/README.md).

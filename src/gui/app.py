@@ -24,19 +24,16 @@ from project_support import (
     CARD,
     CONSOLE,
     DEFAULT_REFERENCE_DIRECTORY,
-    DEFAULT_TRAJECTORY,
     ERROR,
     FirmwareProject,
     INK,
     INTERACTIVE_SIMULATION_SCRIPT,
-    MANUAL_SIMULATION_SCRIPT,
     MOVEMENT_MODEL,
     MOVEMENT_RECOGNITION_SCRIPT,
     MUTED,
     POSE_RECORDING_SCRIPT,
     RECORDER_DETAILS,
     REPOSITORY_ROOT,
-    SIMULATION_SCRIPT,
     SUCCESS,
     TAB_DEFINITIONS,
     WARNING,
@@ -75,11 +72,10 @@ class ProjectGui(
             and _has_python_dependencies(self.simulation_python, ("numpy", "onnxruntime"))
         )
 
-        self.trajectory_path = tk.StringVar(value=str(DEFAULT_TRAJECTORY))
-        self.loop_playback = tk.BooleanVar(value=True)
         self.dynamic_simulation = tk.BooleanVar(value=False)
         self.save_simulation_torque = tk.BooleanVar(value=True)
-        self.refit_dmp = tk.BooleanVar(value=False)
+        self.fusion_camera_weight = tk.StringVar(value="0.25")
+        self.fusion_depth = tk.BooleanVar(value=False)
         self.motion_recording = tk.StringVar()
         self.motion_references = tk.StringVar(value=str(DEFAULT_REFERENCE_DIRECTORY))
         self.loop_pose_playback = tk.BooleanVar(value=False)
@@ -185,7 +181,7 @@ class ProjectGui(
         )
         ttk.Label(
             header,
-            text="Simulation, data capture, recordings, and robot tools",
+            text="Simulation, dual-IMU capture, camera fusion, and firmware",
             style="HeaderSub.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
         self.status_label = tk.Label(
@@ -197,7 +193,20 @@ class ProjectGui(
             padx=12,
             pady=6,
         )
-        self.status_label.grid(row=0, column=1, rowspan=2, sticky="e")
+        ttk.Button(
+            header,
+            text="Open IMU monitor",
+            command=self.open_sensor_window,
+        ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(0, 10))
+        self.camera_monitor_button = ttk.Button(
+            header,
+            text="Open camera monitor",
+            command=self.open_camera_monitor,
+        )
+        self.camera_monitor_button.grid(
+            row=0, column=2, rowspan=2, sticky="e", padx=(0, 10)
+        )
+        self.status_label.grid(row=0, column=3, rowspan=2, sticky="e")
 
     def _build_notebook(self) -> None:
         """Create registered tabs in their declared order."""
@@ -321,22 +330,33 @@ class ProjectGui(
 
     def _update_controls(self) -> None:
         """Enable actions only when their files, tools, and state are ready."""
-        if not hasattr(self, "playback_button"):
+        if not hasattr(self, "interactive_button"):
             return
-        running = bool(self._active_processes())
+        active_processes = self._active_processes()
+        running = bool(active_processes)
+        non_preview_running = any(
+            process.kind != "preview" for process in active_processes
+        )
         interactive_ready = (
             INTERACTIVE_SIMULATION_SCRIPT.is_file() and self.simulation_python is not None
         )
-        simulation_ready = SIMULATION_SCRIPT.is_file() and self.simulation_python is not None
-        manual_ready = MANUAL_SIMULATION_SCRIPT.is_file() and self.simulation_python is not None
+        fusion_ready = interactive_ready
         self.interactive_button.configure(
-            state="disabled" if running or not interactive_ready else "normal"
+            state="disabled" if non_preview_running or not interactive_ready else "normal"
         )
-        self.playback_button.configure(
-            state="disabled" if running or not simulation_ready else "normal"
+        self.fusion_button.configure(
+            state="disabled" if running or not fusion_ready else "normal"
         )
-        self.manual_button.configure(
-            state="disabled" if running or not manual_ready else "normal"
+        camera_preview_running = any(
+            process.key == "preview:record_oak_pose.py"
+            for process in self._active_processes("preview")
+        )
+        camera_blocked = any(
+            process.kind != "preview" and process.name != "Interactive task simulator"
+            for process in active_processes
+        )
+        self.camera_monitor_button.configure(
+            state="disabled" if camera_preview_running or camera_blocked else "normal"
         )
         recording_selected = bool(self.motion_recording.get().strip())
         motion_ai_ready = (
@@ -371,9 +391,6 @@ class ProjectGui(
         active_preview_keys = {
             process.key for process in self._active_processes("preview")
         }
-        non_preview_running = any(
-            process.kind != "preview" for process in self._active_processes()
-        )
         selected_preview_running = bool(
             selected_program
             and f"preview:{selected_program.name}" in active_preview_keys
@@ -386,23 +403,6 @@ class ProjectGui(
         self.single_record_button.configure(
             state="disabled" if running or selected_program is None else "normal"
         )
-        for preview_id, button in self.sensor_preview_buttons.items():
-            filename = self.sensor_preview_programs[preview_id]
-            preview_script = REPOSITORY_ROOT / "src" / "recording" / filename
-            is_ble_window = filename == "record_ble_sensors.py"
-            button.configure(
-                state="disabled"
-                if (
-                    non_preview_running
-                    or (
-                        f"preview:{filename}" in active_preview_keys
-                        and not is_ble_window
-                    )
-                    or not preview_script.is_file()
-                )
-                else "normal"
-            )
-
         firmware = self.firmware_projects.get(self.firmware_project.get())
         firmware_ready = firmware is not None and shutil.which(firmware.executable) is not None
         port_ready = bool(self.serial_port.get().strip())
@@ -491,6 +491,8 @@ class ProjectGui(
         if not self._close_processes():
             return
         self._stop_serial_dashboard()
+        if self.imu_monitor is not None and self.imu_monitor.exists:
+            self.imu_monitor.close()
         self.window.destroy()
 
 

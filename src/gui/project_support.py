@@ -20,10 +20,6 @@ REPOSITORY_ROOT = GUI_DIR.parents[1]
 INTERACTIVE_SIMULATION_SCRIPT = (
     REPOSITORY_ROOT / "src" / "simulation" / "interactive" / "limb_simulator.py"
 )
-SIMULATION_SCRIPT = REPOSITORY_ROOT / "src" / "simulation" / "sim" / "limb_sim.py"
-MANUAL_SIMULATION_SCRIPT = (
-    REPOSITORY_ROOT / "src" / "simulation" / "sim" / "manual_sim.py"
-)
 POSE_RECORDING_SCRIPT = (
     REPOSITORY_ROOT / "src" / "simulation" / "ai" / "pose_recording_sim.py"
 )
@@ -33,7 +29,6 @@ MOVEMENT_RECOGNITION_SCRIPT = (
 MOVEMENT_MODEL = (
     REPOSITORY_ROOT / "src" / "simulation" / "ai" / "models" / "movement_gru.onnx"
 )
-DEFAULT_TRAJECTORY = Path("examples/simulation/demo")
 DEFAULT_RECORDINGS_DIRECTORY = Path("outputs/recordings")
 DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/references")
 DEFAULT_SIMULATION_OUTPUT_DIRECTORY = Path("outputs/simulation")
@@ -47,7 +42,7 @@ RECORDING_EXTENSIONS = {
 RECORDING_ENTRYPOINT_PREFIXES = ("record", "capture")
 RECORDER_DETAILS = {
     "record_ble_sensors.py": (
-        "BLE recorder for raw EMG, IMU, and piezo streams or labeled captures."
+        "Legacy LIMB25 BLE cuff recorder for raw EMG and IMU data."
     ),
     "record_serial_sensors.py": (
         "Serial recorder for newline-delimited JSON and other sensor messages."
@@ -93,9 +88,8 @@ TAB_DEFINITIONS = (
     TabDefinition("simulation", "Simulation", "_build_simulation_tab"),
     TabDefinition("recording", "Recording", "_build_recording_tab"),
     TabDefinition("recordings", "Recordings", "_build_recordings_tab"),
-    TabDefinition("sensors", "Sensors", "_build_sensors_tab"),
     TabDefinition("motion_ai", "Motion AI", "_build_motion_ai_tab"),
-    TabDefinition("robot", "Robot", "_build_robot_tab"),
+    TabDefinition("robot", "Firmware", "_build_robot_tab"),
     TabDefinition("info", "Info", "_build_info_tab"),
 )
 
@@ -253,21 +247,6 @@ def environment_name(python: Path | None) -> str:
     return parent.name or python.name
 
 
-def has_trajectory_data(directory: Path) -> bool:
-    """Return whether a folder contains a supported trajectory NPZ."""
-    supported_names = (
-        "angles.npz", "angles_raw.npz", "angles_clean.npz",
-        "dmp_rollout_raw.npz", "dmp_rollout_clean.npz",
-    )
-    try:
-        return any(
-            path.is_file() and path.name.endswith(supported_names)
-            for path in directory.glob("*.npz")
-        )
-    except OSError:
-        return False
-
-
 def discover_recording_programs() -> dict[str, Path]:
     """Find executable record/capture entry points below ``src``."""
     discovered: dict[str, Path] = {}
@@ -287,14 +266,11 @@ def discover_recording_programs() -> dict[str, Path]:
 
 
 def discover_firmware_projects() -> dict[str, FirmwareProject]:
-    """Find ESP-IDF and PlatformIO projects below ``firmware``."""
+    """Find ESP-IDF projects below ``firmware``."""
     projects: dict[str, FirmwareProject] = {}
     root = REPOSITORY_ROOT / "firmware"
     if not root.is_dir():
         return projects
-    for path in root.rglob("platformio.ini"):
-        project = FirmwareProject(path.parent, "PlatformIO", "pio")
-        projects[display_path(path.parent)] = project
     for path in root.rglob("CMakeLists.txt"):
         directory = path.parent
         try:

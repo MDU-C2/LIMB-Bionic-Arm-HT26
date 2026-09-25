@@ -1,70 +1,81 @@
-# Sensors and recording
+# Dual IMUs, camera, and recording
 
-The current software supports the BLE cuff, OAK-D camera, and a generic serial
-stream.
+The current hardware path is two LSM6DSO32 IMUs on one ESP32-C3. The shoulder
+and wrist readings leave the ESP32 as one newline-delimited JSON serial stream.
+The OAK-D camera is a separate computer-side source.
 
-## BLE cuff
+## Wire the two IMUs
 
-The cuff is expected to advertise as `LIMBServer` and provide EMG, IMU, and
-piezo data. The matching firmware currently remains in the older LIMB25 project:
+Both sensors share power, ground, SDA, and SCL. Their SA0/SDO pins select unique
+I2C addresses:
 
-```text
-LIMB-HT25/src/esp32/human_lower_arm_module
+| Role | Address | SA0/SDO | ESP32-C3-Zero |
+| --- | --- | --- | --- |
+| Shoulder | `0x6A` | GND / low | SDA GPIO 8, SCL GPIO 5 |
+| Wrist | `0x6B` | 3.3 V / high | SDA GPIO 8, SCL GPIO 5 |
+
+Do not put two sensors with the same address on the shared bus. The firmware
+uses the GPIO 8/5 harness verified in the latest project change. If the physical
+harness changes, update `I2C_SDA_PIN` and `I2C_SCL_PIN` in
+`firmware/dual_imu_serial/main/main.c` deliberately rather than scanning random
+pin pairs at runtime.
+
+## Build and flash with ESP-IDF
+
+LIMB-HT25 used ESP-IDF and `idf.py`; this repository follows the same layout.
+From an ESP-IDF terminal:
+
+```powershell
+cd firmware/dual_imu_serial
+idf.py set-target esp32c3
+idf.py build
+idf.py -p COM5 flash monitor
 ```
 
-That firmware targets an ESP32-C3-Zero. Its LSM6DSO32 IMU connection is:
+The same Build, Flash, and Serial monitor actions are available under
+**Firmware** in the GUI. The serial output uses schema
+`aurora.dual_imu.v1`, 115200 baud, and explicit `shoulder`/`wrist` names.
 
-| IMU | ESP32-C3-Zero |
-| --- | --- |
-| 3.3 V | 3.3 V |
-| GND | GND |
-| SDA | GPIO 4 |
-| SCL | GPIO 5 |
+## View readings
 
-The firmware expects I2C address `0x6A`.
+Start the GUI and choose **Open IMU monitor** in the header, Recording page, or
+Simulation page. The separate window shows each IMU's connection state,
+address, temperature, acceleration, angular velocity, and relative arm-angle
+estimate. **Calibrate current pose** makes the next complete two-sensor sample
+the neutral pose.
 
-To use it:
+Choose **Open camera monitor** in the header, Recording page, or Simulation
+page to see the OAK-D image, pose landmarks, arm angles, and hand tracking
+without starting a recording.
 
-1. Flash the legacy cuff firmware from an ESP-IDF terminal.
-2. Reset the ESP32 and check that the IMU is detected in its serial output.
-3. Start the AURORA GUI and keep the BLE device name as `LIMBServer`.
-4. Open **Sensors**.
-5. Open the EMG, IMU, and piezo previews you want to inspect.
+The old single-IMU JSON packet remains readable during hardware transition,
+but shoulder-relative elbow control requires both IMUs.
 
-The three windows use one BLE connection and may stay open together. Packet
-counts should increase. Move the cuff slowly to check acceleration, gyroscope,
-pitch, and roll. Use **Zero tilt** when the cuff is still.
+## Live camera/IMU simulation control
 
-EMG is the electrical muscle signal. The IMU measures acceleration and angular
-velocity. The piezoelectric sensor reacts to bending, tapping, and vibration;
-its value is not a calibrated force measurement.
+Open **Simulation**, select the ESP32 port, then choose **Start live interactive
+control**. It opens the full table-and-target simulator, annotated camera view,
+and a separate live sensor monitor. The live controller:
 
-## OAK-D camera
+1. estimates shoulder and wrist orientation with the LIMB-HT25 complementary
+   accel/gyro filter;
+2. computes elbow flexion from the wrist angle relative to the shoulder;
+3. corrects drift with the current OAK-D/MediaPipe arm angles; and
+4. applies the existing LIMB joint and speed limits to PyBullet.
 
-Connect the OAK-D and choose **Open camera** in **Sensors**. The window shows the
-selected arm, body points, hand landmarks, and angle estimates. It does not save
-until you press `R` or **START REC**.
+Camera correction `0` means IMU-only control and `1` means camera-only control;
+`0.25` keeps the IMUs responsive while the camera supplies low-frequency
+correction. Press `C` in the camera window to recalibrate the IMUs and `Q` to
+stop.
 
-Depth mode can be enabled with the OAK-D arguments in **Recording**, but it still
-needs to be retested on the project camera.
+## Record synchronized sources
 
-## Serial data
+The Recording page selects **OAK-D camera** and **Serial sensor stream** by
+default. Both processes share a session ID and write separate folders below
+`outputs/recordings/`. Their host timestamps are recorded, but they are not
+hardware-clock synchronized.
 
-The USB-connected ESP32/LSM6DSO32 firmware under
-`firmware/imu_i2c_scanner` sends newline-separated JSON at 115200 baud. On GUI
-startup, the **Connected ESP32 + LSM6DSO32** card in **Sensors** automatically
-opens the first detected port and displays ESP32 uptime/free heap, IMU
-temperature, acceleration in g, and angular velocity in degrees per second.
-
-Use **Connect / reconnect** after selecting a different port under Recording.
-If the card says that access is denied, close PlatformIO, Arduino, or another
-serial monitor that has the COM port open; the GUI retries every two seconds.
-
-## Record camera and sensors together
-
-Close the previews, open **Recording**, select the sources, and press
-**Start selected sources**. BLE saves all available cuff streams. The camera
-starts recording automatically in a batch.
-
-Files are written below `outputs/recordings/`. Sources share a session ID, but
-their clocks are not hardware-synchronized.
+The older LIMB25 `LIMBServer` BLE cuff recorder remains under
+`src/recording/record_ble_sensors.py` for compatibility. LIMB25 did include a
+piezo channel in that cuff; it is not part of the current two-IMU ESP32 workflow
+and is therefore not shown in the primary GUI.

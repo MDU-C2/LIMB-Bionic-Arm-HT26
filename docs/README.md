@@ -2,8 +2,8 @@
 
 The current guides are:
 
-- [Sensor data](SENSOR_DATA.md): connect, preview, and record the cuff, camera,
-  and serial sources.
+- [Sensor data](SENSOR_DATA.md): wire and flash the dual IMUs, open their
+  monitor, record with OAK-D, and run live fusion.
 - [Simulation](SIMULATION.md): run and control the simulated arm.
 - [Simulation dynamics](SIMULATION_DYNAMICS.md): details about the current
   physics model.

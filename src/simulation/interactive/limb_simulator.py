@@ -19,8 +19,10 @@ import sys
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 SIMULATION_ROOT = Path(__file__).resolve().parents[1]
-if str(SIMULATION_ROOT) not in sys.path:
-    sys.path.insert(0, str(SIMULATION_ROOT))
+AI_DIR = SIMULATION_ROOT / "ai"
+for module_dir in (SIMULATION_ROOT, AI_DIR):
+    if str(module_dir) not in sys.path:
+        sys.path.insert(0, str(module_dir))
 
 import pybullet as p
 import pybullet_data
@@ -42,6 +44,8 @@ from sim.joint_limits import (
 )
 from sim.robot_model import RIGHT_GRIP_OFFSET_M
 from torque_graph import TorqueGraph
+from live_sensor_input import LiveSensorInput
+from sensor_fusion import interactive_control_targets
 
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -51,10 +55,27 @@ parser.add_argument("--telemetry-out", type=Path,
                     help="Write dynamic-mode state and torque snapshots as JSON lines")
 parser.add_argument("--torque-out", type=Path,
                     help="Write a readable dynamic-mode arm torque CSV")
+parser.add_argument(
+    "--control",
+    choices=("keyboard", "camera-imu"),
+    default="keyboard",
+    help="Use keyboard controls or live OAK-D plus dual-IMU control",
+)
+parser.add_argument("--port", help="Dual-IMU ESP32 serial port for live control")
+parser.add_argument("--baud", type=int, default=115200)
+parser.add_argument("--side", choices=("left", "right"), default="left")
+parser.add_argument("--camera-weight", type=float, default=0.25)
+parser.add_argument("--depth", action="store_true", help="Use OAK-D stereo depth")
 args = parser.parse_args()
 DYNAMIC_MODE = args.mode == "dynamic"
 if (args.telemetry_out is not None or args.torque_out is not None) and not DYNAMIC_MODE:
     parser.error("--telemetry-out and --torque-out require --mode dynamic")
+if args.control == "camera-imu" and not args.port:
+    parser.error("--port is required for camera-imu control")
+if args.baud <= 0:
+    parser.error("--baud must be positive")
+if not 0.0 <= args.camera_weight <= 1.0:
+    parser.error("--camera-weight must be between 0 and 1")
 
 
 SIMULATION_FREQUENCY_HZ = 60
@@ -575,20 +596,6 @@ sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
 dynamics = ArmDynamics(robot_body, p)
 link_indices_by_name = build_link_name_index_map(robot_body, p)
 
-# Keep the project name attached to the orange upper-arm shell. Debug text is
-# used instead of modifying the STL so the source mesh remains reusable.
-upper_arm_link_index = link_indices_by_name.get("right_upper_arm", -1)
-if upper_arm_link_index >= 0:
-    p.addUserDebugText(
-        "AURORA",
-        textPosition=[0.13, -0.045, 0.035],
-        textColorRGB=[0.03, 0.03, 0.03],
-        textSize=1.25,
-        lifeTime=0,
-        parentObjectUniqueId=robot_body,
-        parentLinkIndex=upper_arm_link_index,
-    )
-
 try:
     hand_link_name, hand_link_index = resolve_link_index(
         link_indices_by_name,
@@ -630,7 +637,11 @@ if hand_link_index >= 0:
 
 print("Initializing sensor window (Tkinter)...")
 sensor_window = tk.Tk()
-sensor_window.title("LIMB Sensor Dashboard")
+sensor_window.title(
+    "LIMB Live Sensor Monitor"
+    if args.control == "camera-imu"
+    else "LIMB Sensor Dashboard"
+)
 sensor_window.geometry("500x805+35+35")
 sensor_window.protocol("WM_DELETE_WINDOW", sensor_window.withdraw)
 
@@ -739,16 +750,28 @@ sensor_vars["grip_speed"] = tk.StringVar(value="Grip speed: --")
 tk.Label(physics_frame, textvariable=sensor_vars["gravity_effort"], font=tk_font).pack(anchor='w')
 tk.Label(physics_frame, textvariable=sensor_vars["grip_speed"], font=tk_font).pack(anchor='w')
 
+live_frame = tk.Frame(sensor_window, padx=10, pady=6)
+live_frame.pack(fill='x')
+tk.Label(live_frame, text="--- LIVE CONTROL SOURCES ---", font=tk_font_bold).pack(anchor='w')
+sensor_vars["live_status"] = tk.StringVar(
+    value="Keyboard control" if args.control == "keyboard" else "Starting camera and IMUs"
+)
+sensor_vars["live_shoulder"] = tk.StringVar(value="Shoulder IMU: --")
+sensor_vars["live_wrist"] = tk.StringVar(value="Wrist IMU: --")
+tk.Label(live_frame, textvariable=sensor_vars["live_status"], font=tk_font).pack(anchor='w')
+tk.Label(live_frame, textvariable=sensor_vars["live_shoulder"], font=tk_font).pack(anchor='w')
+tk.Label(live_frame, textvariable=sensor_vars["live_wrist"], font=tk_font).pack(anchor='w')
+
 
 print("Initializing Pygame interface...")
-os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "35,500")
+os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "540,35")
 pygame.init()
-screen = pygame.display.set_mode((900, 440))
+screen = pygame.display.set_mode((780, 370))
 pygame.display.set_caption("LIMB Arm Controller - click here to drive")
-font_title = pygame.font.SysFont("Segoe UI", 27, bold=True)
-font_heading = pygame.font.SysFont("Segoe UI", 18, bold=True)
-font = pygame.font.SysFont("Segoe UI", 16)
-font_small = pygame.font.SysFont("Segoe UI", 14)
+font_title = pygame.font.SysFont("Segoe UI", 22, bold=True)
+font_heading = pygame.font.SysFont("Segoe UI", 15, bold=True)
+font = pygame.font.SysFont("Segoe UI", 14)
+font_small = pygame.font.SysFont("Segoe UI", 12)
 clock = pygame.time.Clock()
 print("\n--- Keyboard Controls ---")
 print("Shoulder: W/S and A/D | Upper arm: Q/E")
@@ -761,18 +784,38 @@ def draw_text(text: str, position, color, text_font=font) -> None:
 
 
 def draw_panel(rect, heading: str) -> None:
-    pygame.draw.rect(screen, (29, 36, 49), rect, border_radius=10)
-    pygame.draw.rect(screen, (55, 68, 88), rect, width=1, border_radius=10)
-    draw_text(heading, (rect.x + 18, rect.y + 13), (242, 246, 252), font_heading)
+    pygame.draw.rect(screen, (29, 36, 49), rect, border_radius=8)
+    pygame.draw.rect(screen, (55, 68, 88), rect, width=1, border_radius=8)
+    draw_text(heading, (rect.x + 14, rect.y + 10), (242, 246, 252), font_heading)
 
 
-def draw_control_row(y: int, keys_text: str, label: str, value: str, x: int = 32) -> None:
-    key_rect = pygame.Rect(x, y, 92, 27)
-    pygame.draw.rect(screen, (50, 104, 216), key_rect, border_radius=6)
+def draw_control_row(y: int, keys_text: str, label: str, value: str, x: int = 26) -> None:
+    key_rect = pygame.Rect(x, y, 76, 24)
+    pygame.draw.rect(screen, (50, 104, 216), key_rect, border_radius=5)
     key_surface = font_small.render(keys_text, True, (255, 255, 255))
     screen.blit(key_surface, key_surface.get_rect(center=key_rect.center))
-    draw_text(label, (x + 106, y + 3), (207, 216, 230), font_small)
-    draw_text(value, (x + 285, y + 3), (121, 214, 168), font_small)
+    draw_text(label, (x + 87, y + 3), (207, 216, 230), font_small)
+    draw_text(value, (x + 246, y + 3), (121, 214, 168), font_small)
+
+
+def format_live_imu(role: str, sensors: dict[str, dict[str, object]]) -> str:
+    """Return one compact live-IMU line for the separate sensor window."""
+    sensor = sensors.get(role, {})
+    if sensor.get("connected") is not True:
+        return f"{role.title()} IMU: disconnected"
+    accel = sensor.get("accel_g")
+    gyro = sensor.get("gyro_dps")
+    if not isinstance(accel, dict) or not isinstance(gyro, dict):
+        return f"{role.title()} IMU: incomplete packet"
+    try:
+        return (
+            f"{role.title()} IMU: A {float(accel['x']):+.2f}/"
+            f"{float(accel['y']):+.2f}/{float(accel['z']):+.2f} g  "
+            f"G {float(gyro['x']):+.1f}/{float(gyro['y']):+.1f}/"
+            f"{float(gyro['z']):+.1f} deg/s"
+        )
+    except (KeyError, TypeError, ValueError):
+        return f"{role.title()} IMU: incomplete packet"
 
 # Main loop
 running = True
@@ -875,6 +918,35 @@ def target_contact_feedback() -> tuple[set[int], dict[str, float]]:
     return contact_links, force_by_finger
 
 
+live_sensor_input = None
+live_snapshot = None
+if args.control == "camera-imu":
+    live_sensor_input = LiveSensorInput(
+        port=args.port,
+        baud=args.baud,
+        side=args.side,
+        camera_weight=args.camera_weight,
+        depth=args.depth,
+    )
+    try:
+        live_sensor_input.start()
+        notice_text = "Live camera + dual-IMU control active"
+        print(f"Live control: {args.port} at {args.baud} baud, {args.side} arm")
+    except Exception as error:
+        if telemetry_file is not None:
+            telemetry_file.close()
+        if torque_csv_file is not None:
+            torque_csv_file.close()
+        try:
+            sensor_window.destroy()
+        except tk.TclError:
+            pass
+        pygame.quit()
+        if p.isConnected():
+            p.disconnect()
+        raise SystemExit(f"Could not start live camera + IMU control: {error}") from error
+
+
 while running and p.isConnected():
 
     try:
@@ -889,6 +961,18 @@ while running and p.isConnected():
     target_z_relative = target_position[2] - robot_position[2]
     target_relative_position = (target_x_relative, target_y_relative, target_z_relative)
     hand_target_distance = math.dist(hand_position, target_position)
+
+    if live_sensor_input is not None:
+        try:
+            live_snapshot = live_sensor_input.poll()
+        except Exception as error:
+            notice_text = f"Live control stopped: {error}"
+            print(notice_text)
+            running = False
+            continue
+        if live_snapshot.stop_requested:
+            running = False
+            continue
 
     reset_requested = False
     interact_requested = False
@@ -1254,6 +1338,40 @@ while running and p.isConnected():
 
     if h_reach_requested or auto_grasp_pending:
         manual_motion.reset()
+    elif args.control == "camera-imu":
+        manual_motion.reset()
+        targets = interactive_control_targets(
+            live_snapshot.angles if live_snapshot is not None else None
+        )
+        if targets:
+            set_shoulder(
+                arm,
+                x=step_toward(
+                    arm.shoulder.angle_x,
+                    targets.get("shoulder_x", arm.shoulder.angle_x),
+                    "shoulder_x",
+                ),
+                y=step_toward(
+                    arm.shoulder.angle_y,
+                    targets.get("shoulder_y", arm.shoulder.angle_y),
+                    "shoulder_y",
+                ),
+                z=step_toward(
+                    arm.shoulder.angle_z,
+                    targets.get("shoulder_z", arm.shoulder.angle_z),
+                    "shoulder_z",
+                ),
+                mode="abs",
+            )
+            set_elbow(
+                arm,
+                x=step_toward(
+                    arm.elbow.angle_x,
+                    targets.get("elbow_x", arm.elbow.angle_x),
+                    "elbow_x",
+                ),
+                mode="abs",
+            )
     else:
         delta_should_y = manual_motion.step(
             keys,
@@ -1265,8 +1383,8 @@ while running and p.isConnected():
         )
         delta_should_z = manual_motion.step(
             keys,
-            pygame.K_d,
             pygame.K_a,
+            pygame.K_d,
             "shoulder_z",
             arm.shoulder.angle_z,
             speed_mult,
@@ -1474,88 +1592,88 @@ while running and p.isConnected():
         status_text = reachability_message.title()
 
     screen.fill((15, 21, 31))
-    draw_text("LIMB Arm Controller", (20, 14), (245, 248, 252), font_title)
+    draw_text("LIMB Arm Controller", (16, 10), (245, 248, 252), font_title)
+    control_label = "LIVE CAMERA + IMU" if args.control == "camera-imu" else "KEYBOARD"
     draw_text(
-        f"{args.mode.title()} mode | controls use the mapped joint limits and speeds",
-        (21, 50),
+        f"{args.mode.title()} mode | {control_label}",
+        (17, 39),
         (151, 164, 183),
         font_small,
     )
     camera_label = f"CAMERA  {camera_mode.upper()}"
-    camera_badge = pygame.Rect(690, 20, 188, 34)
-    pygame.draw.rect(screen, (38, 55, 79), camera_badge, border_radius=17)
+    camera_badge = pygame.Rect(608, 14, 154, 28)
+    pygame.draw.rect(screen, (38, 55, 79), camera_badge, border_radius=14)
     camera_surface = font_small.render(camera_label, True, (177, 207, 255))
     screen.blit(camera_surface, camera_surface.get_rect(center=camera_badge.center))
 
-    draw_panel(pygame.Rect(20, 78, 420, 262), "Move the arm")
+    draw_panel(pygame.Rect(16, 64, 366, 220), "Move the arm")
     draw_control_row(
-        122,
+        98,
         "W / S",
         "Shoulder up / down",
         f"{hardware_angles_deg['shoulder_y']:.1f} deg",
     )
     draw_control_row(
-        162,
+        133,
         "A / D",
         "Shoulder left / right",
         f"{hardware_angles_deg['shoulder_z']:.1f} deg",
     )
     draw_control_row(
-        202,
+        168,
         "Q / E",
         "Upper-arm rotation",
         f"{hardware_angles_deg['shoulder_x']:.1f} deg",
     )
     draw_control_row(
-        242,
+        203,
         "UP / DOWN",
         "Elbow bend / extend",
         f"{hardware_angles_deg['elbow_x']:.1f} deg",
     )
     draw_control_row(
-        282,
+        238,
         "LEFT / RIGHT",
         "Wrist rotation",
         f"{hardware_angles_deg['wrist_rotation']:.1f} deg",
     )
 
-    draw_panel(pygame.Rect(460, 78, 420, 262), "Actions and view")
-    action_x = 472
+    draw_panel(pygame.Rect(398, 64, 366, 220), "Actions and view")
+    action_x = 408
     draw_control_row(
-        122,
+        98,
         "F / G",
         "Close / open fingers",
         f"{arm.hand.curl * 100:.0f}%",
         action_x,
     )
     draw_control_row(
-        162,
+        133,
         "SPACE",
-        "Grab / release target",
+        "Grab / release",
         "holding" if grasp_transform is not None else auto_grasp_phase if auto_grasp_pending else "ready",
         action_x,
     )
     draw_control_row(
-        202,
+        168,
         "H",
-        "Hold for safe approach",
+        "Safe approach",
         "stopped" if h_contact_stop else "reach",
         action_x,
     )
-    draw_control_row(242, "C or 1-3", "Change camera", camera_mode, action_x)
-    draw_control_row(282, "R", "Reset arm and target", "", action_x)
+    draw_control_row(203, "C / 1-3", "Change camera", camera_mode, action_x)
+    draw_control_row(238, "R", "Reset scene", "", action_x)
 
-    pygame.draw.rect(screen, (24, 31, 43), pygame.Rect(20, 354, 860, 68), border_radius=10)
-    draw_text(status_text, (36, 366), status_color, font)
+    pygame.draw.rect(screen, (24, 31, 43), pygame.Rect(16, 296, 748, 58), border_radius=8)
+    draw_text(status_text, (30, 305), status_color, font)
     current_notice = notice_text if pygame.time.get_ticks() < notice_until_ms else ""
     if not pygame.key.get_focused():
-        current_notice = "Click controller for arm keys; Space, F/G, H, R also work in the scene"
+        current_notice = "Click here for controls; task keys also work in the 3D scene"
     elif not current_notice:
         current_notice = (
-            "Ctrl: precise  |  T: target guide  |  P: camera previews  |  "
-            "I: sensors  |  Esc: quit"
+            "Ctrl precise | T guide | P previews | I sensors | Esc quit"
         )
-    draw_text(current_notice, (36, 394), (164, 178, 198), font_small)
+    draw_text(current_notice, (30, 331), (164, 178, 198), font_small)
 
     if hud_visible and hand_link_index != -1:
         reach_line_id = p.addUserDebugLine(
@@ -1599,6 +1717,15 @@ while running and p.isConnected():
         sensor_vars["imu_pitch"].set(f"Pitch: {rad_to_deg(imu_euler_rad[1]):.1f}")
         sensor_vars["imu_yaw"].set(f"Yaw:   {rad_to_deg(imu_euler_rad[2]):.1f}")
 
+        if live_snapshot is not None:
+            sensor_vars["live_status"].set(live_snapshot.status)
+            sensor_vars["live_shoulder"].set(
+                format_live_imu("shoulder", live_snapshot.sensors)
+            )
+            sensor_vars["live_wrist"].set(
+                format_live_imu("wrist", live_snapshot.sensors)
+            )
+
         displayed_fingertip_force_n = {
             finger: max(
                 fingertip_force_n[finger],
@@ -1634,6 +1761,8 @@ while running and p.isConnected():
 
 
 print("Simulation finished.")
+if live_sensor_input is not None:
+    live_sensor_input.close()
 try:
     sensor_window.destroy()
 except tk.TclError:

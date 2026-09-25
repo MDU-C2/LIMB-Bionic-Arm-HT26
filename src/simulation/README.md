@@ -1,7 +1,7 @@
 # Simulation
 
-The simulation contains the PyBullet arm, manual controls, trajectory playback,
-and the experimental Motion AI tools.
+The main simulation is the interactive PyBullet table-and-target scene. It can
+be driven by the keyboard or by live OAK-D and dual-IMU measurements.
 
 Start it from the **Simulation** tab in the GUI:
 
@@ -15,8 +15,8 @@ The current simulation can:
 - run with direct joint control or PyBullet physics;
 - reach for and hold the simulated cup;
 - show simulated contact and motor torque values;
-- play the example or another supported trajectory; and
-- play compatible camera pose recordings.
+- play compatible camera pose recordings through Motion AI; and
+- fuse live OAK-D and dual-IMU angles to control the arm.
 
 Useful direct commands:
 
@@ -25,7 +25,9 @@ micromamba run -n aurora-simulation python src/simulation/interactive/limb_simul
 micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --headless
 ```
 
-The simulation does not yet mirror live movement from the physical cuff. That
-can be connected later so the simulated arm follows the measured movement.
+Live control is started from the Simulation tab after choosing the ESP32 port.
+It opens the same interactive task scene plus an annotated OAK-D camera window.
+Both role-named IMUs are required for relative elbow control; camera control can
+continue briefly if IMU samples are interrupted.
 
 See [the simulation guide](../../docs/SIMULATION.md) for the controls.

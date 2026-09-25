@@ -23,14 +23,10 @@ from project_support import (
     serial_ports,
 )
 from serial_sensor import SerialSensorReader, decode_sensor_packet
+from sensor_window import ImuMonitorWindow
 
 
 MAINTAINED_SOURCES = (
-    (
-        "record_ble_sensors.py",
-        "BLE cuff (EMG + IMU + piezo)",
-        "Connect to LIMBServer and save every available cuff stream.",
-    ),
     (
         "record_oak_pose.py",
         "OAK-D camera",
@@ -38,64 +34,12 @@ MAINTAINED_SOURCES = (
     ),
     (
         "record_serial_sensors.py",
-        "Serial sensor stream",
-        "Save newline-delimited output from an ESP32 or another device.",
+        "Dual-IMU ESP32",
+        "Save the shoulder and wrist samples from the shared serial stream.",
     ),
 )
 
-# Each BLE sensor gets its own preview window, but all three windows are served
-# by one BLE process and one connection to the cuff.
-SENSOR_PREVIEWS = (
-    (
-        "emg",
-        "record_ble_sensors.py",
-        "EMG signal",
-        "View the cuff's electrical muscle signal and its recent activity level.",
-        "Open EMG preview",
-        "emg",
-    ),
-    (
-        "imu",
-        "record_serial_sensors.py",
-        "USB IMU motion (ESP32)",
-        "View the connected LSM6DSO32 acceleration, angular velocity, and temperature in the live panel above.",
-        "Connect USB IMU",
-        None,
-    ),
-    (
-        "piezo",
-        "record_ble_sensors.py",
-        "Piezo contact and vibration",
-        "View the piezoelectric sensor response to contact, bending, or vibration. It is not a calibrated force value.",
-        "Open piezo preview",
-        "piezo",
-    ),
-    (
-        "ble_imu",
-        "record_ble_sensors.py",
-        "BLE cuff IMU (optional)",
-        "Open this only for the separate LIMBServer BLE cuff, not for the USB-connected ESP32.",
-        "Open BLE IMU preview",
-        "imu",
-    ),
-    (
-        "oak",
-        "record_oak_pose.py",
-        "OAK-D camera",
-        "View the camera, body and arm pose, and selected-hand landmarks.",
-        "Open camera",
-        None,
-    ),
-    (
-        "serial",
-        "record_serial_sensors.py",
-        "ESP32 serial sensor stream",
-        "Reconnect the USB serial source shown in the live panel above.",
-        "Reconnect ESP32",
-        None,
-    ),
-)
-DEFAULT_BATCH_SOURCES = {"record_ble_sensors.py", "record_oak_pose.py"}
+DEFAULT_BATCH_SOURCES = {"record_serial_sensors.py", "record_oak_pose.py"}
 
 
 def batch_arguments(
@@ -120,7 +64,7 @@ class RecordingTabMixin:
         self.recording_output = tk.StringVar(value=str(DEFAULT_RECORDINGS_DIRECTORY))
         self.recording_subject = tk.StringVar(value="S01")
         self.recording_trial_id = tk.StringVar(value="T01")
-        self.recording_test_type = tk.StringVar(value="grip_emg")
+        self.recording_test_type = tk.StringVar(value="movement_imu")
         self.recording_duration = tk.StringVar(value="0")
         self.recording_camera_side = tk.StringVar(value="left")
         self.recording_ble_device = tk.StringVar(value="LIMBServer")
@@ -130,16 +74,11 @@ class RecordingTabMixin:
         self.recording_serial_baud = tk.StringVar(value="115200")
         self.serial_sensor_reader = SerialSensorReader()
         self.serial_sensor_connection = tk.StringVar(value="Waiting for a serial port")
-        self.serial_sensor_device = tk.StringVar(value="ESP32: no data")
-        self.serial_sensor_imu = tk.StringVar(value="IMU: no data")
-        self.serial_sensor_accel = tk.StringVar(value="Acceleration: -")
-        self.serial_sensor_gyro = tk.StringVar(value="Angular velocity: -")
-        self.serial_sensor_raw = tk.StringVar(value="Last message: -")
+        self.imu_monitor: ImuMonitorWindow | None = None
         self.recording_sources = {
             filename: tk.BooleanVar(value=filename in DEFAULT_BATCH_SOURCES)
             for filename, _title, _description in MAINTAINED_SOURCES
         }
-        self.sensor_status = tk.StringVar()
         self.recordings_root = self.recording_output
         self.recordings_filter = tk.StringVar()
 
@@ -175,8 +114,8 @@ class RecordingTabMixin:
             tab,
             2,
             "Sources",
-            "BLE cuff and OAK-D are selected by default. Camera recording starts "
-            "automatically when a batch is launched.",
+            "The dual-IMU ESP32 and OAK-D camera are selected by default. Camera "
+            "recording starts automatically with the batch.",
         )
         self.recording_source_buttons: dict[str, ttk.Checkbutton] = {}
         for row, (filename, title, description) in enumerate(MAINTAINED_SOURCES, start=2):
@@ -224,7 +163,7 @@ class RecordingTabMixin:
         ttk.Combobox(
             session_row,
             textvariable=self.recording_test_type,
-            values=("grip_emg", "movement_imu", "combined", "other"),
+            values=("movement_imu", "camera_imu", "other"),
             state="readonly",
         ).grid(row=1, column=3, sticky="ew", padx=(12, 0), pady=(4, 0))
 
@@ -232,27 +171,27 @@ class RecordingTabMixin:
         device_row.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         device_row.columnconfigure(0, weight=1)
         device_row.columnconfigure(1, weight=1)
-        device_row.columnconfigure(2, weight=1)
-        ttk.Label(device_row, text="BLE device", style="Card.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Entry(device_row, textvariable=self.recording_ble_device).grid(
-            row=1, column=0, sticky="ew", pady=(4, 0)
-        )
         ttk.Label(device_row, text="Camera arm", style="Card.TLabel").grid(
-            row=0, column=1, sticky="w", padx=(12, 0)
+            row=0, column=0, sticky="w"
         )
         ttk.Combobox(
             device_row,
             textvariable=self.recording_camera_side,
             values=("left", "right"),
             state="readonly",
-        ).grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(4, 0))
-        ttk.Label(device_row, text="Serial port / baud", style="Card.TLabel").grid(
-            row=0, column=2, sticky="w", padx=(12, 0)
+        ).grid(
+            row=1, column=0, sticky="ew", pady=(4, 0)
+        )
+        ttk.Button(
+            device_row,
+            text="Open camera monitor",
+            command=self.open_camera_monitor,
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(device_row, text="Dual-IMU ESP32 port / baud", style="Card.TLabel").grid(
+            row=0, column=1, sticky="w", padx=(12, 0)
         )
         serial_row = ttk.Frame(device_row, style="Card.TFrame")
-        serial_row.grid(row=1, column=2, sticky="ew", padx=(12, 0), pady=(4, 0))
+        serial_row.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(4, 0))
         serial_row.columnconfigure(0, weight=1)
         self.recording_port_box = ttk.Combobox(
             serial_row, textvariable=self.recording_serial_port
@@ -264,27 +203,20 @@ class RecordingTabMixin:
         ttk.Button(serial_row, text="Refresh", command=self._refresh_recording_ports).grid(
             row=0, column=2, padx=(8, 0)
         )
+        ttk.Button(serial_row, text="Monitor", command=self.open_sensor_window).grid(
+            row=0, column=3, padx=(8, 0)
+        )
 
         option_row = ttk.Frame(settings, style="Card.TFrame")
         option_row.grid(row=4, column=0, sticky="ew", pady=(0, 10))
-        option_row.columnconfigure(3, weight=1)
-        ttk.Checkbutton(
-            option_row,
-            text="Labeled BLE capture",
-            variable=self.recording_ble_dataset,
-            style="Card.TCheckbutton",
-        ).grid(row=0, column=0, sticky="w", padx=(0, 8))
-        ttk.Label(option_row, text="Label", style="Card.TLabel").grid(row=0, column=1)
-        ttk.Entry(option_row, textvariable=self.recording_movement_label, width=8).grid(
-            row=0, column=2, padx=(6, 18)
-        )
+        option_row.columnconfigure(0, weight=1)
         ttk.Label(
             option_row,
             text="OAK-D options (for example --depth or --pose-model 2)",
             style="Card.TLabel",
-        ).grid(row=0, column=3, sticky="w")
+        ).grid(row=0, column=0, sticky="w")
         ttk.Entry(option_row, textvariable=self.recording_arguments).grid(
-            row=1, column=3, sticky="ew", pady=(4, 0)
+            row=1, column=0, sticky="ew", pady=(4, 0)
         )
 
         output_row = ttk.Frame(settings, style="Card.TFrame")
@@ -355,102 +287,6 @@ class RecordingTabMixin:
             advanced, text="", style="Card.TLabel", wraplength=850, justify="left"
         )
         self.recording_program_status.grid(row=3, column=0, sticky="w", pady=(8, 0))
-
-    def _build_sensors_tab(self, tab: ttk.Frame) -> None:
-        """Show live source previews and route sources to batch recording."""
-        tab.columnconfigure(0, weight=1)
-        self._heading(
-            tab,
-            "Sensor tools",
-            "Preview one source without saving, or add it to the multi-source Recording tab.",
-        )
-
-        live = self._card(
-            tab,
-            2,
-            "Connected ESP32 + LSM6DSO32",
-            "The GUI connects to the first detected serial port at startup and shows the "
-            "ESP32 status, acceleration, angular velocity, and IMU temperature here.",
-        )
-        status_row = ttk.Frame(live, style="Card.TFrame")
-        status_row.grid(row=2, column=0, columnspan=2, sticky="ew")
-        status_row.columnconfigure(0, weight=1)
-        ttk.Label(
-            status_row,
-            textvariable=self.serial_sensor_connection,
-            style="Card.TLabel",
-            font=("Segoe UI", 10, "bold"),
-        ).grid(row=0, column=0, sticky="w")
-        ttk.Button(
-            status_row,
-            text="Connect / reconnect",
-            command=self.start_serial_dashboard,
-        ).grid(row=0, column=1, padx=(8, 0))
-        ttk.Button(
-            status_row,
-            text="Disconnect",
-            command=self._stop_serial_dashboard,
-        ).grid(row=0, column=2, padx=(8, 0))
-
-        values = ttk.Frame(live, style="Card.TFrame")
-        values.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
-        values.columnconfigure(0, weight=1)
-        values.columnconfigure(1, weight=1)
-        ttk.Label(values, textvariable=self.serial_sensor_device, style="Card.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(values, textvariable=self.serial_sensor_imu, style="Card.TLabel").grid(
-            row=0, column=1, sticky="w", padx=(16, 0)
-        )
-        ttk.Label(values, textvariable=self.serial_sensor_accel, style="Card.TLabel").grid(
-            row=1, column=0, sticky="w", pady=(6, 0)
-        )
-        ttk.Label(values, textvariable=self.serial_sensor_gyro, style="Card.TLabel").grid(
-            row=1, column=1, sticky="w", padx=(16, 0), pady=(6, 0)
-        )
-        ttk.Label(
-            values,
-            textvariable=self.serial_sensor_raw,
-            style="CardText.TLabel",
-            wraplength=820,
-            justify="left",
-        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
-
-        self.sensor_preview_buttons: dict[str, ttk.Button] = {}
-        self.sensor_preview_programs: dict[str, str] = {}
-        for row, (
-            preview_id,
-            filename,
-            title,
-            description,
-            button_text,
-            ble_sensor,
-        ) in enumerate(SENSOR_PREVIEWS, start=3):
-            card = self._card(tab, row, title, description)
-            preview_button = ttk.Button(
-                card,
-                text=button_text,
-                command=lambda selected=filename, sensor=ble_sensor: self.start_sensor_preview(
-                    selected, sensor
-                ),
-            )
-            preview_button.grid(row=2, column=0, sticky="w")
-            self.sensor_preview_buttons[preview_id] = preview_button
-            self.sensor_preview_programs[preview_id] = filename
-            ttk.Button(
-                card,
-                text="Select for recording",
-                style="Accent.TButton",
-                command=lambda selected=filename: self._select_recorder(selected),
-            ).grid(row=2, column=1, sticky="w", padx=(8, 0))
-
-        ttk.Label(
-            tab,
-            textvariable=self.sensor_status,
-            style="PageSub.TLabel",
-            wraplength=850,
-            justify="left",
-        ).grid(row=3 + len(SENSOR_PREVIEWS), column=0, sticky="w")
 
     def _build_recordings_tab(self, tab: ttk.Frame) -> None:
         """Populate the searchable recording-file browser."""
@@ -532,44 +368,69 @@ class RecordingTabMixin:
         ports = serial_ports()
         if hasattr(self, "recording_port_box"):
             self.recording_port_box.configure(values=ports)
+        if hasattr(self, "fusion_port_box"):
+            self.fusion_port_box.configure(values=ports)
         if not self.recording_serial_port.get() and ports:
             self.recording_serial_port.set(ports[0])
-        self.sensor_status.set(
-            f"Detected serial ports: {', '.join(ports)}" if ports else "No serial ports detected."
-        )
 
     def _start_serial_dashboard_if_available(self) -> None:
-        """Connect automatically after startup when Windows reports a serial port."""
+        """Connect automatically and keep readings outside the main window."""
         if self.recording_serial_port.get().strip():
             self.start_serial_dashboard()
         else:
-            self.serial_sensor_connection.set("No serial port detected")
+            self._set_serial_connection("No serial port detected")
 
-    def start_serial_dashboard(self) -> None:
-        """Read the selected ESP32 port in a worker and render packets in Sensors."""
+    def _ensure_imu_monitor(self) -> ImuMonitorWindow:
+        if self.imu_monitor is None or not self.imu_monitor.exists:
+            self.imu_monitor = ImuMonitorWindow(
+                self.window,
+                lambda: self.start_serial_dashboard(show_window=False),
+                self._stop_serial_dashboard,
+            )
+        return self.imu_monitor
+
+    def open_sensor_window(self) -> None:
+        """Open the dedicated shoulder/wrist monitor and connect if needed."""
+        monitor = self._ensure_imu_monitor()
+        monitor.focus()
+        if not self.serial_sensor_reader.running:
+            self.start_serial_dashboard(show_window=False)
+
+    def open_camera_monitor(self) -> None:
+        """Open the existing OAK-D pose preview without starting a recording."""
+        self.start_sensor_preview("record_oak_pose.py")
+
+    def _set_serial_connection(self, text: str) -> None:
+        self.serial_sensor_connection.set(text)
+        if self.imu_monitor is not None and self.imu_monitor.exists:
+            self.imu_monitor.set_connection(text)
+
+    def start_serial_dashboard(self, show_window: bool = True) -> None:
+        """Read the selected ESP32 port and send packets to the IMU window."""
+        if show_window:
+            self._ensure_imu_monitor().focus()
         port = self.recording_serial_port.get().strip()
         if not port:
             self._refresh_recording_ports()
             port = self.recording_serial_port.get().strip()
         if not port:
-            self.serial_sensor_connection.set("No serial port detected")
-            self.notebook.select(self.tabs["sensors"])
+            self._set_serial_connection("No serial port detected")
             return
         try:
             baud = int(self.recording_serial_baud.get().strip() or "115200")
             if baud <= 0:
                 raise ValueError("Baud must be positive.")
         except ValueError as error:
-            self.serial_sensor_connection.set(f"Invalid serial settings: {error}")
+            self._set_serial_connection(f"Invalid serial settings: {error}")
             return
 
-        self.serial_sensor_connection.set(f"Connecting to {port} at {baud} baud...")
+        self._set_serial_connection(f"Connecting to {port} at {baud} baud...")
         self.serial_sensor_reader.start(port, baud)
 
     def _stop_serial_dashboard(self) -> None:
         """Release the COM port so firmware and recording tools can use it."""
         self.serial_sensor_reader.stop()
-        self.serial_sensor_connection.set("Serial connection stopped")
+        self._set_serial_connection("Serial connection stopped")
 
     def _drain_serial_sensor_events(self) -> None:
         """Apply background serial events to Tk widgets on the UI thread."""
@@ -578,98 +439,34 @@ class RecordingTabMixin:
                 event, value = self.serial_sensor_reader.events.get_nowait()
                 if event == "connected":
                     port, baud = value
-                    self.serial_sensor_connection.set(
+                    self._set_serial_connection(
                         f"Connected to {port} at {baud} baud | waiting for sensor data"
                     )
                 elif event == "error":
-                    self.serial_sensor_connection.set(
+                    self._set_serial_connection(
                         f"Could not open {self.serial_sensor_reader.port}: {value} | retrying"
                     )
                 elif event == "fatal":
-                    self.serial_sensor_connection.set(str(value))
+                    self._set_serial_connection(str(value))
                 elif event == "line":
                     text = str(value)
-                    self.serial_sensor_raw.set(f"Last message: {text[:180]}")
                     packet = decode_sensor_packet(text)
                     if packet is not None:
                         self._show_serial_sensor_packet(packet)
                 elif event == "stopped" and not self.serial_sensor_reader.running:
-                    self.serial_sensor_connection.set("Serial connection stopped")
+                    self._set_serial_connection("Serial connection stopped")
         except queue.Empty:
             pass
         self.after(50, self._drain_serial_sensor_events)
 
     def _show_serial_sensor_packet(self, packet: dict[str, object]) -> None:
-        """Format one ESP32 packet for the live dashboard."""
-        device = str(packet.get("device", "ESP32"))
-        uptime = self._number(packet.get("uptime_ms"))
-        heap = self._number(packet.get("free_heap_bytes"))
-        device_parts = [f"ESP32: {device}"]
-        if uptime is not None:
-            device_parts.append(f"uptime {uptime / 1000:.1f} s")
-        if heap is not None:
-            device_parts.append(f"free heap {heap / 1024:.1f} KiB")
-        self.serial_sensor_device.set(" | ".join(device_parts))
-
-        imu = packet.get("imu")
-        if not isinstance(imu, dict):
-            self.serial_sensor_imu.set("IMU: packet has no IMU values")
-            self.serial_sensor_accel.set("Acceleration: -")
-            self.serial_sensor_gyro.set("Angular velocity: -")
-            return
-        if imu.get("connected") is False:
-            self.serial_sensor_imu.set(f"IMU: disconnected | {imu.get('error', 'unknown error')}")
-            self.serial_sensor_accel.set("Acceleration: -")
-            self.serial_sensor_gyro.set("Angular velocity: -")
-            self.serial_sensor_connection.set(
-                f"Receiving ESP32 data on {self.serial_sensor_reader.port}; IMU unavailable"
-            )
-            return
-
-        model = str(imu.get("model", "IMU"))
-        address = str(imu.get("address", "?"))
-        sda_pin = self._number(imu.get("sda_pin"))
-        scl_pin = self._number(imu.get("scl_pin"))
-        temperature = self._number(imu.get("temperature_c"))
-        pins_text = (
-            f" | SDA {int(sda_pin)} / SCL {int(scl_pin)}"
-            if sda_pin is not None and scl_pin is not None
-            else ""
-        )
-        temperature_text = f" | {temperature:.1f} °C" if temperature is not None else ""
-        self.serial_sensor_imu.set(
-            f"IMU: {model} at {address}{pins_text}{temperature_text}"
-        )
-        self.serial_sensor_accel.set(
-            self._format_axes("Acceleration", imu.get("accel_g"), "g", 4)
-        )
-        self.serial_sensor_gyro.set(
-            self._format_axes("Angular velocity", imu.get("gyro_dps"), "°/s", 2)
-        )
-        self.serial_sensor_connection.set(
+        """Forward one ESP32 packet to the separate monitor window."""
+        self._set_serial_connection(
             f"Live data from {self.serial_sensor_reader.port} at "
             f"{self.serial_sensor_reader.baud} baud"
         )
-
-    @staticmethod
-    def _number(value: object) -> float | None:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return None
-        return float(value)
-
-    @classmethod
-    def _format_axes(
-        cls, label: str, value: object, unit: str, decimals: int
-    ) -> str:
-        if not isinstance(value, dict):
-            return f"{label}: -"
-        axes = [cls._number(value.get(axis)) for axis in ("x", "y", "z")]
-        if any(axis is None for axis in axes):
-            return f"{label}: -"
-        return (
-            f"{label}: X {axes[0]:.{decimals}f}, Y {axes[1]:.{decimals}f}, "
-            f"Z {axes[2]:.{decimals}f} {unit}"
-        )
+        if self.imu_monitor is not None and self.imu_monitor.exists:
+            self.imu_monitor.show_packet(packet)
 
     def _select_recorder(self, filename: str) -> None:
         variable = self.recording_sources.get(filename)
@@ -844,9 +641,17 @@ class RecordingTabMixin:
             return
         if filename == "record_serial_sensors.py":
             self.start_serial_dashboard()
-            self.notebook.select(self.tabs["sensors"])
             return
-        if any(process.kind != "preview" for process in self._active_processes()):
+        non_preview = [
+            process
+            for process in self._active_processes()
+            if process.kind != "preview"
+        ]
+        camera_can_share = (
+            filename == "record_oak_pose.py"
+            and all(process.name == "Interactive task simulator" for process in non_preview)
+        )
+        if non_preview and not camera_can_share:
             messagebox.showinfo(
                 "Program running",
                 "Stop recording, simulation, or firmware tools before opening a preview.",
@@ -870,9 +675,6 @@ class RecordingTabMixin:
             if existing is not None and existing.process.poll() is None:
                 requested_sensor = ble_sensor or "all"
                 if self._send_process_input(preview_key, f"show {requested_sensor}\n"):
-                    self.sensor_status.set(
-                        f"Opened the {requested_sensor.upper()} preview using the existing BLE connection."
-                    )
                     return
                 messagebox.showerror(
                     "Preview unavailable",
@@ -907,7 +709,6 @@ class RecordingTabMixin:
         preview_names = {
             "emg": "EMG preview",
             "imu": "IMU preview",
-            "piezo": "Piezo preview",
         }
         self._start_program(
             (

@@ -1,41 +1,41 @@
 # GUI
 
-The GUI is the main way to use the current project:
+Run the control center with:
 
 ```powershell
 micromamba run -n aurora-simulation python src/gui/app.py
 ```
 
-## Tabs
+## Main workflow
 
 | Tab | Use |
 | --- | --- |
-| Simulation | Open the arm simulator or play a trajectory. |
-| Recording | Record several selected sources as one session. |
+| Simulation | Run the interactive task arm by keyboard or live camera/IMU fusion. |
+| Recording | Capture OAK-D and the dual-IMU serial stream as one session. |
 | Recordings | Browse files created by the recorders. |
-| Sensors | See the USB ESP32/IMU stream and open BLE or camera previews. |
 | Motion AI | Play camera poses or run movement recognition. |
-| Robot | Detect firmware projects when they are added later. |
-| Info | Show the files and dependencies found by the program. |
+| Firmware | Build, flash, and monitor the ESP-IDF project. |
+| Info | Check local files, tools, and dependencies. |
 
-BLE EMG, BLE IMU, and piezo each have their own window and share one connection
-to the optional LIMBServer cuff. The USB-connected ESP32 IMU is shown directly
-in the embedded sensor panel instead. The camera window can stay open alongside
-these previews.
+IMU values are intentionally not embedded in the main window. **Open IMU
+monitor** opens a dedicated window with separate shoulder and wrist panels. The
+GUI connects to the selected serial port at startup when a port is available.
+It releases the port before recording, flashing, or starting live sensor fusion.
 
-When an ESP32 serial port is present, the Sensors tab connects at startup using
-the port and baud rate shown under Recording. The live panel shows ESP32 uptime
-and free heap together with LSM6DSO32 temperature, acceleration, and angular
-velocity. Disconnect it before opening another serial monitor; the GUI does
-this automatically before serial recording or firmware flashing.
+**Open camera monitor** starts the existing OAK-D pose preview without creating
+a recording. Live interactive control opens its own annotated camera monitor,
+so close the standalone preview before starting that mode.
+
+The Recording page defaults to the two current sources: OAK-D and the ESP32
+dual-IMU serial stream. The legacy LIMB25 BLE recorder is still discoverable for
+compatibility, but its extra cuff channels do not clutter the main workflow.
 
 ## GUI files
 
-- `app.py` builds the main window and shared controls.
-- `recording_tab.py` contains sensor, recording, and recording-browser actions.
-- `simulation_tabs.py` contains Simulation and Motion AI.
-- `project_tabs.py` contains Robot and Info.
-- `process_manager.py` starts and stops the programs opened by the GUI.
-- `project_support.py` contains paths and project discovery helpers.
-
-Output from started programs appears in the Activity panel.
+- `app.py` composes the window, tabs, shared controls, and activity panel.
+- `sensor_window.py` renders the separate dual-IMU monitor.
+- `recording_tab.py` coordinates preview, capture, and recording browsing.
+- `simulation_tabs.py` launches simulation, fusion, and Motion AI tools.
+- `project_tabs.py` handles ESP-IDF and project status.
+- `process_manager.py` supervises programs opened by the GUI.
+- `project_support.py` contains paths and discovery helpers.

@@ -14,7 +14,7 @@ micromamba run -n aurora-simulation python src/gui/app.py
 | Recording | Capture OAK-D and the dual-IMU serial stream as one session. |
 | Recordings | Browse files created by the recorders. |
 | Motion AI | Play camera poses or run movement recognition. |
-| Firmware | Build, flash, and monitor the ESP-IDF project. |
+| Firmware | Build, flash, and monitor the ESP-IDF project through the project environment. |
 | Info | Check local files, tools, and dependencies. |
 
 IMU values are intentionally not embedded in the main window. **Open IMU
@@ -36,6 +36,6 @@ compatibility, but its extra cuff channels do not clutter the main workflow.
 - `sensor_window.py` renders the separate dual-IMU monitor.
 - `recording_tab.py` coordinates preview, capture, and recording browsing.
 - `simulation_tabs.py` launches simulation, fusion, and Motion AI tools.
-- `project_tabs.py` handles ESP-IDF and project status.
+- `project_tabs.py` handles ESP-IDF/PlatformIO commands and project status.
 - `process_manager.py` supervises programs opened by the GUI.
 - `project_support.py` contains paths and discovery helpers.

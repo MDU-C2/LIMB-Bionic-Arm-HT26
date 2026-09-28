@@ -75,7 +75,7 @@ def main() -> None:
             os.chdir(previous_directory)
 
         joint_ids = [joint_index(robot, urdf_name) for _, urdf_name, _ in JOINT_MAPPING]
-        wrist_joint = joint_index(robot, "jLeftElbow_rotz")
+        wrist_joint = joint_index(robot, "jLeftWrist_rotation")
         limits_deg = np.rad2deg(JOINT_LIMITS_RAD)
         sliders: dict[int, int] = {}
         for column in SLIDER_ORDER:
@@ -88,7 +88,7 @@ def main() -> None:
             )
         wrist_limit = HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"]
         wrist_slider = p.addUserDebugParameter(
-            "wrist_rotation (jLeftElbow_rotz) [deg]",
+            "wrist_rotation (jLeftWrist_rotation) [deg]",
             wrist_limit.lower,
             wrist_limit.upper,
             wrist_limit.home,

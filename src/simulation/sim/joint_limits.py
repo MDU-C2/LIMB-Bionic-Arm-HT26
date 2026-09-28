@@ -1,4 +1,4 @@
-"""Motion limits shared by the LIMB simulation tools."""
+"""Source-backed command and physical limits for the LIMB robot arm."""
 
 from __future__ import annotations
 
@@ -26,13 +26,24 @@ class JointLimit:
         return self.speed_positive if direction >= 0 else self.speed_negative
 
 
-# Values enforced by the final LIMB-HT25 motor firmware.
-HARDWARE_JOINT_LIMITS_DEG = {
+# Nominal actuator commands configured by the final LIMB-HT25 motor firmware.
+# These are robot limits, not generic human anatomical ranges.  The shoulder
+# firmware explicitly notes that its nominal 90 degree up/down range only
+# reaches approximately 75 degrees on the assembled mechanism.
+FIRMWARE_COMMAND_LIMITS_DEG = {
     "shoulder_up_down": JointLimit(0.0, 90.0, 10.0, 20.0, 15.0),
     "shoulder_left_right": JointLimit(5.0, 40.0, 20.0, 10.0, 15.0, 5.0),
     "upper_arm_rotation": JointLimit(-60.0, 60.0, 40.0, 40.0, 20.0),
     "elbow_up_down": JointLimit(0.0, 60.0, 40.0, 40.0, 20.0),
     "lower_arm_rotation": JointLimit(0.0, 140.0, 100.0, 100.0),
+}
+
+# Use the observed mechanism travel in the simulator.  Keep the nominal
+# command table above so serial/CAN code can distinguish what the firmware
+# accepts from what the HT25 arm was reported to achieve physically.
+HARDWARE_JOINT_LIMITS_DEG = {
+    **FIRMWARE_COMMAND_LIMITS_DEG,
+    "shoulder_up_down": JointLimit(0.0, 75.0, 10.0, 20.0, 15.0),
 }
 
 FINGER_LIMITS_DEG = {
@@ -100,10 +111,30 @@ RIGHT_ARM_LIMITS_DEG = {
     "wrist_rotation": HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"],
 }
 
+# The maintained interactive scene uses the mirrored left-arm URDF. Shoulder
+# abduction remains a negative URDF angle, while its elbow flexion is positive.
+LEFT_ARM_HARDWARE_SIGN = {
+    "shoulder_x": 1.0,
+    "shoulder_y": 1.0,
+    "shoulder_z": -1.0,
+    "elbow_x": 1.0,
+    "wrist_rotation": 1.0,
+}
+LEFT_ARM_LIMITS_DEG = {
+    "shoulder_x": HARDWARE_JOINT_LIMITS_DEG["upper_arm_rotation"],
+    "shoulder_y": HARDWARE_JOINT_LIMITS_DEG["shoulder_up_down"],
+    "shoulder_z": _reverse(HARDWARE_JOINT_LIMITS_DEG["shoulder_left_right"]),
+    "elbow_x": HARDWARE_JOINT_LIMITS_DEG["elbow_up_down"],
+    "wrist_rotation": HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"],
+}
 
-def max_velocity_rad_s(logical_name: str) -> float:
+
+def max_velocity_rad_s(
+    logical_name: str,
+    limits: dict[str, JointLimit] = RIGHT_ARM_LIMITS_DEG,
+) -> float:
     """Return the largest allowed speed for an interactive arm joint."""
-    limit = RIGHT_ARM_LIMITS_DEG[logical_name]
+    limit = limits[logical_name]
     return math.radians(max(limit.speed_positive, limit.speed_negative))
 
 

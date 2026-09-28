@@ -1,14 +1,23 @@
 <?xml version="1.0" ?>
 <robot name="left_arm_final" xmlns:xacro="http://wiki.ros.org/xacro">
+  <!-- Exact local-X reflection of right_arm.urdf: positions and meshes reflect
+       X; axial vectors and rotations use the corresponding reflection.
+       Only elbow commands are sign-reversed to expose positive flexion. -->
   
   <material name="grey">
-    <color rgba="0.6 0.6 0.6 1.0"/>
+    <color rgba="0.08 0.09 0.11 1.0"/>
   </material>
   <material name="blue">
     <color rgba="0.2 0.4 0.9 1.0"/>
   </material>
+  <material name="orange">
+    <color rgba="0.95 0.28 0.04 1.0"/>
+  </material>
+  <material name="dark">
+    <color rgba="0.08 0.09 0.11 1.0"/>
+  </material>
   <material name="SkinColor">
-    <color rgba="0.8 0.6 0.4 1"/>
+    <color rgba="0.95 0.28 0.04 1"/>
   </material>
 
   <link name="base_link">
@@ -20,15 +29,16 @@
   
   <link name="arm_base_rotated">
     <inertial>
-      <mass value="0.001"/>
-      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+      <origin xyz="-0.05 0 0" rpy="0 0 0"/>
+      <mass value="0.8"/>
+      <inertia ixx="0.006" ixy="0" ixz="0" iyy="0.006" iyz="0" izz="0.006"/>
     </inertial>
   </link>
 
   <joint name="world_to_arm_base" type="fixed">
     <parent link="base_link"/>
     <child link="arm_base_rotated"/>
-    <origin xyz="0 0 0" rpy="0 0 1.5708"/> <!-- -pi/2 X-rotation to make the arm "hang" anatomically at zero angles -->
+    <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
   </joint>
 
   <link name="left_shoulder_rotz">
@@ -37,24 +47,6 @@
       <mass value="0.1"/>
       <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
     </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-       <geometry><sphere radius="0.02"/></geometry>
-      <material name="blue"/>
-    </visual>
-  </link>
-  
-  <link name="left_shoulder_rotx">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.1"/>
-      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-       <geometry><sphere radius="0.02"/></geometry>
-      <material name="blue"/>
-    </visual>
   </link>
 
   <joint name="jLeftShoulder_rotz" type="revolute">
@@ -62,92 +54,93 @@
     <child link="left_shoulder_rotz"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 -1"/>
-    <limit lower="-0.698132" upper="-0.087266" effort="200" velocity="0.349066"/>
-  </joint>
-  
-  <joint name="jLeftShoulder_rotx" type="revolute">
-    <parent link="left_shoulder_rotz"/>
-    <child link="left_shoulder_rotx"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="-1 0 0"/>
-    <limit lower="-1.047198" upper="1.047198" effort="200" velocity="0.698132"/>
+    <limit lower="-0.698132" upper="-0.087266" effort="20" velocity="0.349066"/>
   </joint>
 
+  <link name="left_shoulder_roty">
+    <inertial>
+      <origin xyz="-0.055 0.065 0" rpy="0 0 0"/>
+      <mass value="0.6"/>
+      <inertia ixx="0.004" ixy="0" ixz="0" iyy="0.004" iyz="0" izz="0.004"/>
+    </inertial>
+    <!-- Exact reflected shoulder assembly from right_arm.urdf. -->
+    <visual>
+      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
+      <geometry><mesh filename="arm/r_shoulder_base.stl" scale="-0.001 0.001 0.001"/></geometry>
+      <material name="dark"/>
+    </visual>
+    <visual>
+      <origin rpy="0 1.5708 0" xyz="-0.055 0.065 0"/>
+      <geometry><mesh filename="arm/r_shoulder.stl" scale="-0.001 0.001 0.001"/></geometry>
+      <material name="orange"/>
+    </visual>
+    <collision>
+      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
+      <geometry><mesh filename="arm/r_shoulder_base.stl" scale="-0.001 0.001 0.001"/></geometry>
+    </collision>
+    <collision>
+      <origin rpy="0 1.5708 0" xyz="-0.055 0.065 0"/>
+      <geometry><mesh filename="arm/r_shoulder.stl" scale="-0.001 0.001 0.001"/></geometry>
+    </collision>
+  </link>
+
   <joint name="jLeftShoulder_roty" type="revolute">
-    <parent link="left_shoulder_rotx"/>
-    <child link="left_upper_arm"/>
+    <parent link="left_shoulder_rotz"/>
+    <child link="left_shoulder_roty"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <limit lower="0" upper="1.570796" effort="200" velocity="0.349066"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="0" upper="1.308997" effort="20" velocity="0.349066"/>
+  </joint>
+
+  <!-- Upper rotation starts after both shoulder direction joints. -->
+  <joint name="jLeftShoulder_rotx" type="revolute">
+    <parent link="left_shoulder_roty"/>
+    <child link="left_upper_arm"/>
+    <origin xyz="-0.116 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-1.047198" upper="1.047198" effort="15" velocity="0.698132"/>
   </joint>
   
   <link name="left_upper_arm">
     <inertial>
-      <origin xyz="-0.116 0 0" rpy="0 1.5708 0"/>
+      <origin xyz="-0.10 0 0" rpy="0 1.5708 0"/>
       <mass value="1.5"/> 
       <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.02"/>
     </inertial>
     <visual>
        <origin rpy="0 1.5708 0" xyz="0 0 0"/>
-      <geometry><mesh filename="arm/r_shoulder_base.stl" scale="-0.001 0.001 0.001"/></geometry>
-      <material name="grey"/>
-    </visual>
-    <visual>
-      <origin rpy="0 1.5708 0" xyz="-0.055 0.065 0"/>
-      <geometry><mesh filename="arm/r_shoulder.stl" scale="-0.001 0.001 0.001"/></geometry>
-      <material name="grey"/>
-    </visual>
-    <visual>
-       <origin rpy="0 1.5708 0" xyz="-0.116 0 0"/>
       <geometry><mesh filename="arm/bicep.stl" scale="-0.001 0.001 0.001"/></geometry>
-      <material name="grey"/>
+      <material name="orange"/>
     </visual>
     <visual>
-      <origin rpy="0 1.5708 0" xyz="-0.116 0 0"/>
+      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
       <geometry><mesh filename="arm/bicepcover.stl" scale="-0.001 0.001 0.001"/></geometry>
-      <material name="grey"/>
+      <material name="dark"/>
     </visual>
     <collision>
-      <origin rpy="0 1.5708 0" xyz="-0.116 0 0"/>
-      <geometry><mesh filename="arm/r_shoulder.stl" scale="-0.001 0.001 0.001"/></geometry>
+      <origin rpy="0 1.5708 0" xyz="0 0 0"/>
+      <geometry><mesh filename="arm/bicep.stl" scale="-0.001 0.001 0.001"/></geometry>
     </collision>
-  </link>
-
-  <link name="left_elbow_roty">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
-      <mass value="0.01"/>
-      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
-    </inertial>
   </link>
 
   <joint name="jLeftElbow_roty" type="revolute">
     <parent link="left_upper_arm"/>
-    <child link="left_elbow_roty"/>
-    <origin xyz="-0.305 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <limit lower="0" upper="1.047198" effort="200" velocity="0.698132"/>
-  </joint>
-  
-  <joint name="jLeftElbow_rotz" type="revolute">
-    <parent link="left_elbow_roty"/>
     <child link="left_forearm"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <!-- Lower-arm rotation is along the mirrored forearm's length. -->
-    <axis xyz="-1 0 0"/>
-    <limit lower="0" upper="2.443461" effort="200" velocity="1.745329"/>
+    <origin xyz="-0.189 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0" upper="1.047198" effort="10" velocity="0.698132"/>
   </joint>
-  
+
   <link name="left_forearm">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="-0.14 0 0" rpy="0 1.5708 0"/>
       <mass value="1.0"/>
       <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.02"/>
     </inertial>
     <visual>
       <origin rpy="0 1.5708 0" xyz="0 0 0"/>
       <geometry><mesh filename="arm/r_forearm.stl" scale="-0.001 0.001 0.001"/></geometry>
-      <material name="grey"/>
+      <material name="orange"/>
     </visual>
     <collision>
       <origin rpy="0 1.5708 0" xyz="0 0 0"/>
@@ -155,52 +148,54 @@
     </collision>
   </link>
 
-  <link name="left_wrist_rotx">
+  <link name="left_wrist_rotation">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
-      <mass value="0.4"/>
-      <inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.1"/>
+      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
     </inertial>
     <visual>
-      <origin rpy="0 3.14152 -1.5708" xyz="-0.07 0 0.009"/>
-       <geometry><mesh filename="arm/fullhand2/LeftWristlargeV4.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="blue"/>
-    </visual>
-    <visual>
-      <origin xyz="-0.004 0 0" rpy="0 1.5708 0"/>
+      <origin xyz="-0.004 0 0" rpy="0 -1.5708 0"/>
       <geometry><cylinder radius="0.028" length="0.045"/></geometry>
-      <material name="blue"/>
+      <material name="dark"/>
     </visual>
     <collision>
-      <origin rpy="0 3.14152 -1.5708" xyz="-0.07 0 0.009"/>
-       <geometry><mesh filename="arm/fullhand2/LeftWristlargeV4.stl" scale="0.001 0.001 0.001"/></geometry>
+      <origin xyz="-0.004 0 0" rpy="0 -1.5708 0"/>
+      <geometry><cylinder radius="0.028" length="0.045"/></geometry>
     </collision>
   </link>
 
-  <!-- Wrist bend and deviation are not actuated on the physical LIMB arm. -->
-  <joint name="jLeftWrist_rotx" type="fixed">
+  <!-- The physical wrist spins around the forearm axis. -->
+  <joint name="jLeftWrist_rotation" type="revolute">
     <parent link="left_forearm"/>
-    <child link="left_wrist_rotx"/>
+    <child link="left_wrist_rotation"/>
     <origin xyz="-0.310 0.0085 -0.005" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="0" upper="2.443461" effort="4" velocity="1.745329"/>
   </joint>
-  
-  <joint name="jLeftWrist_rotz" type="fixed">
-    <parent link="left_wrist_rotx"/>
+
+  <joint name="left_hand_mount" type="fixed">
+    <parent link="left_wrist_rotation"/>
     <child link="left_hand"/>
     <origin xyz="0 0 -0.006" rpy="0 0 0"/>
   </joint>
   
   <link name="left_hand">
+    <!-- Keep the shell on the hand link so it follows the full arm chain. -->
     <inertial>
-      <origin xyz="0 0 -0.006" rpy="0 0 0"/>
-      <mass value="0.1"/>
-      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
+      <origin xyz="0 0 0.006" rpy="0 1.5708 0"/>
+      <mass value="0.4"/>
+      <inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/>
     </inertial>
     <visual>
-      <origin xyz="0 0 0.006" rpy="0 1.5708 0"/>
+      <origin rpy="0 1.5708 0" xyz="0 0 0.006"/>
       <geometry><mesh filename="arm/r_hand.stl" scale="-0.001 0.001 0.001"/></geometry>
-      <material name="grey"/>
+      <material name="dark"/>
     </visual>
+    <collision>
+      <origin rpy="0 1.5708 0" xyz="0 0 0.006"/>
+      <geometry><mesh filename="arm/r_hand.stl" scale="-0.001 0.001 0.001"/></geometry>
+    </collision>
   </link>
 
   <joint name="joint_hand_cover" type="fixed">
@@ -215,8 +210,8 @@
       <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
     </inertial>
     <visual>
-      <origin rpy="-1.5708 3.14152 1.5708" xyz="0 -0.015 0.05"/>
-      <geometry><mesh filename="arm/fullhand2/lefttopsurface4.stl" scale="0.001 0.001 0.001"/></geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><mesh filename="arm/fullhand2/r_cover_hand.stl" scale="-0.001 0.001 0.001"/></geometry>
       <material name="SkinColor"/>
     </visual>
   </link>
@@ -235,17 +230,17 @@
         <mass value="0.02"/><inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
     </inertial>
     <visual>
-      <geometry><mesh filename="arm/fullhand2/r_thumb5_1.stl" scale="0.001 0.001 0.001"/></geometry>
+      <geometry><mesh filename="arm/fullhand2/r_thumb5_1.stl" scale="-0.001 0.001 0.001"/></geometry>
       <material name="grey"/>
     </visual>
-    <collision> <geometry><mesh filename="arm/fullhand2/r_thumb5_1.stl" scale="0.001 0.001 0.001"/></geometry>
+    <collision> <geometry><mesh filename="arm/fullhand2/r_thumb5_1.stl" scale="-0.001 0.001 0.001"/></geometry>
     </collision>
   </link>
 
   <joint name="thumb_joint_2" type="revolute">
     <parent link="thumb_link_1"/>
     <child link="thumb_link_2"/>
-    <origin rpy="2.27 0 -0.7" xyz="-0.005 0.025 -0.01"/>
+    <origin rpy="-2.27 0 -0.7" xyz="-0.005 0.025 -0.01"/>
     <axis xyz="0 0 -1"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="-0.5" upper="1.5" velocity="2"/>
   </joint>
@@ -296,7 +291,7 @@
     <parent link="left_hand"/>
     <child link="index_link_1"/>
     <origin rpy="0 1.57 0" xyz="-0.105 0.033 0.013"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -316,7 +311,7 @@
     <parent link="index_link_1"/>
     <child link="index_link_2"/>
     <origin rpy="0 -1.57 0" xyz="0 0 -0.03"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -364,7 +359,7 @@
     <parent link="left_hand"/>
     <child link="middle_link_1"/>
     <origin rpy="0 1.57 0" xyz="-0.11 0.0095 0.012"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -384,7 +379,7 @@
     <parent link="middle_link_1"/>
     <child link="middle_link_2"/>
     <origin rpy="0 -1.57 0" xyz="0 0 -0.03"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -444,7 +439,7 @@
     <parent link="ring_BLOCK_anchor"/> 
     <child link="ring_link_1"/>
     <origin rpy="0 0 0" xyz="0 0 0"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
   
@@ -463,8 +458,8 @@
   <joint name="ring_joint_2" type="revolute">
     <parent link="ring_link_1"/>
     <child link="ring_link_2"/>
-    <origin rpy="-0.75 0 0" xyz="0.0 -0.035 -0.017"/> 
-    <axis xyz="0 1 0"/>
+    <origin rpy="-0.75 0 0" xyz="0 -0.035 -0.017"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -486,7 +481,7 @@
     <parent link="ring_link_2"/>
     <child link="ring_link_3"/>
     <origin rpy="0 0 0" xyz="0 0 -0.04"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -527,7 +522,7 @@
     <parent link="pinky_BLOCK_anchor"/> 
     <child link="pinky_link_1"/>
     <origin rpy="0 0 0" xyz="0 0 0"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -546,8 +541,8 @@
   <joint name="pinky_joint_2" type="revolute">
     <parent link="pinky_link_1"/>
     <child link="pinky_link_2"/>
-    <origin rpy="-0.7 0 0" xyz="0.003 -0.04 -0.02"/> 
-    <axis xyz="0 1 0"/>
+    <origin rpy="-0.7 0 0" xyz="-0.003 -0.04 -0.02"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
 
@@ -569,7 +564,7 @@
     <parent link="pinky_link_2"/>
     <child link="pinky_link_3"/>
     <origin rpy="0 0 0" xyz="0 0 -0.04"/> 
-    <axis xyz="0 1 0"/>
+    <axis xyz="0 -1 0"/>
     <dynamics damping="0.5" friction="0.5"/> <limit effort="1" lower="0.0" upper="1.5" velocity="2"/>
   </joint>
   

@@ -114,6 +114,51 @@ class SensorPreviewTests(unittest.TestCase):
         self.assertAlmostEqual(straight["elbow_flexion"], 0)
         self.assertIsNone(straight["shoulder_rotation_proxy"])
 
+    def test_left_and_right_camera_tracking_share_forward_and_outward_axes(self) -> None:
+        trunk = {
+            "left_shoulder": [1, 1, 0], "right_shoulder": [-1, 1, 0],
+            "left_hip": [1, 0, 0], "right_hip": [-1, 0, 0],
+        }
+        left_forward = {
+            **trunk, "left_elbow": [1, 1, 1], "left_wrist": [1, 1, 2],
+        }
+        right_forward = {
+            **trunk, "right_elbow": [-1, 1, 1], "right_wrist": [-1, 1, 2],
+        }
+        left = record_oak_pose.arm_angles_deg(left_forward, "left", np)
+        right = record_oak_pose.arm_angles_deg(right_forward, "right", np)
+        self.assertAlmostEqual(left["shoulder_flexion"], 90.0)
+        self.assertAlmostEqual(right["shoulder_flexion"], 90.0)
+
+        left_out = {
+            **trunk, "left_elbow": [2, 1, 0], "left_wrist": [3, 1, 0],
+        }
+        right_out = {
+            **trunk, "right_elbow": [-2, 1, 0], "right_wrist": [-3, 1, 0],
+        }
+        left = record_oak_pose.arm_angles_deg(left_out, "left", np)
+        right = record_oak_pose.arm_angles_deg(right_out, "right", np)
+        self.assertAlmostEqual(left["shoulder_abduction"], 90.0)
+        self.assertAlmostEqual(right["shoulder_abduction"], 90.0)
+
+    def test_forward_reach_does_not_turn_small_lateral_noise_into_abduction(self) -> None:
+        points = {
+            "left_shoulder": [1, 1, 0], "right_shoulder": [-1, 1, 0],
+            "left_hip": [1, 0, 0], "right_hip": [-1, 0, 0],
+            "left_elbow": [1.05, 1, 1], "left_wrist": [1.10, 1, 2],
+        }
+        angles = record_oak_pose.arm_angles_deg(points, "left", np)
+        self.assertGreater(angles["shoulder_flexion"], 85.0)
+        self.assertLess(angles["shoulder_abduction"], 5.0)
+
+    def test_stereo_deprojection_uses_mediapipe_forward_axis(self) -> None:
+        intrinsics = [[100.0, 0.0, 50.0], [0.0, 100.0, 40.0], [0.0, 0.0, 1.0]]
+        center = record_oak_pose.camera_xyz([50.0, 40.0, 1.25], intrinsics)
+        self.assertEqual(center, [0.0, 0.0, -1.25])
+        # A point closer to the camera has a larger (more positive) forward Z.
+        closer = record_oak_pose.camera_xyz([50.0, 40.0, 0.75], intrinsics)
+        self.assertGreater(closer[2], center[2])
+
     def test_hand_nearest_selected_wrist_is_saved_with_finger_angles(self) -> None:
         pose_point = lambda x, y: types.SimpleNamespace(x=x, y=y, visibility=0.95)
         body = types.SimpleNamespace(landmark=[

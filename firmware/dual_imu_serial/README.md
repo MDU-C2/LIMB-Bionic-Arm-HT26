@@ -14,15 +14,20 @@ Both IMUs share one I2C bus and must use different addresses:
 Connect both SDA pins to ESP32-C3 GPIO 8, both SCL pins to GPIO 5, and share
 3.3 V and ground. Do not connect two sensors with the same address to this bus.
 
-From an ESP-IDF terminal:
+The GUI uses PlatformIO from the `aurora-simulation` environment to provide the
+ESP-IDF compiler and uploader without requiring `idf.py` on the global PATH:
 
 ```powershell
 cd firmware/dual_imu_serial
-idf.py set-target esp32c3
-idf.py build
-idf.py -p COM5 flash monitor
+python -m platformio run
+python -m platformio run --target upload --upload-port COM4
+python -m platformio device monitor --port COM4 --baud 115200
 ```
+
+Native `idf.py build`, `idf.py -p COM4 flash`, and `idf.py -p COM4 monitor`
+remain supported when a full ESP-IDF installation is already active.
 
 The device emits one `aurora.dual_imu.v1` JSON line every 20 ms at 115200 baud.
 The GUI labels the two entries as shoulder and wrist rather than relying on
-ambiguous `imu1`/`imu2` names.
+ambiguous `imu1`/`imu2` names. A missing address is emitted as disconnected, so
+the desktop program automatically changes between `1/2` and `2/2` IMU mode.

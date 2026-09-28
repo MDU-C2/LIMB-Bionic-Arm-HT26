@@ -63,7 +63,8 @@ class SerialSensorReader:
             self.events.put(
                 (
                     "fatal",
-                    "pyserial is missing. Start the GUI with the aurora-simulation environment.",
+                    "Serial support is unavailable in the current Python runtime. "
+                    "Close and reopen the GUI so it can switch to aurora-simulation.",
                 )
             )
             return

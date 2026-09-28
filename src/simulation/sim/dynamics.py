@@ -1,4 +1,4 @@
-"""Reusable PyBullet kinematics and rigid-body dynamics for the right LIMB arm.
+"""Reusable PyBullet kinematics and rigid-body dynamics for a LIMB arm.
 
 The five arm joints are a subset of the full model, which also has articulated
 finger joints. Arrays here always follow PyBullet's full movable-joint order.
@@ -28,7 +28,15 @@ from sim.robot_model import (
 class ArmDynamics:
     """Query the loaded URDF without changing its joints or motor commands."""
 
-    def __init__(self, body_id: int, client=p, gravity=(0.0, 0.0, -9.81)):
+    def __init__(
+        self,
+        body_id: int,
+        client=p,
+        gravity=(0.0, 0.0, -9.81),
+        arm_joint_names=RIGHT_ARM_JOINTS,
+        hand_link=RIGHT_HAND_LINK,
+        grip_offset=RIGHT_GRIP_OFFSET_M,
+    ):
         self.client = client
         self.body_id = body_id
         self.gravity = np.asarray(gravity, dtype=float)
@@ -40,9 +48,13 @@ class ArmDynamics:
             client.getJointInfo(body_id, index)[1].decode("utf-8")
             for index in self.joints
         )
-        if not all(name in self.names for name in RIGHT_ARM_JOINTS):
-            raise ValueError("Loaded model is missing a right-arm joint")
-        self.hand_link = link_name_index(body_id, client)[RIGHT_HAND_LINK]
+        self.arm_joint_names = tuple(arm_joint_names)
+        self.grip_offset = tuple(float(value) for value in grip_offset)
+        if len(self.grip_offset) != 3:
+            raise ValueError("grip_offset must contain three values")
+        if not all(name in self.names for name in self.arm_joint_names):
+            raise ValueError("Loaded model is missing a requested arm joint")
+        self.hand_link = link_name_index(body_id, client)[hand_link]
 
     @property
     def dof(self) -> int:
@@ -69,7 +81,7 @@ class ArmDynamics:
         # without subtracting the inertial translation.
         inverse = self.client.invertTransform((0.0, 0.0, 0.0), state[3])
         local_point, _ = self.client.multiplyTransforms(
-            *inverse, RIGHT_GRIP_OFFSET_M, (0.0, 0.0, 0.0, 1.0)
+            *inverse, self.grip_offset, (0.0, 0.0, 0.0, 1.0)
         )
         return local_point
 
@@ -139,7 +151,7 @@ class ArmDynamics:
             computeForwardKinematics=1,
         )
         position, orientation = self.client.multiplyTransforms(
-            state[4], state[5], RIGHT_GRIP_OFFSET_M, (0.0, 0.0, 0.0, 1.0)
+            state[4], state[5], self.grip_offset, (0.0, 0.0, 0.0, 1.0)
         )
         offset = np.asarray(position) - np.asarray(state[0])
         velocity = np.asarray(state[6]) + np.cross(np.asarray(state[7]), offset)
@@ -155,7 +167,7 @@ class ArmDynamics:
         linear, angular = self.jacobian(q)
         return {
             "time_s": float(time_s), "joint_names": list(self.names),
-            "arm_joint_names": list(RIGHT_ARM_JOINTS),
+            "arm_joint_names": list(self.arm_joint_names),
             "q_rad": q.tolist(), "qd_rad_s": qd.tolist(),
             "commanded_q_rad": None if commanded_positions is None else self._vector(
                 commanded_positions, "commanded_positions").tolist(),

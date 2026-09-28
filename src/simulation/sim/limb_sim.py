@@ -159,7 +159,7 @@ def main() -> None:
         finally:
             os.chdir(previous_directory)
         joint_ids = [joint_index(robot, urdf_name) for _, urdf_name, _ in JOINT_MAPPING]
-        wrist_joint = joint_index(robot, "jLeftElbow_rotz")
+        wrist_joint = joint_index(robot, "jLeftWrist_rotation")
         for index in range(p.getNumJoints(robot)):
             p.setJointMotorControl2(robot, index, p.POSITION_CONTROL, force=0.0)
         # The four-column trajectory has no wrist channel. Hold the forearm at

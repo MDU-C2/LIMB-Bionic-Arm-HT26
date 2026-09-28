@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -18,8 +17,10 @@ from project_support import (
     discover_firmware_projects,
     display_path,
     environment_name,
+    firmware_command,
     find_simulation_python,
     has_python_dependencies as _has_python_dependencies,
+    resolve_firmware_tool,
     serial_ports,
 )
 
@@ -170,15 +171,16 @@ class ProjectTabsMixin:
             self.firmware_status.configure(
                 text="No ESP-IDF firmware project is present under firmware yet."
             )
-        elif shutil.which(project.executable):
+        elif resolve_firmware_tool(project):
             self.firmware_status.configure(
                 text=f"{project.system} tools ready. Project: {display_path(project.directory)}"
             )
         else:
             self.firmware_status.configure(
                 text=(
-                    f"{project.system} project found, but {project.executable} "
-                    "is not available on PATH."
+                    f"{project.system} project found, but its build tool is missing. "
+                    "Update aurora-simulation from src/simulation/environment.yml, "
+                    "then press Refresh."
                 )
             )
         self._update_controls()
@@ -189,10 +191,12 @@ class ProjectTabsMixin:
         if project is None:
             messagebox.showinfo("Firmware unavailable", "No supported firmware project was found.")
             return
-        if shutil.which(project.executable) is None:
+        command = firmware_command(project, action, self.serial_port.get().strip())
+        if command is None:
             messagebox.showerror(
                 "Tool unavailable",
-                f"{project.executable} is required for this {project.system} project.",
+                "Update aurora-simulation from src/simulation/environment.yml to "
+                f"install the build tool for {project.system}.",
             )
             return
 
@@ -208,11 +212,6 @@ class ProjectTabsMixin:
 
         if action in {"flash", "monitor"}:
             self._stop_serial_dashboard()
-
-        command = ["idf.py"]
-        if action in {"flash", "monitor"}:
-            command.extend(["-p", port])
-        command.append(action)
 
         self._start_program(
             f"Firmware {action}",
@@ -248,7 +247,12 @@ class ProjectTabsMixin:
             f"Movement AI: {'Ready' if motion_ai_ready else 'Missing model or ONNX Runtime'}",
             f"Recording programs: {len(self.recording_programs)} found",
             f"Firmware projects: {len(self.firmware_projects)} found",
-            f"ESP-IDF command: {'Available' if shutil.which('idf.py') else 'Not found'}",
+            "Firmware tool: "
+            + (
+                "Ready"
+                if any(resolve_firmware_tool(project) for project in self.firmware_projects.values())
+                else "Not installed"
+            ),
             f"Active programs: {active}",
             "",
             "PORTABILITY\n",
@@ -259,7 +263,7 @@ class ProjectTabsMixin:
             "Simulation: interactive task scene with keyboard or live camera + IMU control",
             "Motion AI: pose-recording playback and GRU profile recognition",
             "Recording: dual-IMU serial data and OAK-D pose capture",
-            "Firmware: ESP-IDF CMake projects under firmware",
+            "Firmware: ESP-IDF projects built and flashed through the project environment",
             "Recording settings are passed to record*.py and capture*.py programs",
         ]
         self.info_text.configure(state="normal")

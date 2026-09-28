@@ -127,7 +127,15 @@ def arm_angles_deg(points: dict[str, object], side: str, np) -> dict[str, float 
     upper = elbow - shoulder
     forearm = wrist - elbow
     upper_unit, forearm_unit = unit(upper), unit(forearm)
-    lateral = unit(shoulder - opposite)
+    # Keep one trunk frame for both selectable arms. Building lateral from the
+    # selected shoulder reverses camera forward whenever ``side == right`` and
+    # makes the same forward reach report opposite flexion.
+    try:
+        left_shoulder = np.asarray(points["left_shoulder"], dtype=float)
+        right_shoulder = np.asarray(points["right_shoulder"], dtype=float)
+    except (KeyError, TypeError, ValueError):
+        return None
+    lateral = unit(left_shoulder - right_shoulder)
     vertical = unit((shoulder + opposite - left_hip - right_hip) / 2.0)
     if any(vector is None for vector in (upper_unit, forearm_unit, lateral, vertical)):
         return None
@@ -139,9 +147,24 @@ def arm_angles_deg(points: dict[str, object], side: str, np) -> dict[str, float 
     trunk = np.column_stack((lateral, vertical, forward))
     upper_t = trunk.T @ upper_unit
     forearm_t = trunk.T @ forearm_unit
+    # Express lateral motion as outward-positive for whichever anatomical arm
+    # is selected while leaving trunk forward/up identical.
+    side_sign = 1.0 if side == "left" else -1.0
+    upper_t[0] *= side_sign
+    forearm_t[0] *= side_sign
     elbow_angle = float(np.arccos(np.clip(np.dot(upper_unit, forearm_unit), -1.0, 1.0)))
-    flexion = float(np.arctan2(upper_t[2], -upper_t[1]))
-    abduction = float(np.arctan2(upper_t[0], -upper_t[1]))
+    # OSCARR's original independent ``atan2(component, down)`` equations are
+    # exact in their individual anatomical planes, but both become singular
+    # when the arm is horizontal.  At a forward reach, for example, a few
+    # millimetres of lateral pose noise made abduction jump towards 90 deg.
+    # Include the orthogonal component in each denominator so a channel only
+    # reports the portion of elevation that belongs to its own plane.
+    flexion = float(np.arctan2(
+        upper_t[2], np.hypot(upper_t[0], upper_t[1])
+    ))
+    abduction = float(np.arctan2(
+        upper_t[0], np.hypot(upper_t[1], upper_t[2])
+    ))
 
     # Undo shoulder abduction and flexion before projecting the forearm onto
     # the transverse plane, following the report's lateral/medial proxy.
@@ -259,22 +282,31 @@ def add_hand_tracking(output, observation, sample, hand_results, pose_wrist,
 
 
 def camera_xyz(point: list[float], intrinsics) -> list[float]:
-    """Deproject an RGB pixel and aligned depth using camera calibration."""
+    """Deproject depth into the same trunk frame as MediaPipe world points.
+
+    OAK-D depth increases away from the camera, while the normalized world
+    points above use positive Z towards the camera.  Keeping that sign
+    consistent prevents enabling stereo depth from reversing shoulder
+    flexion.
+    """
     x, y, depth_m = point
     return [
         (x - intrinsics[0][2]) * depth_m / intrinsics[0][0],
         -(y - intrinsics[1][2]) * depth_m / intrinsics[1][1],
-        depth_m,
+        -depth_m,
     ]
 
 
 def build_pipeline(dai, use_depth: bool = False):
     """Run RGB tracking; add stereo only when explicitly requested."""
     pipeline = dai.Pipeline()
-    color = pipeline.create(dai.node.Camera).build()
-    color.setSensorType(dai.CameraSensorType.COLOR)
-    color_output = color.requestOutput(FRAME_SIZE, type=dai.ImgFrame.Type.BGR888p,
-                                       fps=VIDEO_FPS)
+    color = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+    color_output = color.requestOutput(
+        FRAME_SIZE,
+        type=dai.ImgFrame.Type.BGR888p,
+        fps=VIDEO_FPS,
+        enableUndistortion=use_depth,
+    )
     video_queue = color_output.createOutputQueue(maxSize=2, blocking=False)
     if not use_depth:
         return pipeline, video_queue, None
@@ -283,12 +315,14 @@ def build_pipeline(dai, use_depth: bool = False):
     left_output = mono_left.requestOutput(DEPTH_SIZE, type=dai.ImgFrame.Type.GRAY8,
                                           fps=VIDEO_FPS)
     right_output = mono_right.requestOutput(DEPTH_SIZE, type=dai.ImgFrame.Type.GRAY8,
-                                            fps=VIDEO_FPS)
+                                          fps=VIDEO_FPS)
     stereo = pipeline.create(dai.node.StereoDepth)
     left_output.link(stereo.left)
     right_output.link(stereo.right)
-    stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
-    stereo.setOutputSize(*DEPTH_SIZE)
+    # DepthAI v3 aligns RVC2 stereo depth by linking the exact RGB stream used
+    # for tracking.  The former v2-style setDepthAlign(socket) configuration
+    # could drop both queues with X_LINK_ERROR on the project's OAK-D 2.1.
+    color_output.link(stereo.inputAlignTo)
     return (
         pipeline,
         video_queue,

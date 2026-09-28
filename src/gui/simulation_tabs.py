@@ -28,7 +28,7 @@ class SimulationTabsMixin:
         self._heading(
             tab,
             "LIMB simulation",
-            "Use the interactive task scene with keyboard control or live camera + IMUs.",
+            "Use the left-arm task scene with keyboard control or live camera + IMUs.",
         )
 
         interactive = self._card(
@@ -63,7 +63,8 @@ class SimulationTabsMixin:
             3,
             "Interactive simulator with live sensors",
             "Open the same table-and-target scene, show the camera monitor, and control "
-            "the arm from the OAK-D plus shoulder and wrist IMUs.",
+            "the arm from the OAK-D plus an automatically detected shoulder IMU and "
+            "optional wrist IMU. Hold the arm down and press K to recalibrate.",
         )
         fusion_settings = ttk.Frame(fusion, style="Card.TFrame")
         fusion_settings.grid(row=2, column=0, sticky="ew")
@@ -307,7 +308,7 @@ class SimulationTabsMixin:
         )
 
     def start_live_sensor_fusion(self) -> None:
-        """Launch the interactive task scene under camera and dual-IMU control."""
+        """Launch the interactive task scene under camera and available-IMU control."""
         if self.simulation_python is None:
             messagebox.showerror(
                 "Simulation environment missing",

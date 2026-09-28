@@ -88,9 +88,9 @@ def extract_imus(packet: object) -> dict[str, dict[str, Any]]:
         }
 
     if "imu" in packet:
-        # The single-IMU packet remains visible during the two-sensor hardware
-        # transition.  It cannot drive the elbow fusion on its own.
-        return {"wrist": normalize_imu(packet.get("imu"), "wrist")}
+        # Keep the old single-IMU stream useful during the hardware transition.
+        # HT25's one-IMU controller mounted that sensor on the upper arm.
+        return {"shoulder": normalize_imu(packet.get("imu"), "shoulder")}
     return {}
 
 
@@ -101,3 +101,10 @@ def connected_roles(packet: object) -> tuple[str, ...]:
         role for role in ("shoulder", "wrist")
         if sensors.get(role, {}).get("connected") is True
     )
+
+
+def imu_configuration(packet: object) -> tuple[str, tuple[str, ...]]:
+    """Return ``none``, ``single`` or ``dual`` plus the connected roles."""
+    roles = connected_roles(packet)
+    mode = "dual" if len(roles) == 2 else "single" if len(roles) == 1 else "none"
+    return mode, roles

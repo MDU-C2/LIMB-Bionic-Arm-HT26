@@ -8,6 +8,7 @@ focused on composing the interface.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -17,6 +18,7 @@ import sys
 
 GUI_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = GUI_DIR.parents[1]
+FIRMWARE_RUNNER_SCRIPT = GUI_DIR / "firmware_runner.py"
 INTERACTIVE_SIMULATION_SCRIPT = (
     REPOSITORY_ROOT / "src" / "simulation" / "interactive" / "limb_simulator.py"
 )
@@ -119,7 +121,18 @@ def open_path(path: Path) -> None:
 
 
 def serial_ports() -> list[str]:
-    """Return serial-port names using only the Python standard library."""
+    """Return connected serial ports, preferring pyserial's live enumeration."""
+    try:
+        from serial.tools import list_ports
+
+        ports = sorted({str(port.device) for port in list_ports.comports()})
+        if ports:
+            return ports
+    except (ImportError, OSError):
+        pass
+
+    # Keep the launcher useful before pyserial is installed. On Windows the
+    # registry still exposes native-USB ESP32 ports such as the C3's CDC port.
     if sys.platform == "win32":
         try:
             import winreg
@@ -230,9 +243,12 @@ def has_python_dependencies(python: Path, modules: tuple[str, ...]) -> bool:
 
 
 def find_simulation_python() -> Path | None:
-    """Find an interpreter that can run the migrated simulator."""
+    """Find an interpreter that can run simulation and serial monitoring."""
     for candidate in simulation_python_candidates():
-        if has_python_dependencies(candidate, ("numpy", "scipy", "pybullet", "pygame")):
+        if has_python_dependencies(
+            candidate,
+            ("numpy", "scipy", "pybullet", "pygame", "serial", "tkinter"),
+        ):
             return candidate
     return None
 
@@ -266,11 +282,18 @@ def discover_recording_programs() -> dict[str, Path]:
 
 
 def discover_firmware_projects() -> dict[str, FirmwareProject]:
-    """Find ESP-IDF projects below ``firmware``."""
+    """Find PlatformIO and native ESP-IDF projects below ``firmware``."""
     projects: dict[str, FirmwareProject] = {}
     root = REPOSITORY_ROOT / "firmware"
     if not root.is_dir():
         return projects
+    for path in root.rglob("platformio.ini"):
+        directory = path.parent
+        projects[display_path(directory)] = FirmwareProject(
+            directory,
+            "PlatformIO (ESP-IDF)",
+            "platformio",
+        )
     for path in root.rglob("CMakeLists.txt"):
         directory = path.parent
         try:
@@ -287,3 +310,57 @@ def discover_firmware_projects() -> dict[str, FirmwareProject]:
 def executable_available(name: str) -> bool:
     """Return whether a command-line tool is available on PATH."""
     return shutil.which(name) is not None
+
+
+def resolve_firmware_tool(project: FirmwareProject) -> tuple[str, ...] | None:
+    """Resolve a firmware CLI from PATH or an installed Python module."""
+    names = (
+        ("pio", "platformio")
+        if project.executable == "platformio"
+        else (project.executable,)
+    )
+    for name in names:
+        executable = shutil.which(name)
+        if executable:
+            return (executable,)
+
+    module = "platformio" if project.executable == "platformio" else None
+    if module and importlib.util.find_spec(module) is not None:
+        return (str(console_python(Path(sys.executable))), "-m", module)
+    if module:
+        for python in simulation_python_candidates():
+            if has_python_dependencies(python, (module,)):
+                return (str(python), "-m", module)
+    return None
+
+
+def firmware_command(
+    project: FirmwareProject,
+    action: str,
+    port: str = "",
+) -> list[str] | None:
+    """Build the supported command line for a firmware action."""
+    tool = resolve_firmware_tool(project)
+    if tool is None:
+        return None
+    if action not in {"build", "flash", "monitor"}:
+        raise ValueError(f"Unsupported firmware action: {action}")
+
+    command = list(tool)
+    if project.executable == "platformio":
+        return [
+            str(console_python(Path(sys.executable))),
+            str(FIRMWARE_RUNNER_SCRIPT),
+            action,
+            "--project",
+            str(project.directory),
+            "--port",
+            port,
+            "--tool",
+            *command,
+        ]
+
+    if action in {"flash", "monitor"}:
+        command.extend(["-p", port])
+    command.append(action)
+    return command

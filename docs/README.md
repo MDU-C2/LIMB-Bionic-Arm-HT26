@@ -5,6 +5,8 @@ The current guides are:
 - [Sensor data](SENSOR_DATA.md): wire and flash the dual IMUs, open their
   monitor, record with OAK-D, and run live fusion.
 - [Simulation](SIMULATION.md): run and control the simulated arm.
+- [Joint limits](JOINT_LIMITS.md): source-backed ranges and coordinate
+  conventions for the mirrored left arm.
 - [Simulation dynamics](SIMULATION_DYNAMICS.md): details about the current
   physics model.
 - [Motor notes](MOTORS.md): motor information inherited by the simulation.

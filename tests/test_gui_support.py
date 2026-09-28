@@ -18,19 +18,64 @@ sys.path.insert(0, str(ROOT / "src" / "recording"))
 sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
 
 from common import create_session_directory, experiment_metadata
-from imu_protocol import extract_imus
-from project_support import discover_recording_programs
+from imu_protocol import extract_imus, imu_configuration
+from project_support import (
+    FIRMWARE_RUNNER_SCRIPT,
+    FirmwareProject,
+    discover_firmware_projects,
+    discover_recording_programs,
+    firmware_command,
+)
 from process_manager import ManagedProcess, ProcessManagerMixin
 from recording_tab import DEFAULT_BATCH_SOURCES, batch_arguments
 from sensor_fusion import (
+    ControlAngleSmoother,
     DualImuArmEstimator,
+    camera_control_angles,
+    camera_hand_curl,
     fuse_control_angles,
     interactive_control_targets,
 )
+from live_sensor_input import installed_pose_model_complexity
 from serial_sensor import decode_sensor_packet
+import app as gui_app
 
 
 class RecordingBatchTests(unittest.TestCase):
+    def test_live_pose_model_never_requires_a_startup_download(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary) / "mediapipe"
+            package.mkdir()
+            fake_mp = types.SimpleNamespace(__file__=str(package / "__init__.py"))
+            self.assertEqual(installed_pose_model_complexity(fake_mp), 1)
+            heavy = package / "modules" / "pose_landmark" / "pose_landmark_heavy.tflite"
+            heavy.parent.mkdir(parents=True)
+            heavy.touch()
+            self.assertEqual(installed_pose_model_complexity(fake_mp), 2)
+
+    def test_gui_relaunch_keeps_spaced_script_path_as_one_argument(self) -> None:
+        simulation_python = ROOT / "environment with spaces" / "python.exe"
+        with (
+            patch("app.importlib.util.find_spec", return_value=None),
+            patch("app.find_simulation_python", return_value=simulation_python),
+            patch.object(gui_app.sys, "executable", r"C:\Python313\python.exe"),
+            patch.object(
+                gui_app.sys,
+                "argv",
+                [str((ROOT / "src" / "gui" / "app.py").resolve())],
+            ),
+            patch("app.subprocess.call", return_value=0) as relaunch,
+            patch.dict(os.environ, {"AURORA_GUI_RELAUNCHED": ""}),
+            self.assertRaises(SystemExit) as exit_context,
+        ):
+            gui_app.main()
+
+        self.assertEqual(exit_context.exception.code, 0)
+        command = relaunch.call_args.args[0]
+        self.assertEqual(command[0], str(simulation_python))
+        self.assertEqual(command[1], str((ROOT / "src" / "gui" / "app.py").resolve()))
+        self.assertEqual(len(command), 2)
+
     def test_esp32_dual_imu_packet_has_physical_roles(self) -> None:
         packet = decode_sensor_packet(
             '{"device":"ESP32-C3","uptime_ms":1200,"imus":{'
@@ -82,14 +127,182 @@ class RecordingBatchTests(unittest.TestCase):
         moved = {role: dict(sensor) for role, sensor in level.items()}
         moved["wrist"] = {
             **level["wrist"],
-            "accel_g": {"x": 1.0, "y": 0.0, "z": 0.0},
+            "accel_g": {"x": 0.0, "y": 1.0, "z": 0.0},
         }
         imu = estimator.update(moved, 0.02)
-        self.assertAlmostEqual(imu["elbow_flexion"], 90.0)
-        fused = fuse_control_angles(imu, {"elbow_flexion": 70.0}, 0.25)
-        self.assertAlmostEqual(fused["elbow_flexion"], 85.0)
+        self.assertAlmostEqual(imu["elbow_flexion"], 60.0)
+        self.assertNotIn("shoulder_rotation_proxy", imu)
+        fused = fuse_control_angles(imu, {"elbow_flexion": 50.0}, 0.25)
+        self.assertAlmostEqual(fused["elbow_flexion"], 57.5)
 
-    def test_fused_angles_map_to_interactive_right_arm_signs(self) -> None:
+    def test_single_imu_controls_shoulder_and_camera_can_supply_elbow(self) -> None:
+        estimator = DualImuArmEstimator(alpha=0.0)
+        level = {
+            "shoulder": {
+                "connected": True,
+                "accel_g": {"x": 0.0, "y": 0.0, "z": 1.0},
+                "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+            }
+        }
+        initial = estimator.update(level, 0.02)
+        self.assertEqual(initial["shoulder_flexion"], 0.0)
+        self.assertNotIn("elbow_flexion", initial)
+
+        moved = {
+            "shoulder": {
+                **level["shoulder"],
+                "accel_g": {"x": 0.0, "y": 1.0, "z": 0.0},
+            }
+        }
+        imu = estimator.update(moved, 0.02)
+        self.assertAlmostEqual(imu["shoulder_flexion"], 90.0)
+        fused = fuse_control_angles(imu, {"elbow_flexion": 42.0}, 0.25)
+        self.assertEqual(fused["elbow_flexion"], 42.0)
+
+    def test_wrist_only_imu_does_not_impersonate_the_upper_arm(self) -> None:
+        estimator = DualImuArmEstimator(alpha=0.0)
+        wrist = {
+            "wrist": {
+                "connected": True,
+                "accel_g": {"x": 0.0, "y": 1.0, "z": 0.0},
+                "gyro_dps": {"x": 0.0, "y": 0.0, "z": 20.0},
+            }
+        }
+        self.assertEqual(estimator.update(wrist, 0.02), {})
+
+    def test_imu_gyro_z_drives_shoulder_left_right_without_axial_drift(self) -> None:
+        estimator = DualImuArmEstimator(alpha=0.0, gyro_deadzone_dps=1.0)
+        sensor = {
+            "shoulder": {
+                "connected": True,
+                "accel_g": {"x": 0.0, "y": 0.0, "z": 1.0},
+                "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+            }
+        }
+        estimator.update(sensor, 0.1)
+        sensor["shoulder"]["gyro_dps"]["z"] = 31.0
+        estimate = None
+        for _ in range(10):
+            estimate = estimator.update(sensor, 0.1)
+        self.assertAlmostEqual(estimate["shoulder_abduction"], 30.0)
+        self.assertNotIn("shoulder_rotation_proxy", estimate)
+
+    def test_adding_wrist_imu_does_not_create_a_false_elbow_bend(self) -> None:
+        estimator = DualImuArmEstimator(alpha=0.0)
+        shoulder = {
+            "shoulder": {
+                "connected": True,
+                "accel_g": {"x": 0.0, "y": 0.0, "z": 1.0},
+                "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+            }
+        }
+        estimator.update(shoulder, 0.02)
+        shoulder["shoulder"]["accel_g"] = {
+            "x": 0.0, "y": 0.5, "z": 0.8660254,
+        }
+        estimator.update(shoulder, 0.02)
+        both = {
+            **shoulder,
+            "wrist": {
+                "connected": True,
+                "accel_g": {"x": 0.0, "y": 0.5, "z": 0.8660254},
+                "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+            },
+        }
+        self.assertAlmostEqual(estimator.update(both, 0.02)["elbow_flexion"], 0.0)
+
+    def test_packet_reports_none_single_or_dual_imu_configuration(self) -> None:
+        sensor = {
+            "connected": True,
+            "accel_g": {"x": 0.0, "y": 0.0, "z": 1.0},
+            "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+        }
+        self.assertEqual(imu_configuration({}), ("none", ()))
+        self.assertEqual(
+            imu_configuration({"imus": {"shoulder": sensor}}),
+            ("single", ("shoulder",)),
+        )
+        self.assertEqual(
+            imu_configuration({"imus": {"shoulder": sensor, "wrist": sensor}}),
+            ("dual", ("shoulder", "wrist")),
+        )
+
+    def test_last_verified_single_imu_packet_remains_visible(self) -> None:
+        packet = decode_sensor_packet(
+            '{"device":"ESP32-C3","imu":{"connected":true,'
+            '"address":"0x6A","accel_g":{"x":0,"y":0,"z":1},'
+            '"gyro_dps":{"x":1,"y":2,"z":3}}}'
+        )
+        self.assertEqual(imu_configuration(packet), ("single", ("shoulder",)))
+        self.assertEqual(extract_imus(packet)["shoulder"]["gyro_dps"]["z"], 3.0)
+
+    def test_camera_angles_are_normalized_before_they_reach_the_robot(self) -> None:
+        normalized = camera_control_angles({
+            "elbow_flexion": 130.0,
+            "shoulder_flexion": -12.0,
+            "shoulder_abduction": -28.0,
+            "shoulder_rotation_proxy": 95.0,
+        })
+        self.assertEqual(normalized, {
+            "elbow_flexion": 60.0,
+            "shoulder_flexion": 0.0,
+            "shoulder_abduction": 0.0,
+            "shoulder_rotation_proxy": 60.0,
+        })
+
+    def test_camera_smoother_filters_jitter_without_filling_missing_axes(self) -> None:
+        smoother = ControlAngleSmoother(time_constant_s=0.1)
+        self.assertEqual(smoother.update({"elbow_flexion": 20.0}, 0.04), {
+            "elbow_flexion": 20.0,
+        })
+        filtered = smoother.update({"elbow_flexion": 40.0}, 0.04)
+        self.assertGreater(filtered["elbow_flexion"], 20.0)
+        self.assertLess(filtered["elbow_flexion"], 40.0)
+        self.assertEqual(
+            smoother.update({"shoulder_flexion": 30.0}, 0.04),
+            {"shoulder_flexion": 30.0},
+        )
+
+    def test_camera_hand_tracking_controls_a_bounded_shared_grip(self) -> None:
+        self.assertAlmostEqual(camera_hand_curl({
+            "thumb": 0.0, "index": 45.0, "middle": 90.0,
+            "ring": 135.0, "pinky": -20.0,
+        }), 0.5)
+        self.assertIsNone(camera_hand_curl({"index": 30.0, "middle": 30.0}))
+
+    def test_firmware_project_uses_environment_platformio_commands(self) -> None:
+        projects = discover_firmware_projects()
+        project = projects["firmware\\dual_imu_serial"]
+        self.assertEqual(project.system, "PlatformIO (ESP-IDF)")
+        with patch(
+            "project_support.resolve_firmware_tool",
+            return_value=("python", "-m", "platformio"),
+        ):
+            self.assertEqual(
+                firmware_command(project, "build"),
+                [
+                    sys.executable,
+                    str(FIRMWARE_RUNNER_SCRIPT),
+                    "build",
+                    "--project",
+                    str(project.directory),
+                    "--port",
+                    "",
+                    "--tool",
+                    "python",
+                    "-m",
+                    "platformio",
+                ],
+            )
+            self.assertEqual(
+                firmware_command(project, "flash", "COM4")[2:8],
+                [
+                    "flash", "--project", str(project.directory), "--port", "COM4",
+                    "--tool",
+                ],
+            )
+
+    def test_fused_angles_map_to_interactive_left_arm_signs(self) -> None:
         targets = interactive_control_targets(
             {
                 "elbow_flexion": 35.0,
@@ -101,12 +314,18 @@ class RecordingBatchTests(unittest.TestCase):
         self.assertEqual(
             targets,
             {
-                "elbow_x": -35.0,
-                "shoulder_y": 40.0,
+                "elbow_x": 35.0,
+                "shoulder_y": 50.0,
                 "shoulder_z": -20.0,
                 "shoulder_x": -15.0,
             },
         )
+
+    def test_anatomical_shoulder_zero_is_converted_to_cad_zero(self) -> None:
+        arm_down = interactive_control_targets({"shoulder_flexion": 0.0})
+        arm_forward = interactive_control_targets({"shoulder_flexion": 90.0})
+        self.assertEqual(arm_down, {"shoulder_y": 90.0})
+        self.assertEqual(arm_forward, {"shoulder_y": 0.0})
 
     def test_running_preview_can_receive_another_window_request(self) -> None:
         child_input = io.StringIO()

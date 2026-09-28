@@ -19,7 +19,7 @@ from sensor_fusion import DualImuArmEstimator
 
 
 class ImuMonitorWindow:
-    """Render dual-IMU values outside the main control-center window."""
+    """Render one or two connected IMUs outside the main control window."""
 
     def __init__(self, parent: tk.Misc, reconnect_command, disconnect_command) -> None:
         self.window = tk.Toplevel(parent)
@@ -32,7 +32,7 @@ class ImuMonitorWindow:
         self.last_sample_time: float | None = None
         self.connection = tk.StringVar(value="Waiting for serial connection")
         self.device = tk.StringVar(value="ESP32: no data")
-        self.joints = tk.StringVar(value="Calibrating after both IMUs report data")
+        self.joints = tk.StringVar(value="Waiting for IMU data")
         self.sensor_values: dict[str, dict[str, tk.StringVar]] = {}
 
         root = ttk.Frame(self.window, padding=18)
@@ -134,14 +134,25 @@ class ImuMonitorWindow:
         if not self.exists:
             return
         device = str(packet.get("device", "ESP32"))
+        sensors = extract_imus(packet)
+        roles = tuple(
+            role for role in ("shoulder", "wrist")
+            if sensors.get(role, {}).get("connected") is True
+        )
+        mode_text = (
+            "Dual IMU (2/2)"
+            if len(roles) == 2
+            else f"Single IMU (1/2: {roles[0]})"
+            if len(roles) == 1
+            else "No IMU detected (0/2)"
+        )
         uptime = packet.get("uptime_ms")
         uptime_text = (
             f" · uptime {float(uptime) / 1000:.1f} s"
             if isinstance(uptime, (int, float)) and not isinstance(uptime, bool)
             else ""
         )
-        self.device.set(f"ESP32: {device}{uptime_text}")
-        sensors = extract_imus(packet)
+        self.device.set(f"ESP32: {device} · {mode_text}{uptime_text}")
         connected = 0
         for role in ("shoulder", "wrist"):
             sensor = sensors.get(role, {})
@@ -171,14 +182,31 @@ class ImuMonitorWindow:
         self.last_sample_time = now
         estimate = self.estimator.update(sensors, dt)
         if estimate is None:
-            self.joints.set(f"Waiting for both sensors ({connected}/2 connected)")
-        else:
+            self.joints.set(f"Waiting for an IMU ({connected}/2 connected)")
+            return
+        if not estimate:
             self.joints.set(
-                "Shoulder flex {shoulder_flexion:6.1f}°   "
-                "abduction {shoulder_abduction:6.1f}°   "
-                "rotation {shoulder_rotation_proxy:6.1f}°   "
-                "elbow {elbow_flexion:6.1f}°".format(**estimate)
+                "Wrist IMU connected · camera or shoulder IMU needed for arm control"
             )
+            return
+        elbow = (
+            f"{estimate['elbow_flexion']:6.1f}°"
+            if "elbow_flexion" in estimate
+            else "-- (camera or second IMU needed)"
+        )
+        rotation = (
+            f"{estimate['shoulder_rotation_proxy']:6.1f}°"
+            if "shoulder_rotation_proxy" in estimate
+            else "-- (camera needed)"
+        )
+        self.joints.set(
+            (
+                "Shoulder flex {shoulder_flexion:6.1f}°   "
+                "left/right {shoulder_abduction:6.1f}°   "
+                f"rotation {rotation}   "
+                f"elbow {elbow}"
+            ).format(**estimate)
+        )
 
     def calibrate(self) -> None:
         self.estimator.reset_calibration()

@@ -8,8 +8,9 @@ from repository conventions instead of machine-specific paths.
 
 from __future__ import annotations
 
+import importlib.util
+import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tkinter as tk
@@ -39,6 +40,7 @@ from project_support import (
     WARNING,
     display_path,
     find_simulation_python,
+    resolve_firmware_tool,
     has_python_dependencies as _has_python_dependencies,
     open_path,
     project_path,
@@ -115,6 +117,7 @@ class ProjectGui(
         self.after(100, self._drain_log_queue)
         self.after(100, self._drain_serial_sensor_events)
         self.after(500, self._start_serial_dashboard_if_available)
+        self.after(1000, self._poll_serial_ports)
 
     # Window and tabs
 
@@ -404,7 +407,7 @@ class ProjectGui(
             state="disabled" if running or selected_program is None else "normal"
         )
         firmware = self.firmware_projects.get(self.firmware_project.get())
-        firmware_ready = firmware is not None and shutil.which(firmware.executable) is not None
+        firmware_ready = firmware is not None and resolve_firmware_tool(firmware) is not None
         port_ready = bool(self.serial_port.get().strip())
         self.build_button.configure(
             state="disabled" if running or not firmware_ready else "normal"
@@ -500,6 +503,39 @@ class ProjectGui(
 
 def main() -> None:
     """Create the top-level window and run the Tk event loop."""
+    # IDEs and double-clicks can start this file with a system Python even when
+    # the project environment exists. Switch before Tk is created so the
+    # in-process IMU reader always has the installed pyserial package.
+    if (
+        importlib.util.find_spec("serial") is None
+        and os.environ.get("AURORA_GUI_RELAUNCHED") != "1"
+    ):
+        simulation_python = find_simulation_python()
+        current_python = Path(sys.executable).resolve()
+        if simulation_python is not None and simulation_python.resolve() != current_python:
+            environment = os.environ.copy()
+            environment["AURORA_GUI_RELAUNCHED"] = "1"
+            # os.execve() does not preserve quoting reliably when a Microsoft
+            # Store Python hands a Windows path containing spaces to another
+            # interpreter. subprocess receives an argument list and quotes the
+            # script path correctly (including the OneDrive university path).
+            try:
+                return_code = subprocess.call(
+                    [
+                        str(simulation_python),
+                        str(Path(__file__).resolve()),
+                        *sys.argv[1:],
+                    ],
+                    cwd=REPOSITORY_ROOT,
+                    env=environment,
+                )
+            except OSError:
+                # Keep the GUI launchable in the current interpreter. The IMU
+                # monitor will show a focused dependency message if needed.
+                pass
+            else:
+                raise SystemExit(return_code)
+
     window = tk.Tk()
     window.title("AURORA Control Center")
     window.geometry("1000x720")

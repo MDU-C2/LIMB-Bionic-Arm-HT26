@@ -1,7 +1,7 @@
 # Simulation
 
 The main simulation is the interactive PyBullet table-and-target scene. It can
-be driven by the keyboard or by live OAK-D and dual-IMU measurements.
+be driven by the keyboard or by live OAK-D and one/two-IMU measurements.
 
 Start it from the **Simulation** tab in the GUI:
 
@@ -16,7 +16,7 @@ The current simulation can:
 - reach for and hold the simulated cup;
 - show simulated contact and motor torque values;
 - play compatible camera pose recordings through Motion AI; and
-- fuse live OAK-D and dual-IMU angles to control the arm.
+- fuse live OAK-D and available IMU angles to control the left arm.
 
 Useful direct commands:
 
@@ -27,7 +27,10 @@ micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --head
 
 Live control is started from the Simulation tab after choosing the ESP32 port.
 It opens the same interactive task scene plus an annotated OAK-D camera window.
-Both role-named IMUs are required for relative elbow control; camera control can
-continue briefly if IMU samples are interrupted.
+A shoulder IMU controls elevation and left/right movement; adding the wrist IMU
+enables relative-IMU elbow control. Camera tracking supplies absolute arm pose,
+the otherwise-unobservable axial-rotation proxy, and finger curl. A wrist-only
+sensor is monitored without being misidentified as the upper arm. Press `K` in
+the simulator to recalibrate while the tracked arm is down and still.
 
 See [the simulation guide](../../docs/SIMULATION.md) for the controls.

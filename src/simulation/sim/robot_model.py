@@ -19,9 +19,18 @@ RIGHT_ARM_JOINTS = (
     "jRightWrist_rotation",
 )
 RIGHT_HAND_LINK = "right_hand"
+LEFT_ARM_JOINTS = (
+    "jLeftShoulder_rotz",
+    "jLeftShoulder_roty",
+    "jLeftShoulder_rotx",
+    "jLeftElbow_roty",
+    "jLeftWrist_rotation",
+)
+LEFT_HAND_LINK = "left_hand"
 UPPER_ARM_LENGTH_M = 0.305
 FOREARM_LENGTH_M = 0.310
 RIGHT_GRIP_OFFSET_M = (0.105, 0.0, 0.0)
+LEFT_GRIP_OFFSET_M = (-0.105, 0.0, 0.0)
 
 
 @contextmanager
@@ -48,6 +57,19 @@ def load_right_arm(
         )
 
 
+def load_left_arm(
+    client=p,
+    base_position=(0.0, 0.0, 0.7),
+    base_orientation=(0.0, 0.0, 0.0, 1.0),
+) -> int:
+    """Load the exact X-reflected arm; its URDF contains the mirrored base pose."""
+    with model_directory():
+        return client.loadURDF(
+            "arm/left_arm.urdf", base_position, base_orientation,
+            useFixedBase=True,
+        )
+
+
 def link_name_index(body_id: int, client=p) -> dict[str, int]:
     result = {client.getBodyInfo(body_id)[0].decode("utf-8"): -1}
     result.update({
@@ -67,14 +89,18 @@ def moving_joint_indices(body_id: int, client=p) -> tuple[int, ...]:
     return tuple(index for _, index in sorted(entries))
 
 
-def inspect_model(body_id: int, client=p) -> list[dict[str, object]]:
+def inspect_model(
+    body_id: int,
+    client=p,
+    urdf_name: str = "right_arm.urdf",
+) -> list[dict[str, object]]:
     """Return URDF-origin, motion-limit, mass and inertia data for every joint."""
     rows = []
     # PyBullet reports parent frame positions relative to the parent's inertial
     # frame, which are not the xyz values written in the URDF. Keep both.
     urdf_joints = {
         element.attrib["name"]: element
-        for element in ET.parse(SIM_DIR / "arm" / "right_arm.urdf").getroot().findall("joint")
+        for element in ET.parse(SIM_DIR / "arm" / urdf_name).getroot().findall("joint")
     }
     base_name = client.getBodyInfo(body_id)[0].decode("utf-8")
     for index in range(client.getNumJoints(body_id)):

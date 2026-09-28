@@ -2,15 +2,18 @@
 
 ## Model
 
-The interactive scene loads `sim/arm/right_arm.urdf`. The trajectory and
-manual-slider tools load `left_arm.urdf`. Direct preview and playback use
+The interactive scene loads `sim/arm/left_arm.urdf`, an exact geometric mirror
+of the proven right-arm chain with the HT25 appearance. Direct preview uses
 `resetJointState`; Physics mode uses gravity and position motors.
 
-The right URDF has **five driven arm joints**: shoulder Z and Y, upper-arm X
+The left URDF has **five driven arm joints**: shoulder Z and Y, upper-arm X
 rotation, elbow Y, and forearm/wrist X rotation, plus articulated fingers.
 Wrist bend and deviation are fixed. The [older HT25 simulation](https://github.com/MDU-C2/LIMB-HT25/tree/main/LIMB%20Simulation)
 described seven arm DOFs. `sim/joint_limits.py` holds the current
-firmware-derived limits, which are also encoded in the URDFs.
+firmware-derived limits, which are also encoded in the URDFs. The nominal
+shoulder command is 0 to 90 degrees, but the firmware says the assembled
+mechanism achieves about 75 degrees, so 75 degrees is the simulation maximum.
+See [Joint limits](JOINT_LIMITS.md).
 
 The old BOM's seven arm motors are not the same as seven verified joints. It
 lists three NEMA17, two NEMA23, and two HV2060MG motors, while the final firmware
@@ -22,11 +25,16 @@ HT25 [control-layer FK and Jacobian](https://github.com/MDU-C2/LIMB-HT25/blob/ma
 assume a different shoulder rotation order. The loaded URDF supplies FK and
 the Jacobian for `sim/dynamics.py`.
 
-The right model uses 0.305 m upper arm, 0.310 m forearm, and a 0.105 m grip
+The left model uses 0.305 m upper arm, 0.310 m forearm, and a 0.105 m grip
 offset: about 0.720 m straight reach. The old 0.120 m hand estimate gives a
-different reach. The wrist origin is `(0.310, 0.0085, -0.005)` m. A fixed +90°
-base rotation is in the right URDF; the left playback loader uses a separate
-base orientation.
+different reach. The entire right-arm mechanism is reflected across world X,
+and the target and camera view are reflected with it.
+
+The imported `r_shoulder_base.stl` and `r_shoulder.stl` skins are mounted on
+the same shoulder-elevation stage, as one visual assembly. This preserves the
+legacy CAD alignment throughout W/S movement instead of letting one skin turn
+through the other. The bicep still starts at the CAD's 0.116 m offset, so this
+visual correction does not alter shoulder-to-elbow length or end-effector FK.
 
 Repeated link masses and inertias in the URDF appear to be placeholders.
 `sim/controller_params.py` contains simulation gains and torque caps. Neither

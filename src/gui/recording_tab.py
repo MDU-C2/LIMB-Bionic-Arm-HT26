@@ -89,6 +89,7 @@ class RecordingTabMixin:
         self.recordings_scan_error = ""
         self.recordings_scan_truncated = False
         self.recordings_filter_after: str | None = None
+        self._known_serial_ports: tuple[str, ...] = ()
 
     def _bind_recording_traces(self) -> None:
         self.recording_program.trace_add(
@@ -370,8 +371,36 @@ class RecordingTabMixin:
             self.recording_port_box.configure(values=ports)
         if hasattr(self, "fusion_port_box"):
             self.fusion_port_box.configure(values=ports)
-        if not self.recording_serial_port.get() and ports:
-            self.recording_serial_port.set(ports[0])
+        if hasattr(self, "port_box"):
+            self.port_box.configure(values=ports)
+        selected_recording_port = self.recording_serial_port.get().strip()
+        if selected_recording_port not in ports:
+            self.recording_serial_port.set(ports[0] if ports else "")
+        if hasattr(self, "serial_port"):
+            selected_firmware_port = self.serial_port.get().strip()
+            if selected_firmware_port not in ports:
+                self.serial_port.set(ports[0] if ports else "")
+        self._known_serial_ports = tuple(ports)
+
+    def _poll_serial_ports(self) -> None:
+        """Keep ESP32 port selectors current when hardware is hot-plugged."""
+        ports = tuple(serial_ports())
+        if ports != self._known_serial_ports:
+            self._refresh_recording_ports()
+            if ports:
+                self._append_log(f"Serial ports detected: {', '.join(ports)}\n")
+                selected = self.recording_serial_port.get().strip()
+                reader_needs_port = (
+                    not self.serial_sensor_reader.running
+                    or self.serial_sensor_reader.port != selected
+                )
+                if selected and reader_needs_port and not self._active_processes("firmware"):
+                    self.start_serial_dashboard(show_window=False)
+            else:
+                self.serial_sensor_reader.stop()
+                self._set_serial_connection("No serial port detected")
+            self._update_controls()
+        self.after(1500, self._poll_serial_ports)
 
     def _start_serial_dashboard_if_available(self) -> None:
         """Connect automatically and keep readings outside the main window."""

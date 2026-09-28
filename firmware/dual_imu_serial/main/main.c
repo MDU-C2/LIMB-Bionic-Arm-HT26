@@ -35,9 +35,10 @@
 #define SAMPLE_PERIOD_MS 20
 #define RETRY_PERIOD_MS 1000
 
-/* +-4 g and +-500 dps, matching the final LIMB-HT25 human-arm change. */
+/* +-4 g and +-250 dps, matching LIMB-HT25 and the last hardware-verified
+ * single-IMU streamer in this repository. */
 #define ACCEL_G_PER_LSB 0.000122F
-#define GYRO_DPS_PER_LSB 0.01750F
+#define GYRO_DPS_PER_LSB 0.00875F
 
 typedef struct {
   bool connected;
@@ -69,7 +70,7 @@ static esp_err_t configure_imu(uint8_t address) {
   /* BDU + IF_INC.  Both sensors sample at 104 Hz; serial output is 50 Hz. */
   if ((error = write_register(address, CTRL3_C, 0x44)) != ESP_OK ||
       (error = write_register(address, CTRL1_XL, 0x40)) != ESP_OK ||
-      (error = write_register(address, CTRL2_G, 0x44)) != ESP_OK) {
+      (error = write_register(address, CTRL2_G, 0x40)) != ESP_OK) {
     return error;
   }
   vTaskDelay(pdMS_TO_TICKS(40));

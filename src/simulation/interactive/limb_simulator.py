@@ -37,12 +37,16 @@ from sim.controller_params import (
 from sim.contact_feedback import estimate_contact_force_n, grasp_is_ready
 from sim.dynamics import ArmDynamics
 from sim.joint_limits import (
-    RIGHT_ARM_HARDWARE_SIGN,
-    RIGHT_ARM_LIMITS_DEG,
+    LEFT_ARM_HARDWARE_SIGN,
+    LEFT_ARM_LIMITS_DEG,
     finger_joint_angles_rad,
     max_velocity_rad_s,
 )
-from sim.robot_model import RIGHT_GRIP_OFFSET_M
+from sim.robot_model import (
+    LEFT_ARM_JOINTS,
+    LEFT_GRIP_OFFSET_M,
+    LEFT_HAND_LINK,
+)
 from torque_graph import TorqueGraph
 from live_sensor_input import LiveSensorInput
 from sensor_fusion import interactive_control_targets
@@ -59,7 +63,7 @@ parser.add_argument(
     "--control",
     choices=("keyboard", "camera-imu"),
     default="keyboard",
-    help="Use keyboard controls or live OAK-D plus dual-IMU control",
+    help="Use keyboard controls or live OAK-D plus one/two-IMU control",
 )
 parser.add_argument("--port", help="Dual-IMU ESP32 serial port for live control")
 parser.add_argument("--baud", type=int, default=115200)
@@ -87,7 +91,7 @@ SAFE_REACH_DISTANCE_M = 0.10
 # rejecting the manual F grip because the unrounded distance is just above it.
 GRASP_CAPTURE_DISTANCE_M = 0.25
 TARGET_NORMAL_MASS_KG = 0.1
-HAND_GRIP_OFFSET_M = RIGHT_GRIP_OFFSET_M
+HAND_GRIP_OFFSET_M = LEFT_GRIP_OFFSET_M
 MIN_GRASP_CURL = 0.45
 MAX_GRASP_CURL = 1.5
 MIN_GRASP_FINGERTIPS = 2
@@ -103,8 +107,9 @@ READY_POSE_DEG = {
     "shoulder_x": 0.0,
     "shoulder_y": 15.0,
     "shoulder_z": -18.0,
-    "elbow_x": -20.0,
-    "wrist_rotation": 70.0,
+    "elbow_x": 20.0,
+    # HT25's neutral pose and reset command both use zero wrist rotation.
+    "wrist_rotation": 0.0,
 }
 CAMERA_MODES = ("overview", "shoulder", "hand")
 
@@ -128,13 +133,13 @@ def rad_to_deg(rad: float) -> float:
 
 
 def hardware_value(logical_name: str, value: float) -> float:
-    """Convert a right-arm URDF value to the physical actuator sign."""
-    return value * RIGHT_ARM_HARDWARE_SIGN[logical_name]
+    """Convert a left-arm URDF value to the physical actuator sign."""
+    return value * LEFT_ARM_HARDWARE_SIGN[logical_name]
 
 
 def step_toward(current: float, target: float, joint_name: str, scale: float = 1.0) -> float:
     """Move a command toward a target without exceeding its actuator speed."""
-    limit = RIGHT_ARM_LIMITS_DEG[joint_name]
+    limit = LEFT_ARM_LIMITS_DEG[joint_name]
     target = limit.clamp(target)
     difference = target - current
     if difference == 0:
@@ -147,7 +152,7 @@ class ManualMotion:
     """Turn held keys into smooth, firmware-limited joint movement."""
 
     def __init__(self) -> None:
-        self.velocity_deg_s = {name: 0.0 for name in RIGHT_ARM_LIMITS_DEG}
+        self.velocity_deg_s = {name: 0.0 for name in LEFT_ARM_LIMITS_DEG}
 
     def reset(self) -> None:
         for name in self.velocity_deg_s:
@@ -163,7 +168,7 @@ class ManualMotion:
         speed_scale: float,
     ) -> float:
         direction = int(bool(keys[positive_key])) - int(bool(keys[negative_key]))
-        limit = RIGHT_ARM_LIMITS_DEG[joint_name]
+        limit = LEFT_ARM_LIMITS_DEG[joint_name]
         target_velocity = direction * limit.speed(direction) * speed_scale
         current_velocity = self.velocity_deg_s[joint_name]
 
@@ -192,9 +197,9 @@ class Shoulder:
 
     def __init__(self) -> None:
         """Initialize the shoulder in its neutral pose."""
-        x_limit = RIGHT_ARM_LIMITS_DEG["shoulder_x"]
-        y_limit = RIGHT_ARM_LIMITS_DEG["shoulder_y"]
-        z_limit = RIGHT_ARM_LIMITS_DEG["shoulder_z"]
+        x_limit = LEFT_ARM_LIMITS_DEG["shoulder_x"]
+        y_limit = LEFT_ARM_LIMITS_DEG["shoulder_y"]
+        z_limit = LEFT_ARM_LIMITS_DEG["shoulder_z"]
         self.angle_x = x_limit.home
         self.angle_y = y_limit.home
         self.angle_z = z_limit.home
@@ -208,7 +213,7 @@ class Elbow:
 
     def __init__(self) -> None:
         """Initialize elbow flexion."""
-        x_limit = RIGHT_ARM_LIMITS_DEG["elbow_x"]
+        x_limit = LEFT_ARM_LIMITS_DEG["elbow_x"]
         self.angle_x = x_limit.home
         self.min_angle_x, self.max_angle_x = x_limit.lower, x_limit.upper
 
@@ -217,7 +222,7 @@ class Wrist:
     """Command for the driven wrist rotation."""
 
     def __init__(self) -> None:
-        rotation_limit = RIGHT_ARM_LIMITS_DEG["wrist_rotation"]
+        rotation_limit = LEFT_ARM_LIMITS_DEG["wrist_rotation"]
         self.rotation = rotation_limit.home
         self.min_rotation = rotation_limit.lower
         self.max_rotation = rotation_limit.upper
@@ -341,7 +346,11 @@ def sync_to_pybullet(
         force = FINGER_MOTOR_FORCE_NM if is_finger else ARM_MOTOR_FORCE_NM[name]
         p_gain = FINGER_POSITION_GAIN if is_finger else ARM_POSITION_GAIN
         v_gain = FINGER_VELOCITY_GAIN if is_finger else ARM_VELOCITY_GAIN
-        max_velocity = FINGER_PREVIEW_SPEED_RAD_S if is_finger else max_velocity_rad_s(name)
+        max_velocity = (
+            FINGER_PREVIEW_SPEED_RAD_S
+            if is_finger
+            else max_velocity_rad_s(name, LEFT_ARM_LIMITS_DEG)
+        )
 
         if use_motors:
             urdf_joint = cli.getJointInfo(body_id, joint_index)
@@ -368,11 +377,11 @@ def sync_to_pybullet(
             )
 
 URDF_TO_LOGICAL_JOINT = {
-    "jRightShoulder_rotx": "shoulder_x",
-    "jRightShoulder_roty": "shoulder_y",
-    "jRightShoulder_rotz": "shoulder_z",
-    "jRightElbow_roty": "elbow_x",
-    "jRightWrist_rotation": "wrist_rotation",
+    "jLeftShoulder_rotx": "shoulder_x",
+    "jLeftShoulder_roty": "shoulder_y",
+    "jLeftShoulder_rotz": "shoulder_z",
+    "jLeftElbow_roty": "elbow_x",
+    "jLeftWrist_rotation": "wrist_rotation",
     "thumb_joint_1": "thumb_1",
     "thumb_joint_2": "thumb_2",
     "thumb_joint_3": "thumb_3",
@@ -398,7 +407,7 @@ LOGICAL_TO_URDF_JOINT = {
 
 
 def build_joint_index_map(robot_id: int, client) -> dict[str, int]:
-    """Map logical controller names to their indices in the right-arm URDF."""
+    """Map logical controller names to their indices in the left-arm URDF."""
     joint_map: dict[str, int] = {}
     for joint_index in range(client.getNumJoints(robot_id)):
         joint_info = client.getJointInfo(robot_id, joint_index)
@@ -450,7 +459,7 @@ def resolve_link_index(
 # PyBullet scene
 simulator_dir = os.path.abspath(os.path.dirname(__file__))
 model_dir = os.path.abspath(os.path.join(simulator_dir, "..", "sim"))
-urdf_path = os.path.join(model_dir, "arm", "right_arm.urdf")
+urdf_path = os.path.join(model_dir, "arm", "left_arm.urdf")
 
 print(f"Simulator mode: {args.mode}")
 print(f"Simulator directory: {simulator_dir}")
@@ -484,7 +493,8 @@ p.setPhysicsEngineParameter(
 p.loadURDF("plane.urdf")
 p.loadURDF("table/table.urdf", [0, 0.8, -0.2], useFixedBase=True)
 
-target_start_position = [0.2, 0.6, 0.5]
+# Mirror the proven right-arm task across world X together with the arm.
+target_start_position = [-0.2, 0.6, 0.5]
 target_start_orientation = p.getQuaternionFromEuler([0, 0, 0])
 cup_collision_shape = p.createCollisionShape(
     shapeType=p.GEOM_CYLINDER,
@@ -528,7 +538,7 @@ def anchor_target_to_world() -> int:
 target_anchor_constraint = anchor_target_to_world()
 p.resetDebugVisualizerCamera(
     cameraDistance=1.25,
-    cameraYaw=45,
+    cameraYaw=-45,
     cameraPitch=-24,
     cameraTargetPosition=[0, 0.35, 0.45]
 )
@@ -537,6 +547,8 @@ p.resetDebugVisualizerCamera(
 
 try:
     print("Attempting to load robot...")
+    # left_arm.urdf is a complete world-X reflection of the proven right arm.
+    # Its own mirrored base joint already points it toward the task table.
     base_orientation = p.getQuaternionFromEuler([0, 0, 0])
 
     # PyBullet on Windows cannot open a non-ASCII absolute path reliably. Load
@@ -546,7 +558,7 @@ try:
     try:
         p.setAdditionalSearchPath(".")
         robot_body = p.loadURDF(
-            "arm/right_arm.urdf",
+            "arm/left_arm.urdf",
             [0, 0, 0.7],
             base_orientation,
             useFixedBase=True,
@@ -580,7 +592,7 @@ try:
 
 except p.error as error:
     print("\n--- ERROR LOADING ROBOT ---")
-    print("Check that right_arm.urdf and its STL files are in src/simulation/sim/arm.")
+    print("Check that left_arm.urdf and its STL files are in src/simulation/sim/arm.")
     print(f"PyBullet error: {error}")
     p.disconnect()
     raise SystemExit(1) from error
@@ -593,27 +605,33 @@ set_ready_pose(arm)
 manual_motion = ManualMotion()
 joint_indices = build_joint_index_map(robot_body, p)
 sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
-dynamics = ArmDynamics(robot_body, p)
+dynamics = ArmDynamics(
+    robot_body,
+    p,
+    arm_joint_names=LEFT_ARM_JOINTS,
+    hand_link=LEFT_HAND_LINK,
+    grip_offset=LEFT_GRIP_OFFSET_M,
+)
 link_indices_by_name = build_link_name_index_map(robot_body, p)
 
 try:
     hand_link_name, hand_link_index = resolve_link_index(
         link_indices_by_name,
-        ("right_hand", "RightHand"),
+        ("left_hand", "LeftHand"),
         "hand",
     )
     print(f"Link 'Hand' found: {hand_link_name} (Index: {hand_link_index})")
 
     wrist_link_name, wrist_link_index = resolve_link_index(
         link_indices_by_name,
-        ("right_wrist_rotation",),
+        ("left_wrist_rotation", "left_hand"),
         "wrist",
     )
     print(f"Link 'Wrist' found: {wrist_link_name} (Index: {wrist_link_index})")
 
     elbow_link_name, elbow_link_index = resolve_link_index(
         link_indices_by_name,
-        ("right_forearm", "RightForeArm"),
+        ("left_forearm", "LeftForeArm"),
         "forearm",
     )
     print(f"Link 'Elbow' found: {elbow_link_name} (Index: {elbow_link_index})")
@@ -830,7 +848,7 @@ reach_line_id = -1
 target_text_id = -1
 
 camera_mode = CAMERA_MODES[0]
-default_cam_yaw = 45
+default_cam_yaw = -45
 default_cam_pitch = -24
 default_cam_target = [0, 0.35, 0.45]
 notice_text = "Ready - click this window to control the arm"
@@ -930,7 +948,7 @@ if args.control == "camera-imu":
     )
     try:
         live_sensor_input.start()
-        notice_text = "Live camera + dual-IMU control active"
+        notice_text = "Live camera + IMU control active (auto-detecting 1 or 2 sensors)"
         print(f"Live control: {args.port} at {args.baud} baud, {args.side} arm")
     except Exception as error:
         if telemetry_file is not None:
@@ -977,6 +995,7 @@ while running and p.isConnected():
     reset_requested = False
     interact_requested = False
     camera_changed = False
+    calibrate_requested = False
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -992,6 +1011,9 @@ while running and p.isConnected():
 
             if event.key == pygame.K_r:
                 reset_requested = True
+
+            if event.key == pygame.K_k and live_sensor_input is not None:
+                calibrate_requested = True
 
             if event.key in (pygame.K_c, pygame.K_TAB):
                 camera_index = (CAMERA_MODES.index(camera_mode) + 1) % len(CAMERA_MODES)
@@ -1052,6 +1074,13 @@ while running and p.isConnected():
         interact_requested = True
     if bullet_key_triggered("r"):
         reset_requested = True
+    if bullet_key_triggered("k") and live_sensor_input is not None:
+        calibrate_requested = True
+
+    if calibrate_requested:
+        live_sensor_input.calibrate()
+        notice_text = "Live sensors recalibrated - hold the arm down and still"
+        notice_until_ms = pygame.time.get_ticks() + 2600
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_ESCAPE]:
@@ -1138,7 +1167,7 @@ while running and p.isConnected():
                 relative_z,
             )
             world_azimuth = math.atan2(relative_y, relative_x)
-            target_shoulder_z = math.degrees(world_azimuth - math.pi / 2.0)
+            target_shoulder_z = math.degrees(math.pi / 2.0 - world_azimuth)
             while target_shoulder_z > 180:
                 target_shoulder_z -= 360
             while target_shoulder_z <= -180:
@@ -1192,6 +1221,17 @@ while running and p.isConnected():
         if delta_hand:
             new_value = arm.hand.curl + delta_hand
             arm.hand.curl = clamp(new_value, arm.hand.min_curl, arm.hand.max_curl)
+        elif (
+            args.control == "camera-imu"
+            and live_snapshot is not None
+            and live_snapshot.hand_curl is not None
+        ):
+            target_curl = live_snapshot.hand_curl * MAX_GRASP_CURL
+            arm.hand.curl += clamp(
+                target_curl - arm.hand.curl,
+                -hand_step,
+                hand_step,
+            )
 
     # Match LIMB-HT25 manual handling: holding F inside 20 cm closes the hand
     # and immediately secures the object. Space keeps the assisted workflow.
@@ -1383,8 +1423,8 @@ while running and p.isConnected():
         )
         delta_should_z = manual_motion.step(
             keys,
-            pygame.K_a,
             pygame.K_d,
+            pygame.K_a,
             "shoulder_z",
             arm.shoulder.angle_z,
             speed_mult,
@@ -1407,8 +1447,8 @@ while running and p.isConnected():
 
         delta_elbow_x = manual_motion.step(
             keys,
-            pygame.K_DOWN,
             pygame.K_UP,
+            pygame.K_DOWN,
             "elbow_x",
             arm.elbow.angle_x,
             speed_mult,
@@ -1558,7 +1598,7 @@ while running and p.isConnected():
     elif camera_mode == "shoulder":
         p.resetDebugVisualizerCamera(
             cameraDistance=0.65,
-            cameraYaw=40,
+            cameraYaw=-40,
             cameraPitch=-18,
             cameraTargetPosition=[
                 robot_position[0],
@@ -1569,7 +1609,7 @@ while running and p.isConnected():
     elif camera_mode == "hand":
         p.resetDebugVisualizerCamera(
             cameraDistance=0.48,
-            cameraYaw=45,
+            cameraYaw=-45,
             cameraPitch=-22,
             cameraTargetPosition=hand_position,
         )
@@ -1644,7 +1684,7 @@ while running and p.isConnected():
         98,
         "F / G",
         "Close / open fingers",
-        f"{arm.hand.curl * 100:.0f}%",
+        f"{arm.hand.curl / MAX_GRASP_CURL * 100:.0f}%",
         action_x,
     )
     draw_control_row(
@@ -1662,7 +1702,13 @@ while running and p.isConnected():
         action_x,
     )
     draw_control_row(203, "C / 1-3", "Change camera", camera_mode, action_x)
-    draw_control_row(238, "R", "Reset scene", "", action_x)
+    draw_control_row(
+        238,
+        "R / K" if live_sensor_input is not None else "R",
+        "Reset / calibrate" if live_sensor_input is not None else "Reset scene",
+        "",
+        action_x,
+    )
 
     pygame.draw.rect(screen, (24, 31, 43), pygame.Rect(16, 296, 748, 58), border_radius=8)
     draw_text(status_text, (30, 305), status_color, font)
@@ -1671,7 +1717,9 @@ while running and p.isConnected():
         current_notice = "Click here for controls; task keys also work in the 3D scene"
     elif not current_notice:
         current_notice = (
-            "Ctrl precise | T guide | P previews | I sensors | Esc quit"
+            "Ctrl precise | T guide | P previews | I sensors | K calibrate | Esc quit"
+            if live_sensor_input is not None
+            else "Ctrl precise | T guide | P previews | I sensors | Esc quit"
         )
     draw_text(current_notice, (30, 331), (164, 178, 198), font_small)
 
@@ -1706,7 +1754,7 @@ while running and p.isConnected():
             )
 
         if physics_snapshot is not None:
-            shoulder_column = dynamics.names.index("jRightShoulder_roty")
+            shoulder_column = dynamics.names.index("jLeftShoulder_roty")
             gravity_hold = physics_snapshot["gravity_torque_Nm"][shoulder_column]
             velocity = physics_snapshot["end_effector"]["velocity_m_s"]
             grip_speed = math.sqrt(sum(component**2 for component in velocity))

@@ -11,7 +11,7 @@ micromamba run -n aurora-simulation python src/gui/app.py
 | Tab | Use |
 | --- | --- |
 | Simulation | Run the interactive task arm by keyboard or live camera/IMU fusion. |
-| Recording | Capture OAK-D and the dual-IMU serial stream as one session. |
+| Recording | Capture OAK-D and synchronized dual-IMU Bluetooth data as one session. |
 | Recordings | Browse files created by the recorders. |
 | Motion AI | Play camera poses or run movement recognition. |
 | Firmware | Build, flash, and monitor the ESP-IDF project through the project environment. |
@@ -26,9 +26,12 @@ It releases the port before recording, flashing, or starting live sensor fusion.
 a recording. Live interactive control opens its own annotated camera monitor,
 so close the standalone preview before starting that mode.
 
-The Recording page defaults to the two current sources: OAK-D and the ESP32
-dual-IMU serial stream. The legacy LIMB25 BLE recorder is still discoverable for
-compatibility, but its extra cuff channels do not clutter the main workflow.
+The Recording page defaults to OAK-D plus the Bluetooth IMU and EMG streams.
+IMU, EMG, and piezo can be enabled independently; if a selected characteristic
+is unavailable, the recorder keeps every other connected stream running. Device
+timestamps are mapped to the same host monotonic clock saved with camera frames.
+The serial IMU stream remains available for diagnostics and the legacy LIMB25
+BLE characteristics remain readable.
 
 ## GUI files
 
@@ -36,6 +39,6 @@ compatibility, but its extra cuff channels do not clutter the main workflow.
 - `sensor_window.py` renders the separate dual-IMU monitor.
 - `recording_tab.py` coordinates preview, capture, and recording browsing.
 - `simulation_tabs.py` launches simulation, fusion, and Motion AI tools.
-- `project_tabs.py` handles ESP-IDF/PlatformIO commands and project status.
+- `project_tabs.py` handles native ESP-IDF commands and project status.
 - `process_manager.py` supervises programs opened by the GUI.
 - `project_support.py` contains paths and discovery helpers.

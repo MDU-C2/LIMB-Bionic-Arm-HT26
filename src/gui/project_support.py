@@ -8,9 +8,9 @@ focused on composing the interface.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import importlib.util
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -18,7 +18,6 @@ import sys
 
 GUI_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = GUI_DIR.parents[1]
-FIRMWARE_RUNNER_SCRIPT = GUI_DIR / "firmware_runner.py"
 INTERACTIVE_SIMULATION_SCRIPT = (
     REPOSITORY_ROOT / "src" / "simulation" / "interactive" / "limb_simulator.py"
 )
@@ -44,7 +43,7 @@ RECORDING_EXTENSIONS = {
 RECORDING_ENTRYPOINT_PREFIXES = ("record", "capture")
 RECORDER_DETAILS = {
     "record_ble_sensors.py": (
-        "Legacy LIMB25 BLE cuff recorder for raw EMG and IMU data."
+        "Synchronized AURORA/LIMB BLE recorder for IMU, EMG, and piezo data."
     ),
     "record_serial_sensors.py": (
         "Serial recorder for newline-delimited JSON and other sensor messages."
@@ -282,18 +281,11 @@ def discover_recording_programs() -> dict[str, Path]:
 
 
 def discover_firmware_projects() -> dict[str, FirmwareProject]:
-    """Find PlatformIO and native ESP-IDF projects below ``firmware``."""
+    """Find native ESP-IDF projects below ``firmware``."""
     projects: dict[str, FirmwareProject] = {}
     root = REPOSITORY_ROOT / "firmware"
     if not root.is_dir():
         return projects
-    for path in root.rglob("platformio.ini"):
-        directory = path.parent
-        projects[display_path(directory)] = FirmwareProject(
-            directory,
-            "PlatformIO (ESP-IDF)",
-            "platformio",
-        )
     for path in root.rglob("CMakeLists.txt"):
         directory = path.parent
         try:
@@ -301,8 +293,10 @@ def discover_firmware_projects() -> dict[str, FirmwareProject]:
         except OSError:
             continue
         if "project(" in content and "IDF_PATH" in content:
-            projects.setdefault(
-                display_path(directory), FirmwareProject(directory, "ESP-IDF", "idf.py")
+            projects[display_path(directory)] = FirmwareProject(
+                directory,
+                "ESP-IDF",
+                "idf.py",
             )
     return dict(sorted(projects.items()))
 
@@ -313,25 +307,25 @@ def executable_available(name: str) -> bool:
 
 
 def resolve_firmware_tool(project: FirmwareProject) -> tuple[str, ...] | None:
-    """Resolve a firmware CLI from PATH or an installed Python module."""
-    names = (
-        ("pio", "platformio")
-        if project.executable == "platformio"
-        else (project.executable,)
-    )
-    for name in names:
-        executable = shutil.which(name)
-        if executable:
-            return (executable,)
+    """Resolve native IDF first, then a project-pinned ESP-IDF PlatformIO."""
+    executable = shutil.which(project.executable)
+    if executable:
+        return (executable,)
 
-    module = "platformio" if project.executable == "platformio" else None
-    if module and importlib.util.find_spec(module) is not None:
-        return (str(console_python(Path(sys.executable))), "-m", module)
-    if module:
-        for python in simulation_python_candidates():
-            if has_python_dependencies(python, (module,)):
-                return (str(python), "-m", module)
-    return None
+    configuration = project.directory / "platformio.ini"
+    try:
+        content = configuration.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    if re.search(r"(?im)^\s*framework\s*=\s*espidf\s*$", content) is None:
+        return None
+
+    platformio = shutil.which("platformio")
+    if platformio is None and os.name == "nt":
+        local = Path.home() / ".platformio" / "penv" / "Scripts" / "platformio.exe"
+        if local.is_file():
+            platformio = str(local)
+    return (platformio, "run") if platformio else None
 
 
 def firmware_command(
@@ -346,20 +340,14 @@ def firmware_command(
     if action not in {"build", "flash", "monitor"}:
         raise ValueError(f"Unsupported firmware action: {action}")
 
-    command = list(tool)
-    if project.executable == "platformio":
-        return [
-            str(console_python(Path(sys.executable))),
-            str(FIRMWARE_RUNNER_SCRIPT),
-            action,
-            "--project",
-            str(project.directory),
-            "--port",
-            port,
-            "--tool",
-            *command,
-        ]
+    if len(tool) == 2 and tool[1] == "run":
+        if action == "build":
+            return list(tool)
+        if action == "flash":
+            return [*tool, "-t", "upload", "--upload-port", port]
+        return [tool[0], "device", "monitor", "--port", port]
 
+    command = list(tool)
     if action in {"flash", "monitor"}:
         command.extend(["-p", port])
     command.append(action)

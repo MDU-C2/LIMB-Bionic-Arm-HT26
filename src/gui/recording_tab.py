@@ -11,6 +11,12 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+# ``app.py`` is launched directly from ``src/gui``, so sibling source folders
+# are not importable until they are explicitly added to the module search path.
+RECORDING_MODULE_DIR = Path(__file__).resolve().parents[1] / "recording"
+if str(RECORDING_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(RECORDING_MODULE_DIR))
+
 from project_support import (
     DEFAULT_RECORDINGS_DIRECTORY,
     RECORDER_DETAILS,
@@ -22,7 +28,8 @@ from project_support import (
     project_path,
     serial_ports,
 )
-from serial_sensor import SerialSensorReader, decode_sensor_packet
+from imu_protocol import extract_imus, ImuStreamDecoder
+from serial_sensor import SerialSensorReader
 from sensor_window import ImuMonitorWindow
 
 
@@ -33,25 +40,34 @@ MAINTAINED_SOURCES = (
         "Save video, body/arm pose, and selected-hand landmarks.",
     ),
     (
-        "record_serial_sensors.py",
-        "Dual-IMU ESP32",
-        "Save the shoulder and wrist samples from the shared serial stream.",
+        "record_ble_sensors.py",
+        "ESP32 sensors (Bluetooth)",
+        "Save selected IMU, EMG, and piezo streams on the shared clock.",
     ),
 )
 
-DEFAULT_BATCH_SOURCES = {"record_serial_sensors.py", "record_oak_pose.py"}
+DEFAULT_BATCH_SOURCES = {"record_ble_sensors.py", "record_oak_pose.py"}
+BLE_SENSOR_OPTIONS = (
+    ("imu", "IMU"),
+    ("emg", "EMG"),
+    ("piezo", "Piezo"),
+)
 
 
 def batch_arguments(
     filename: str,
     camera_arguments: list[str],
     dataset_label: str = "",
+    ble_sensors: tuple[str, ...] = (),
 ) -> list[str]:
     """Return source-specific arguments without leaking options to other recorders."""
     if filename == "record_oak_pose.py":
         return ["--auto-start", *camera_arguments]
-    if filename == "record_ble_sensors.py" and dataset_label:
-        return ["--dataset-label", dataset_label]
+    if filename == "record_ble_sensors.py":
+        arguments = ["--sensors", *ble_sensors] if ble_sensors else []
+        if dataset_label:
+            arguments.extend(("--dataset-label", dataset_label))
+        return arguments
     return []
 
 
@@ -68,11 +84,17 @@ class RecordingTabMixin:
         self.recording_duration = tk.StringVar(value="0")
         self.recording_camera_side = tk.StringVar(value="left")
         self.recording_ble_device = tk.StringVar(value="LIMBServer")
+        self.recording_ble_sensors = {
+            name: tk.BooleanVar(value=name in {"imu", "emg"})
+            for name, _label in BLE_SENSOR_OPTIONS
+        }
         self.recording_ble_dataset = tk.BooleanVar(value=False)
         self.recording_movement_label = tk.StringVar(value="1")
         self.recording_serial_port = tk.StringVar()
         self.recording_serial_baud = tk.StringVar(value="115200")
         self.serial_sensor_reader = SerialSensorReader()
+        self.serial_imu_decoder = ImuStreamDecoder()
+        self.latest_serial_sensor_packet: dict[str, object] | None = None
         self.serial_sensor_connection = tk.StringVar(value="Waiting for a serial port")
         self.imu_monitor: ImuMonitorWindow | None = None
         self.recording_sources = {
@@ -100,6 +122,8 @@ class RecordingTabMixin:
         )
         for variable in self.recording_sources.values():
             variable.trace_add("write", lambda *_: self._update_controls())
+        for variable in self.recording_ble_sensors.values():
+            variable.trace_add("write", lambda *_: self._update_controls())
 
     def _build_recording_tab(self, tab: ttk.Frame) -> None:
         """Build batch recording controls and an advanced single-recorder path."""
@@ -115,8 +139,8 @@ class RecordingTabMixin:
             tab,
             2,
             "Sources",
-            "The dual-IMU ESP32 and OAK-D camera are selected by default. Camera "
-            "recording starts automatically with the batch.",
+            "The Bluetooth sensors and OAK-D camera are selected by default. "
+            "Camera recording starts automatically with the batch.",
         )
         self.recording_source_buttons: dict[str, ttk.Checkbutton] = {}
         for row, (filename, title, description) in enumerate(MAINTAINED_SOURCES, start=2):
@@ -208,8 +232,40 @@ class RecordingTabMixin:
             row=0, column=3, padx=(8, 0)
         )
 
+        ble_row = ttk.Frame(settings, style="Card.TFrame")
+        ble_row.grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        ble_row.columnconfigure(0, weight=1)
+        ble_row.columnconfigure(1, weight=2)
+        ttk.Label(ble_row, text="Bluetooth device", style="Card.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Entry(ble_row, textvariable=self.recording_ble_device).grid(
+            row=1, column=0, sticky="ew", pady=(4, 0)
+        )
+        ttk.Label(
+            ble_row,
+            text="Sensor streams (each connects independently)",
+            style="Card.TLabel",
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        sensor_choices = ttk.Frame(ble_row, style="Card.TFrame")
+        sensor_choices.grid(row=1, column=1, sticky="w", padx=(12, 0), pady=(4, 0))
+        for column, (name, label) in enumerate(BLE_SENSOR_OPTIONS):
+            ttk.Checkbutton(
+                sensor_choices,
+                text=label,
+                variable=self.recording_ble_sensors[name],
+                style="Card.TCheckbutton",
+            ).grid(row=0, column=column * 2, sticky="w", padx=(0, 5))
+            ttk.Button(
+                sensor_choices,
+                text="Preview",
+                command=lambda sensor=name: self.start_sensor_preview(
+                    "record_ble_sensors.py", sensor
+                ),
+            ).grid(row=0, column=column * 2 + 1, padx=(0, 12))
+
         option_row = ttk.Frame(settings, style="Card.TFrame")
-        option_row.grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        option_row.grid(row=5, column=0, sticky="ew", pady=(0, 10))
         option_row.columnconfigure(0, weight=1)
         ttk.Label(
             option_row,
@@ -221,7 +277,7 @@ class RecordingTabMixin:
         )
 
         output_row = ttk.Frame(settings, style="Card.TFrame")
-        output_row.grid(row=5, column=0, sticky="ew", pady=(0, 12))
+        output_row.grid(row=6, column=0, sticky="ew", pady=(0, 12))
         output_row.columnconfigure(1, weight=1)
         ttk.Label(output_row, text="Output", style="Card.TLabel").grid(
             row=0, column=0, padx=(0, 8)
@@ -234,7 +290,7 @@ class RecordingTabMixin:
         )
 
         action_row = ttk.Frame(settings, style="Card.TFrame")
-        action_row.grid(row=6, column=0, sticky="w")
+        action_row.grid(row=7, column=0, sticky="w")
         self.record_button = ttk.Button(
             action_row,
             text="Start selected sources",
@@ -416,6 +472,8 @@ class RecordingTabMixin:
                 lambda: self.start_serial_dashboard(show_window=False),
                 self._stop_serial_dashboard,
             )
+            if self.latest_serial_sensor_packet is not None:
+                self.imu_monitor.show_packet(self.latest_serial_sensor_packet)
         return self.imu_monitor
 
     def open_sensor_window(self) -> None:
@@ -454,6 +512,7 @@ class RecordingTabMixin:
             return
 
         self._set_serial_connection(f"Connecting to {port} at {baud} baud...")
+        self.serial_imu_decoder.reset()
         self.serial_sensor_reader.start(port, baud)
 
     def _stop_serial_dashboard(self) -> None:
@@ -478,8 +537,7 @@ class RecordingTabMixin:
                 elif event == "fatal":
                     self._set_serial_connection(str(value))
                 elif event == "line":
-                    text = str(value)
-                    packet = decode_sensor_packet(text)
+                    packet = self.serial_imu_decoder.feed(str(value))
                     if packet is not None:
                         self._show_serial_sensor_packet(packet)
                 elif event == "stopped" and not self.serial_sensor_reader.running:
@@ -490,6 +548,11 @@ class RecordingTabMixin:
 
     def _show_serial_sensor_packet(self, packet: dict[str, object]) -> None:
         """Forward one ESP32 packet to the separate monitor window."""
+        sensors = extract_imus(packet)
+        if not sensors:
+            return
+        if any(sensor.get("connected") is True for sensor in sensors.values()):
+            self.latest_serial_sensor_packet = packet
         self._set_serial_connection(
             f"Live data from {self.serial_sensor_reader.port} at "
             f"{self.serial_sensor_reader.baud} baud"
@@ -527,6 +590,14 @@ class RecordingTabMixin:
                 self.recording_sources[filename].set(False)
         self._recording_selection_changed()
 
+    def _selected_ble_sensors(self) -> tuple[str, ...]:
+        """Return BLE streams selected for the next recording."""
+        return tuple(
+            name
+            for name, _label in BLE_SENSOR_OPTIONS
+            if self.recording_ble_sensors[name].get()
+        )
+
     def _recording_setup(self, filenames: list[str]) -> tuple[dict[str, str], list[str]] | None:
         output_value = self.recording_output.get().strip()
         if not output_value:
@@ -553,6 +624,12 @@ class RecordingTabMixin:
             self._stop_serial_dashboard()
         if "record_ble_sensors.py" in filenames and not self.recording_ble_device.get().strip():
             messagebox.showerror("BLE device required", "Enter the LIMB BLE device name first.")
+            return None
+        if "record_ble_sensors.py" in filenames and not self._selected_ble_sensors():
+            messagebox.showerror(
+                "Bluetooth sensor required",
+                "Select at least one Bluetooth sensor stream (IMU, EMG, or piezo).",
+            )
             return None
         if "record_ble_sensors.py" in filenames and self.recording_ble_dataset.get():
             if not self.recording_movement_label.get().strip():
@@ -603,7 +680,12 @@ class RecordingTabMixin:
                 self.recording_movement_label.get().strip()
                 if self.recording_ble_dataset.get() else ""
             )
-            arguments = batch_arguments(filename, camera_arguments, dataset_label)
+            arguments = batch_arguments(
+                filename,
+                camera_arguments,
+                dataset_label,
+                self._selected_ble_sensors(),
+            )
             display_name = next(
                 title for candidate, title, _description in MAINTAINED_SOURCES
                 if candidate == filename
@@ -636,8 +718,17 @@ class RecordingTabMixin:
         if setup is None:
             return
         environment, arguments = setup
-        if program.name == "record_ble_sensors.py" and self.recording_ble_dataset.get():
-            arguments = ["--dataset-label", self.recording_movement_label.get().strip()]
+        if program.name == "record_ble_sensors.py":
+            dataset_label = (
+                self.recording_movement_label.get().strip()
+                if self.recording_ble_dataset.get() else ""
+            )
+            arguments = batch_arguments(
+                program.name,
+                arguments,
+                dataset_label,
+                self._selected_ble_sensors(),
+            )
         elif program.name == "record_oak_pose.py":
             arguments = ["--auto-start", *arguments]
         python = self.simulation_python or console_python(Path(sys.executable))

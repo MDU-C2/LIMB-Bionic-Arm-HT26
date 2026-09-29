@@ -23,7 +23,8 @@ controller, and the separate sensor display.
 | Show camera panels | P |
 | Show sensor display | I |
 | Recalibrate live IMUs | K (live mode) |
-| Reset | R |
+| Start live feedback after matching reference | L (live mode) |
+| Reset and return to straight-arm reference | R |
 | Quit | Escape |
 
 The GUI can start the simulator in direct mode or physics mode. Physics mode
@@ -48,7 +49,8 @@ control because only one process can own the camera.
 The **Motion AI** tab can play compatible OAK-D pose recordings and run the
 experimental movement-recognition model.
 
-Hold the tracked arm down and still, then press `K` in the simulator or `C` in
-the live camera window to establish the IMU anatomical zero. Press `Q` in the
-camera window to stop. See
+Live control begins paused with the simulated arm fully extended. Match that
+pose with the tracked real arm, then press `L` to calibrate and start feedback.
+Press `R` to pause and return to the reference pose, or `K` to recalibrate at
+the current pose. Press `Q` in the camera window to stop. See
 [Sensor data](SENSOR_DATA.md) for wiring and units.

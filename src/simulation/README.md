@@ -31,6 +31,7 @@ A shoulder IMU controls elevation and left/right movement; adding the wrist IMU
 enables relative-IMU elbow control. Camera tracking supplies absolute arm pose,
 the otherwise-unobservable axial-rotation proxy, and finger curl. A wrist-only
 sensor is monitored without being misidentified as the upper arm. Press `K` in
-the simulator to recalibrate while the tracked arm is down and still.
+the simulator to recalibrate. At startup, copy the simulated straight-arm pose
+and press `L` to start feedback. Press `R` to pause and align again.
 
 See [the simulation guide](../../docs/SIMULATION.md) for the controls.

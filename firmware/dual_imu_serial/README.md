@@ -1,33 +1,81 @@
-# Dual-IMU ESP32-C3 firmware
+# Dual-IMU ESP32-C3 ESP-IDF firmware
 
-This ESP-IDF target replaces the temporary single-IMU scanner. It keeps the
-verified GPIO 8/5 wiring from the current project and the LSM6DSO32 register
-setup/scaling from LIMB-HT25.
+This ESP-IDF-only target replaces the temporary single-IMU scanner. It keeps the
+GPIO 2/3 wiring from the current arm harness and the LSM6DSO32 register
+setup/scaling from LIMB-HT25. Bluetooth uses ESP-IDF NimBLE directly; there is
+no Arduino framework or third-party BLE library.
 
 Both IMUs share one I2C bus and must use different addresses:
 
 | Role | LSM6DSO32 address | SA0/SDO |
 | --- | --- | --- |
-| Shoulder | `0x6A` | Low / GND |
-| Wrist | `0x6B` | High / 3.3 V |
+| Shoulder | `0x6B` | High / 3.3 V |
+| Wrist | `0x6A` | Low / GND |
 
-Connect both SDA pins to ESP32-C3 GPIO 8, both SCL pins to GPIO 5, and share
+The sensor currently strapped over the brachialis is the shoulder-role sensor,
+so it must use address `0x6B`. The wrist sensor may be absent; firmware and GUI
+continue in single-IMU mode.
+
+Connect both SDA pins to ESP32-C3 GPIO 2, both SCL pins to GPIO 3, and share
 3.3 V and ground. Do not connect two sensors with the same address to this bus.
+At startup the firmware checks those requested pins first. If neither address
+answers, it also checks the verified LIMB-HT25 wiring on SDA GPIO 5/SCL GPIO 4
+and the previous archived firmware's SDA GPIO 4/SCL GPIO 5, followed by the
+older AURORA prototype wiring on SDA GPIO 8/SCL GPIO 5. It continues on
+whichever pair responds. The bus runs at the previous repo's reliable 100 kHz.
+The JSON `i2c` object reports the active pins/profile and sets `fallback` to
+`true` when an old pair is in use. For diagnosis it also tries the reversed and
+remaining pin pairs documented by the previous scanner. With no sensor
+connected it cycles these known pairs once per second, so hot-plugging is
+detected without a reboot.
 
-The GUI uses PlatformIO from the `aurora-simulation` environment to provide the
-ESP-IDF compiler and uploader without requiring `idf.py` on the global PATH:
+The `external_sda_pullup` and `external_scl_pullup` fields test whether the
+powered breakout's pull-ups physically reach each ESP32 pin. Both should be
+`true` on the correct pair. One `false` value indicates an open or miswired
+signal conductor even though the ESP32's internal pull-up can still make the
+reported idle line level appear high. Sensor errors distinguish a missing I2C
+acknowledgement from an unexpected `WHO_AM_I` value.
+
+Use the native ESP-IDF toolchain to build, flash, and monitor the target:
 
 ```powershell
 cd firmware/dual_imu_serial
-python -m platformio run
-python -m platformio run --target upload --upload-port COM4
-python -m platformio device monitor --port COM4 --baud 115200
+idf.py set-target esp32c3
+idf.py build
+idf.py -p COM4 flash monitor
 ```
 
-Native `idf.py build`, `idf.py -p COM4 flash`, and `idf.py -p COM4 monitor`
-remain supported when a full ESP-IDF installation is already active.
+If `idf.py` is not installed, the checked-in PlatformIO environment is an
+equivalent fallback and is pinned to `framework = espidf` (ESP-IDF 4.4.7):
+
+```powershell
+platformio run
+platformio run -t upload --upload-port COM4
+platformio device monitor --port COM4
+```
+
+PlatformIO is only the build runner here; Arduino is not installed or linked.
+
+The GUI's **Firmware** page prefers `idf.py` and automatically uses this
+ESP-IDF-only PlatformIO environment when the native command is unavailable.
 
 The device emits one `aurora.dual_imu.v1` JSON line every 20 ms at 115200 baud.
 The GUI labels the two entries as shoulder and wrist rather than relying on
 ambiguous `imu1`/`imu2` names. A missing address is emitted as disconnected, so
 the desktop program automatically changes between `1/2` and `2/2` IMU mode.
+
+At the sensor rate (100 Hz), the device also advertises as `LIMBServer` and
+notifies the existing LIMB IMU characteristic
+`25011525-1212-efde-1523-785feabcd122`. Its 38-byte little-endian packet is:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| format/flags | `uint16` | high byte `1`; bits 0/1 mean shoulder/wrist connected |
+| sequence | `uint32` | increments once per acquisition |
+| device time | `uint64` | ESP monotonic microseconds at acquisition |
+| samples | `12 × int16` | shoulder then wrist; accel g and gyro dps, each ×1000 |
+
+The time-sync characteristic `27011525-1212-efde-1523-785feabcd122` accepts a
+host transmit timestamp and returns device receive/transmit timestamps. The
+recorder repeats this four-timestamp exchange to estimate offset and drift.
+See [Bluetooth synchronization](../../docs/BLUETOOTH_SYNC.md).

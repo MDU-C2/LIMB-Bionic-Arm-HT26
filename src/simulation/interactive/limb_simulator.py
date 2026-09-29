@@ -111,6 +111,13 @@ READY_POSE_DEG = {
     # HT25's neutral pose and reset command both use zero wrist rotation.
     "wrist_rotation": 0.0,
 }
+LIVE_ALIGNMENT_POSE_DEG = {
+    "shoulder_x": 0.0,
+    "shoulder_y": LEFT_ARM_LIMITS_DEG["shoulder_y"].upper,
+    "shoulder_z": LEFT_ARM_LIMITS_DEG["shoulder_z"].upper,
+    "elbow_x": LEFT_ARM_LIMITS_DEG["elbow_x"].lower,
+    "wrist_rotation": LEFT_ARM_LIMITS_DEG["wrist_rotation"].lower,
+}
 CAMERA_MODES = ("overview", "shoulder", "hand")
 
 
@@ -137,14 +144,23 @@ def hardware_value(logical_name: str, value: float) -> float:
     return value * LEFT_ARM_HARDWARE_SIGN[logical_name]
 
 
-def step_toward(current: float, target: float, joint_name: str, scale: float = 1.0) -> float:
-    """Move a command toward a target without exceeding its actuator speed."""
+def step_toward(
+    current: float,
+    target: float,
+    joint_name: str,
+    scale: float = 1.0,
+    elapsed_s: float | None = None,
+) -> float:
+    """Move toward a target at the actuator speed, independent of render FPS."""
     limit = LEFT_ARM_LIMITS_DEG[joint_name]
     target = limit.clamp(target)
     difference = target - current
     if difference == 0:
         return current
-    max_step = limit.speed(difference) * scale / SIMULATION_FREQUENCY_HZ
+    if elapsed_s is None:
+        elapsed_s = 1.0 / SIMULATION_FREQUENCY_HZ
+    elapsed_s = min(0.1, max(0.001, float(elapsed_s)))
+    max_step = limit.speed(difference) * scale * elapsed_s
     return current + clamp(difference, -max_step, max_step)
 
 
@@ -299,6 +315,19 @@ def set_ready_pose(arm: LimbArm) -> None:
     )
     set_elbow(arm, x=READY_POSE_DEG["elbow_x"])
     set_wrist(arm, READY_POSE_DEG["wrist_rotation"])
+    arm.hand.curl = 0.0
+
+
+def set_live_alignment_pose(arm: LimbArm) -> None:
+    """Show the straight-arm pose the operator copies before feedback starts."""
+    set_shoulder(
+        arm,
+        x=LIVE_ALIGNMENT_POSE_DEG["shoulder_x"],
+        y=LIVE_ALIGNMENT_POSE_DEG["shoulder_y"],
+        z=LIVE_ALIGNMENT_POSE_DEG["shoulder_z"],
+    )
+    set_elbow(arm, x=LIVE_ALIGNMENT_POSE_DEG["elbow_x"])
+    set_wrist(arm, LIVE_ALIGNMENT_POSE_DEG["wrist_rotation"])
     arm.hand.curl = 0.0
 
 
@@ -601,7 +630,10 @@ except p.error as error:
 print("Initializing 'brain'...")
 
 arm = LimbArm()
-set_ready_pose(arm)
+if args.control == "camera-imu":
+    set_live_alignment_pose(arm)
+else:
+    set_ready_pose(arm)
 manual_motion = ManualMotion()
 joint_indices = build_joint_index_map(robot_body, p)
 sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
@@ -794,7 +826,7 @@ clock = pygame.time.Clock()
 print("\n--- Keyboard Controls ---")
 print("Shoulder: W/S and A/D | Upper arm: Q/E")
 print("Elbow: Up/Down | Wrist: Left/Right | Fingers: F/G")
-print("Space interact | H auto reach | R reset | C camera | Esc quit")
+print("Space interact | H auto reach | R align | L start live | C camera | Esc quit")
 
 
 def draw_text(text: str, position, color, text_font=font) -> None:
@@ -938,6 +970,7 @@ def target_contact_feedback() -> tuple[set[int], dict[str, float]]:
 
 live_sensor_input = None
 live_snapshot = None
+live_feedback_active = args.control != "camera-imu"
 if args.control == "camera-imu":
     live_sensor_input = LiveSensorInput(
         port=args.port,
@@ -948,7 +981,8 @@ if args.control == "camera-imu":
     )
     try:
         live_sensor_input.start()
-        notice_text = "Live camera + IMU control active (auto-detecting 1 or 2 sensors)"
+        notice_text = "Match the straight simulated arm, then press L to start live feedback"
+        notice_until_ms = pygame.time.get_ticks() + 6000
         print(f"Live control: {args.port} at {args.baud} baud, {args.side} arm")
     except Exception as error:
         if telemetry_file is not None:
@@ -966,6 +1000,15 @@ if args.control == "camera-imu":
 
 
 while running and p.isConnected():
+    # MediaPipe currently processes about 20-25 frames/s on the lab machine.
+    # Use real elapsed time so a nominal 10 deg/s actuator does not silently
+    # slow to 3-4 deg/s when camera inference takes longer than one 60 Hz tick.
+    previous_loop_ms = clock.get_time()
+    loop_dt_s = (
+        previous_loop_ms / 1000.0
+        if previous_loop_ms > 0 else 1.0 / SIMULATION_FREQUENCY_HZ
+    )
+    loop_dt_s = min(0.1, max(0.001, loop_dt_s))
 
     try:
         target_position, _ = p.getBasePositionAndOrientation(target_body)
@@ -996,6 +1039,7 @@ while running and p.isConnected():
     interact_requested = False
     camera_changed = False
     calibrate_requested = False
+    start_live_requested = False
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -1014,6 +1058,9 @@ while running and p.isConnected():
 
             if event.key == pygame.K_k and live_sensor_input is not None:
                 calibrate_requested = True
+
+            if event.key == pygame.K_l and live_sensor_input is not None:
+                start_live_requested = True
 
             if event.key in (pygame.K_c, pygame.K_TAB):
                 camera_index = (CAMERA_MODES.index(camera_mode) + 1) % len(CAMERA_MODES)
@@ -1076,10 +1123,29 @@ while running and p.isConnected():
         reset_requested = True
     if bullet_key_triggered("k") and live_sensor_input is not None:
         calibrate_requested = True
+    if bullet_key_triggered("l") and live_sensor_input is not None:
+        start_live_requested = True
+
+    if start_live_requested:
+        tracking_ready = live_snapshot is not None and (
+            live_snapshot.camera_ready or live_snapshot.imu_ready
+        )
+        if tracking_ready:
+            live_sensor_input.calibrate()
+            # Do not apply the snapshot captured before calibration.  Keeping
+            # the reference pose for one more frame prevents a visible jump.
+            live_snapshot = None
+            live_feedback_active = True
+            notice_text = "Live feedback started from the matched straight-arm pose"
+            notice_until_ms = pygame.time.get_ticks() + 3000
+        else:
+            notice_text = "No camera or IMU tracking yet - keep the arm matched and try L again"
+            notice_until_ms = pygame.time.get_ticks() + 3000
 
     if calibrate_requested:
         live_sensor_input.calibrate()
-        notice_text = "Live sensors recalibrated - hold the arm down and still"
+        live_snapshot = None
+        notice_text = "Live sensors recalibrated at the current pose"
         notice_until_ms = pygame.time.get_ticks() + 2600
 
     keys = pygame.key.get_pressed()
@@ -1117,12 +1183,20 @@ while running and p.isConnected():
         p.resetBaseVelocity(target_body, [0, 0, 0], [0, 0, 0])
         target_anchor_constraint = anchor_target_to_world()
 
-        set_ready_pose(arm)
+        if live_sensor_input is not None:
+            live_feedback_active = False
+            set_live_alignment_pose(arm)
+        else:
+            set_ready_pose(arm)
         manual_motion.reset()
         if p.isConnected():
             sync_to_pybullet(arm, robot_body, joint_indices, client=p, use_motors=False)
             p.performCollisionDetection()
-        notice_text = "Arm and target reset"
+        notice_text = (
+            "Straight-arm reference ready - match it, then press L"
+            if live_sensor_input is not None
+            else "Arm and target reset"
+        )
         notice_until_ms = pygame.time.get_ticks() + 2200
 
     current_contact_links, fingertip_force_n = target_contact_feedback()
@@ -1175,22 +1249,30 @@ while running and p.isConnected():
 
             set_shoulder(
                 arm,
-                x=step_toward(arm.shoulder.angle_x, 0.0, "shoulder_x"),
+                x=step_toward(
+                    arm.shoulder.angle_x, 0.0, "shoulder_x",
+                    elapsed_s=loop_dt_s,
+                ),
                 y=step_toward(
                     arm.shoulder.angle_y,
                     target_shoulder_y,
                     "shoulder_y",
+                    elapsed_s=loop_dt_s,
                 ),
                 z=step_toward(
                     arm.shoulder.angle_z,
                     target_shoulder_z,
                     "shoulder_z",
+                    elapsed_s=loop_dt_s,
                 ),
                 mode="abs",
             )
             set_elbow(
                 arm,
-                x=step_toward(arm.elbow.angle_x, target_elbow_x, "elbow_x"),
+                x=step_toward(
+                    arm.elbow.angle_x, target_elbow_x, "elbow_x",
+                    elapsed_s=loop_dt_s,
+                ),
                 mode="abs",
             )
             if auto_reach_active:
@@ -1200,6 +1282,7 @@ while running and p.isConnected():
                         arm.wrist.rotation,
                         AUTO_GRASP_WRIST_DEG,
                         "wrist_rotation",
+                        elapsed_s=loop_dt_s,
                     ),
                     mode="abs",
                 )
@@ -1208,13 +1291,13 @@ while running and p.isConnected():
             notice_until_ms = pygame.time.get_ticks() + 1800
 
     if auto_grasp_pending and auto_grasp_phase in {"open", "close"}:
-        auto_hand_step = AUTO_GRASP_CURL_PER_SECOND / SIMULATION_FREQUENCY_HZ
+        auto_hand_step = AUTO_GRASP_CURL_PER_SECOND * loop_dt_s
         if auto_grasp_phase == "open":
             arm.hand.curl = max(0.0, arm.hand.curl - auto_hand_step)
         else:
             arm.hand.curl = min(MAX_GRASP_CURL, arm.hand.curl + auto_hand_step)
     else:
-        hand_step = FINGER_CURL_PER_SECOND / SIMULATION_FREQUENCY_HZ
+        hand_step = FINGER_CURL_PER_SECOND * loop_dt_s
         delta_hand = (hand_step if keys[pygame.K_f] or bullet_key_down("f") else 0) + (
             -hand_step if keys[pygame.K_g] or bullet_key_down("g") else 0
         )
@@ -1223,6 +1306,7 @@ while running and p.isConnected():
             arm.hand.curl = clamp(new_value, arm.hand.min_curl, arm.hand.max_curl)
         elif (
             args.control == "camera-imu"
+            and live_feedback_active
             and live_snapshot is not None
             and live_snapshot.hand_curl is not None
         ):
@@ -1378,7 +1462,7 @@ while running and p.isConnected():
 
     if h_reach_requested or auto_grasp_pending:
         manual_motion.reset()
-    elif args.control == "camera-imu":
+    elif args.control == "camera-imu" and live_feedback_active:
         manual_motion.reset()
         targets = interactive_control_targets(
             live_snapshot.angles if live_snapshot is not None else None
@@ -1390,16 +1474,19 @@ while running and p.isConnected():
                     arm.shoulder.angle_x,
                     targets.get("shoulder_x", arm.shoulder.angle_x),
                     "shoulder_x",
+                    elapsed_s=loop_dt_s,
                 ),
                 y=step_toward(
                     arm.shoulder.angle_y,
                     targets.get("shoulder_y", arm.shoulder.angle_y),
                     "shoulder_y",
+                    elapsed_s=loop_dt_s,
                 ),
                 z=step_toward(
                     arm.shoulder.angle_z,
                     targets.get("shoulder_z", arm.shoulder.angle_z),
                     "shoulder_z",
+                    elapsed_s=loop_dt_s,
                 ),
                 mode="abs",
             )
@@ -1409,6 +1496,7 @@ while running and p.isConnected():
                     arm.elbow.angle_x,
                     targets.get("elbow_x", arm.elbow.angle_x),
                     "elbow_x",
+                    elapsed_s=loop_dt_s,
                 ),
                 mode="abs",
             )
@@ -1473,7 +1561,12 @@ while running and p.isConnected():
             arm=arm, body_id=robot_body, joint_name_to_index=joint_indices,
             client=p, use_motors=True,
         )
-        p.stepSimulation()
+        physics_steps = max(
+            1,
+            min(6, round(loop_dt_s * SIMULATION_FREQUENCY_HZ)),
+        )
+        for _ in range(physics_steps):
+            p.stepSimulation()
     else:
         # Direct preview keeps the light finger links visually stable.
         p.stepSimulation()
@@ -1704,9 +1797,9 @@ while running and p.isConnected():
     draw_control_row(203, "C / 1-3", "Change camera", camera_mode, action_x)
     draw_control_row(
         238,
-        "R / K" if live_sensor_input is not None else "R",
-        "Reset / calibrate" if live_sensor_input is not None else "Reset scene",
-        "",
+        "R / L" if live_sensor_input is not None else "R",
+        "Align / start live" if live_sensor_input is not None else "Reset scene",
+        "active" if live_feedback_active and live_sensor_input is not None else "",
         action_x,
     )
 
@@ -1717,7 +1810,7 @@ while running and p.isConnected():
         current_notice = "Click here for controls; task keys also work in the 3D scene"
     elif not current_notice:
         current_notice = (
-            "Ctrl precise | T guide | P previews | I sensors | K calibrate | Esc quit"
+            "R align | L start live | K recalibrate | P previews | I sensors | Esc quit"
             if live_sensor_input is not None
             else "Ctrl precise | T guide | P previews | I sensors | Esc quit"
         )
@@ -1766,7 +1859,12 @@ while running and p.isConnected():
         sensor_vars["imu_yaw"].set(f"Yaw:   {rad_to_deg(imu_euler_rad[2]):.1f}")
 
         if live_snapshot is not None:
-            sensor_vars["live_status"].set(live_snapshot.status)
+            live_phase = (
+                "Feedback ACTIVE"
+                if live_feedback_active
+                else "ALIGN STRAIGHT ARM - press L when matched"
+            )
+            sensor_vars["live_status"].set(f"{live_phase} | {live_snapshot.status}")
             sensor_vars["live_shoulder"].set(
                 format_live_imu("shoulder", live_snapshot.sensors)
             )

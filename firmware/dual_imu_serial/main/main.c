@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "driver/gpio.h"
 #include "driver/i2c.h"
 #include "esp_err.h"
 #include "esp_system.h"
@@ -16,14 +17,16 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define I2C_PORT I2C_NUM_0
-#define I2C_SDA_PIN GPIO_NUM_8
-#define I2C_SCL_PIN GPIO_NUM_5
-#define I2C_FREQUENCY_HZ 400000
-#define I2C_TIMEOUT_MS 100
+#include "ble_transport.h"
 
-#define SHOULDER_ADDRESS 0x6A
-#define WRIST_ADDRESS 0x6B
+#define I2C_PORT I2C_NUM_0
+#define I2C_SDA_PIN GPIO_NUM_2
+#define I2C_SCL_PIN GPIO_NUM_3
+#define I2C_FREQUENCY_HZ 100000
+#define I2C_TIMEOUT_MS 20
+
+#define SHOULDER_ADDRESS 0x6B
+#define WRIST_ADDRESS 0x6A
 
 #define WHO_AM_I 0x0F
 #define WHO_AM_I_VALUE 0x6C
@@ -32,7 +35,8 @@
 #define CTRL3_C 0x12
 #define OUT_TEMP_L 0x20
 
-#define SAMPLE_PERIOD_MS 20
+#define SAMPLE_PERIOD_MS 10
+#define SERIAL_PERIOD_SAMPLES 2
 #define RETRY_PERIOD_MS 1000
 
 /* +-4 g and +-250 dps, matching LIMB-HT25 and the last hardware-verified
@@ -47,6 +51,37 @@ typedef struct {
   float gyro_dps[3];
 } imu_sample_t;
 
+typedef struct {
+  esp_err_t error;
+  uint8_t who_am_i;
+} imu_probe_t;
+
+typedef struct {
+  gpio_num_t sda_pin;
+  gpio_num_t scl_pin;
+  const char *profile;
+} i2c_bus_profile_t;
+
+/* Keep 2/3 authoritative. These are the finite wiring variants found in the
+ * current and archived AURORA/LIMB projects, not a scan of arbitrary GPIOs. */
+static const i2c_bus_profile_t I2C_BUS_PROFILES[] = {
+    {I2C_SDA_PIN, I2C_SCL_PIN, "requested"},
+    {GPIO_NUM_3, GPIO_NUM_2, "requested-swapped"},
+    {GPIO_NUM_4, GPIO_NUM_5, "previous-firmware"},
+    {GPIO_NUM_5, GPIO_NUM_4, "limb-ht25"},
+    {GPIO_NUM_8, GPIO_NUM_5, "aurora-prototype"},
+    {GPIO_NUM_5, GPIO_NUM_8, "aurora-prototype-swapped"},
+    {GPIO_NUM_6, GPIO_NUM_7, "legacy-6-7"},
+    {GPIO_NUM_7, GPIO_NUM_6, "legacy-7-6"},
+    {GPIO_NUM_8, GPIO_NUM_9, "legacy-8-9"},
+    {GPIO_NUM_9, GPIO_NUM_8, "legacy-9-8"},
+};
+#define I2C_BUS_PROFILE_COUNT                                                \
+  (sizeof(I2C_BUS_PROFILES) / sizeof(I2C_BUS_PROFILES[0]))
+
+static int external_sda_pullup = 0;
+static int external_scl_pullup = 0;
+
 static esp_err_t write_register(uint8_t address, uint8_t reg, uint8_t value) {
   const uint8_t bytes[] = {reg, value};
   return i2c_master_write_to_device(I2C_PORT, address, bytes, sizeof(bytes),
@@ -60,10 +95,15 @@ static esp_err_t read_registers(uint8_t address, uint8_t reg, uint8_t *data,
       pdMS_TO_TICKS(I2C_TIMEOUT_MS));
 }
 
-static esp_err_t configure_imu(uint8_t address) {
+static esp_err_t configure_imu(uint8_t address, imu_probe_t *probe) {
   uint8_t identity = 0;
   esp_err_t error = read_registers(address, WHO_AM_I, &identity, 1);
-  if (error != ESP_OK || identity != WHO_AM_I_VALUE) {
+  probe->error = error;
+  probe->who_am_i = identity;
+  if (error != ESP_OK) {
+    return error;
+  }
+  if (identity != WHO_AM_I_VALUE) {
     return ESP_ERR_NOT_FOUND;
   }
 
@@ -71,6 +111,7 @@ static esp_err_t configure_imu(uint8_t address) {
   if ((error = write_register(address, CTRL3_C, 0x44)) != ESP_OK ||
       (error = write_register(address, CTRL1_XL, 0x40)) != ESP_OK ||
       (error = write_register(address, CTRL2_G, 0x40)) != ESP_OK) {
+    probe->error = error;
     return error;
   }
   vTaskDelay(pdMS_TO_TICKS(40));
@@ -81,9 +122,11 @@ static int16_t signed_value(uint8_t low, uint8_t high) {
   return (int16_t)((uint16_t)low | ((uint16_t)high << 8));
 }
 
-static bool read_imu(uint8_t address, imu_sample_t *sample) {
+static bool read_imu(uint8_t address, imu_sample_t *sample,
+                     imu_probe_t *probe) {
   uint8_t raw[14] = {0};
-  if (read_registers(address, OUT_TEMP_L, raw, sizeof(raw)) != ESP_OK) {
+  probe->error = read_registers(address, OUT_TEMP_L, raw, sizeof(raw));
+  if (probe->error != ESP_OK) {
     sample->connected = false;
     return false;
   }
@@ -99,11 +142,23 @@ static bool read_imu(uint8_t address, imu_sample_t *sample) {
 }
 
 static void print_sensor(const char *role, uint8_t address,
-                         const imu_sample_t *sample) {
+                         const imu_sample_t *sample, const imu_probe_t *probe,
+                         int sda_level, int scl_level) {
   if (!sample->connected) {
-    printf("\"%s\":{\"connected\":false,\"model\":\"LSM6DSO32\","
-           "\"address\":\"0x%02X\",\"error\":\"I2C read failed\"}",
-           role, address);
+    if (probe->error == ESP_OK) {
+      printf("\"%s\":{\"connected\":false,\"model\":\"LSM6DSO32\","
+             "\"address\":\"0x%02X\",\"error\":\"WHO_AM_I 0x%02X; "
+             "expected 0x%02X (SDA=%d SCL=%d)\"}",
+             role, address, probe->who_am_i, WHO_AM_I_VALUE, sda_level,
+             scl_level);
+    } else {
+      const char *error_name =
+          probe->error == ESP_FAIL ? "No I2C ACK" : esp_err_to_name(probe->error);
+      printf("\"%s\":{\"connected\":false,\"model\":\"LSM6DSO32\","
+             "\"address\":\"0x%02X\",\"error\":\"%s at 0x%02X "
+             "(SDA=%d SCL=%d)\"}",
+             role, address, error_name, address, sda_level, scl_level);
+    }
     return;
   }
   printf("\"%s\":{\"connected\":true,\"model\":\"LSM6DSO32\","
@@ -115,55 +170,142 @@ static void print_sensor(const char *role, uint8_t address,
          sample->gyro_dps[1], sample->gyro_dps[2]);
 }
 
-void app_main(void) {
-  setvbuf(stdout, NULL, _IONBF, 0);
+static aurora_ble_imu_sample_t ble_sample(const imu_sample_t *sample) {
+  return (aurora_ble_imu_sample_t){
+      .connected = sample->connected,
+      .accel_g = {sample->accel_g[0], sample->accel_g[1], sample->accel_g[2]},
+      .gyro_dps = {sample->gyro_dps[0], sample->gyro_dps[1],
+                   sample->gyro_dps[2]},
+  };
+}
+
+static esp_err_t install_i2c_bus(gpio_num_t sda_pin, gpio_num_t scl_pin) {
+  /* Adafruit's breakout has 10K external pull-ups. Brief internal pull-downs
+   * reveal whether the powered cable actually reaches each candidate pin;
+   * normal I2C operation then restores the ESP32 pull-ups as a safety net. */
+  ESP_ERROR_CHECK(gpio_reset_pin(sda_pin));
+  ESP_ERROR_CHECK(gpio_reset_pin(scl_pin));
+  ESP_ERROR_CHECK(gpio_set_direction(sda_pin, GPIO_MODE_INPUT));
+  ESP_ERROR_CHECK(gpio_set_direction(scl_pin, GPIO_MODE_INPUT));
+  ESP_ERROR_CHECK(gpio_set_pull_mode(sda_pin, GPIO_PULLDOWN_ONLY));
+  ESP_ERROR_CHECK(gpio_set_pull_mode(scl_pin, GPIO_PULLDOWN_ONLY));
+  vTaskDelay(pdMS_TO_TICKS(5));
+  external_sda_pullup = gpio_get_level(sda_pin);
+  external_scl_pullup = gpio_get_level(scl_pin);
+
   const i2c_config_t bus_config = {
       .mode = I2C_MODE_MASTER,
-      .sda_io_num = I2C_SDA_PIN,
-      .scl_io_num = I2C_SCL_PIN,
+      .sda_io_num = sda_pin,
+      .scl_io_num = scl_pin,
       .sda_pullup_en = GPIO_PULLUP_ENABLE,
       .scl_pullup_en = GPIO_PULLUP_ENABLE,
       .master.clk_speed = I2C_FREQUENCY_HZ,
       .clk_flags = 0,
   };
-  ESP_ERROR_CHECK(i2c_param_config(I2C_PORT, &bus_config));
-  ESP_ERROR_CHECK(i2c_driver_install(I2C_PORT, I2C_MODE_MASTER, 0, 0, 0));
+  esp_err_t error = i2c_param_config(I2C_PORT, &bus_config);
+  if (error != ESP_OK) {
+    return error;
+  }
+  return i2c_driver_install(I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
+}
 
-  bool shoulder_ready = configure_imu(SHOULDER_ADDRESS) == ESP_OK;
-  bool wrist_ready = configure_imu(WRIST_ADDRESS) == ESP_OK;
+static void probe_imus(bool *shoulder_ready, bool *wrist_ready,
+                       imu_probe_t *shoulder_probe,
+                       imu_probe_t *wrist_probe) {
+  *shoulder_ready =
+      configure_imu(SHOULDER_ADDRESS, shoulder_probe) == ESP_OK;
+  *wrist_ready = configure_imu(WRIST_ADDRESS, wrist_probe) == ESP_OK;
+}
+
+void app_main(void) {
+  setvbuf(stdout, NULL, _IONBF, 0);
+  size_t active_bus_index = 0;
+  const i2c_bus_profile_t *active_bus = &I2C_BUS_PROFILES[active_bus_index];
+  ESP_ERROR_CHECK(install_i2c_bus(active_bus->sda_pin, active_bus->scl_pin));
+  ESP_ERROR_CHECK(ble_transport_init());
+
+  bool shoulder_ready = false;
+  bool wrist_ready = false;
+  imu_probe_t shoulder_probe = {.error = ESP_ERR_INVALID_STATE};
+  imu_probe_t wrist_probe = {.error = ESP_ERR_INVALID_STATE};
+  probe_imus(&shoulder_ready, &wrist_ready, &shoulder_probe, &wrist_probe);
+  while (!shoulder_ready && !wrist_ready &&
+         active_bus_index + 1 < I2C_BUS_PROFILE_COUNT) {
+    ESP_ERROR_CHECK(i2c_driver_delete(I2C_PORT));
+    active_bus = &I2C_BUS_PROFILES[++active_bus_index];
+    ESP_ERROR_CHECK(install_i2c_bus(active_bus->sda_pin, active_bus->scl_pin));
+    probe_imus(&shoulder_ready, &wrist_ready, &shoulder_probe, &wrist_probe);
+  }
   int64_t last_retry_us = esp_timer_get_time();
+  uint32_t sequence = 0;
+  TickType_t last_wake = xTaskGetTickCount();
 
   while (true) {
     const int64_t now_us = esp_timer_get_time();
     if (now_us - last_retry_us >= RETRY_PERIOD_MS * 1000LL) {
       if (!shoulder_ready) {
-        shoulder_ready = configure_imu(SHOULDER_ADDRESS) == ESP_OK;
+        shoulder_ready =
+            configure_imu(SHOULDER_ADDRESS, &shoulder_probe) == ESP_OK;
       }
       if (!wrist_ready) {
-        wrist_ready = configure_imu(WRIST_ADDRESS) == ESP_OK;
+        wrist_ready = configure_imu(WRIST_ADDRESS, &wrist_probe) == ESP_OK;
+      }
+      /* Cycle the known harnesses when nothing answers. This also makes
+       * hot-plugging work without rebooting the ESP32. */
+      if (!shoulder_ready && !wrist_ready) {
+        ESP_ERROR_CHECK(i2c_driver_delete(I2C_PORT));
+        active_bus_index = (active_bus_index + 1) % I2C_BUS_PROFILE_COUNT;
+        active_bus = &I2C_BUS_PROFILES[active_bus_index];
+        ESP_ERROR_CHECK(
+            install_i2c_bus(active_bus->sda_pin, active_bus->scl_pin));
+        probe_imus(&shoulder_ready, &wrist_ready, &shoulder_probe,
+                   &wrist_probe);
       }
       last_retry_us = now_us;
     }
 
+    const int64_t sample_time_us = esp_timer_get_time();
     imu_sample_t shoulder = {.connected = shoulder_ready};
     imu_sample_t wrist = {.connected = wrist_ready};
     if (shoulder_ready) {
-      shoulder_ready = read_imu(SHOULDER_ADDRESS, &shoulder);
+      shoulder_ready =
+          read_imu(SHOULDER_ADDRESS, &shoulder, &shoulder_probe);
     }
     if (wrist_ready) {
-      wrist_ready = read_imu(WRIST_ADDRESS, &wrist);
+      wrist_ready = read_imu(WRIST_ADDRESS, &wrist, &wrist_probe);
     }
 
-    printf("{\"schema\":\"aurora.dual_imu.v1\",\"device\":\"ESP32-C3\","
-           "\"uptime_ms\":%lld,\"free_heap_bytes\":%lu,"
-           "\"i2c\":{\"sda_pin\":%d,\"scl_pin\":%d},\"imus\":{",
-           now_us / 1000LL, (unsigned long)esp_get_free_heap_size(), I2C_SDA_PIN,
-           I2C_SCL_PIN);
-    print_sensor("shoulder", SHOULDER_ADDRESS, &shoulder);
-    printf(",");
-    print_sensor("wrist", WRIST_ADDRESS, &wrist);
-    printf("}}\n");
+    const aurora_ble_imu_sample_t shoulder_ble = ble_sample(&shoulder);
+    const aurora_ble_imu_sample_t wrist_ble = ble_sample(&wrist);
+    ble_transport_publish(sequence, (uint64_t)sample_time_us, &shoulder_ble,
+                          &wrist_ble);
 
-    vTaskDelay(pdMS_TO_TICKS(SAMPLE_PERIOD_MS));
+    if (sequence % SERIAL_PERIOD_SAMPLES == 0) {
+      const int sda_level = gpio_get_level(active_bus->sda_pin);
+      const int scl_level = gpio_get_level(active_bus->scl_pin);
+      printf("{\"schema\":\"aurora.dual_imu.v1\",\"device\":\"ESP32-C3\","
+             "\"sequence\":%lu,\"sample_time_us\":%lld,"
+             "\"uptime_ms\":%lld,\"free_heap_bytes\":%lu,"
+             "\"i2c\":{\"sda_pin\":%d,\"scl_pin\":%d,"
+             "\"profile\":\"%s\",\"fallback\":%s,"
+             "\"sda_level\":%d,\"scl_level\":%d,"
+             "\"external_sda_pullup\":%s,\"external_scl_pullup\":%s},"
+             "\"imus\":{",
+             (unsigned long)sequence, sample_time_us, sample_time_us / 1000LL,
+             (unsigned long)esp_get_free_heap_size(), active_bus->sda_pin,
+             active_bus->scl_pin, active_bus->profile,
+             active_bus_index == 0 ? "false" : "true", sda_level, scl_level,
+             external_sda_pullup ? "true" : "false",
+             external_scl_pullup ? "true" : "false");
+      print_sensor("shoulder", SHOULDER_ADDRESS, &shoulder, &shoulder_probe,
+                   sda_level, scl_level);
+      printf(",");
+      print_sensor("wrist", WRIST_ADDRESS, &wrist, &wrist_probe, sda_level,
+                   scl_level);
+      printf("}}\n");
+    }
+    sequence++;
+
+    vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SAMPLE_PERIOD_MS));
   }
 }

@@ -15,3 +15,4 @@ Thumbs.db
 firmware/**/build/
 firmware/**/sdkconfig
 firmware/**/sdkconfig.old
+firmware/**/sdkconfig.*-*

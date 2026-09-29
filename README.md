@@ -17,7 +17,7 @@ The GUI can:
 
 - monitor shoulder and wrist IMUs in a dedicated window;
 - monitor the OAK-D camera and pose tracking without recording;
-- record dual-IMU serial data and OAK-D camera data as one session;
+- record clock-synchronized dual-IMU Bluetooth data and OAK-D camera data;
 - fuse live camera and IMU angles to control the PyBullet arm;
 - run the interactive PyBullet arm simulation;
 - play saved camera poses; and

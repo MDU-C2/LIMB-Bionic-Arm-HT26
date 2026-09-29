@@ -18,8 +18,13 @@ for module_dir in (AI_DIR, RECORDING_DIR):
     if str(module_dir) not in sys.path:
         sys.path.insert(0, str(module_dir))
 
-from imu_protocol import extract_imus, imu_configuration
-from record_oak_pose import FRAME_SIZE, analyze_frame, build_pipeline
+from imu_protocol import extract_imus, ImuStreamDecoder, imu_configuration
+from record_oak_pose import (
+    FRAME_SIZE,
+    analyze_frame,
+    build_pipeline,
+    configure_depthai_runtime,
+)
 from sensor_fusion import (
     ControlAngleSmoother,
     DualImuArmEstimator,
@@ -73,8 +78,10 @@ class SerialPacketReader:
         self.packets: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
         self.thread: threading.Thread | None = None
         self.error = ""
+        self.decoder = ImuStreamDecoder()
 
     def start(self) -> None:
+        self.decoder.reset()
         self.running = True
         self.thread = threading.Thread(target=self._read_loop, daemon=True)
         self.thread.start()
@@ -101,14 +108,9 @@ class SerialPacketReader:
                         raw = device.readline()
                         if not raw:
                             continue
-                        try:
-                            import json
-
-                            packet = json.loads(
-                                raw.decode("utf-8", errors="ignore").strip()
-                            )
-                        except (UnicodeDecodeError, ValueError):
-                            continue
+                        packet = self.decoder.feed(
+                            raw.decode("utf-8", errors="ignore")
+                        )
                         if not isinstance(packet, dict) or not extract_imus(packet):
                             continue
                         if self.packets.full():
@@ -223,6 +225,7 @@ class LiveSensorInput:
 
     def start(self) -> None:
         """Start hardware and show the camera monitor."""
+        configure_depthai_runtime()
         try:
             import cv2
             import depthai as dai

@@ -71,11 +71,12 @@ class SensorPreviewTests(unittest.TestCase):
         self.assertIn("Left arm tracked", status)
         self.assertIsNone(sample)
         self.assertEqual(len(observation["keypoints_2d"]), 6)
-        self.assertEqual(rendered[0, 0, 0], 99)
+        self.assertEqual(rendered[0, -1, 0], 99)
+        self.assertEqual(rendered[0, 0, 0], 0)
         self.assertTrue(observation["arm_visible"])
         self.assertEqual(cv2.line.call_count, 2)
-        self.assertEqual(cv2.line.call_args_list[0].args[1], (128, 96))
-        self.assertEqual(cv2.line.call_args_list[0].args[2], (192, 144))
+        self.assertEqual(cv2.line.call_args_list[0].args[1], (511, 96))
+        self.assertEqual(cv2.line.call_args_list[0].args[2], (447, 144))
         self.assertEqual(cv2.putText.call_count, 3)
         world_point = lambda x, y, z: types.SimpleNamespace(x=x, y=y, z=z)
         pose.process.return_value.pose_world_landmarks = types.SimpleNamespace(
@@ -140,6 +141,25 @@ class SensorPreviewTests(unittest.TestCase):
         right = record_oak_pose.arm_angles_deg(right_out, "right", np)
         self.assertAlmostEqual(left["shoulder_abduction"], 90.0)
         self.assertAlmostEqual(right["shoulder_abduction"], 90.0)
+
+    def test_left_axial_proxy_keeps_right_and_left_direction(self) -> None:
+        trunk_and_upper_arm = {
+            "left_shoulder": [1, 1, 0], "right_shoulder": [-1, 1, 0],
+            "left_hip": [1, 0, 0], "right_hip": [-1, 0, 0],
+            "left_elbow": [1, 0, 0],
+        }
+        hand_right = record_oak_pose.arm_angles_deg(
+            {**trunk_and_upper_arm, "left_wrist": [0, 0, 0]},
+            "left",
+            np,
+        )
+        hand_left = record_oak_pose.arm_angles_deg(
+            {**trunk_and_upper_arm, "left_wrist": [2, 0, 0]},
+            "left",
+            np,
+        )
+        self.assertGreater(hand_right["shoulder_rotation_proxy"], 0.0)
+        self.assertLess(hand_left["shoulder_rotation_proxy"], 0.0)
 
     def test_forward_reach_does_not_turn_small_lateral_noise_into_abduction(self) -> None:
         points = {
@@ -272,8 +292,16 @@ class SensorPreviewTests(unittest.TestCase):
             writer.write.assert_called()
             self.assertEqual((session / "pose.json").is_file(), True)
             self.assertEqual((session / "meta.json").is_file(), True)
-            self.assertEqual(__import__("json").loads((session / "pose.json").read_text())["side"], "left")
-            self.assertFalse(__import__("json").loads((session / "meta.json").read_text())["video_mirrored"])
+            pose = __import__("json").loads((session / "pose.json").read_text())
+            metadata = __import__("json").loads((session / "meta.json").read_text())
+            self.assertEqual(pose["side"], "left")
+            self.assertIsInstance(pose["data"][0]["host_monotonic_ns"], int)
+            self.assertEqual(
+                pose["data"][0]["host_monotonic_ns"],
+                pose["observations"][0]["host_monotonic_ns"],
+            )
+            self.assertEqual(metadata["clock_domain"], "host_monotonic_ns")
+            self.assertTrue(metadata["video_mirrored"])
 
     def test_serial_preview_prints_without_creating_session(self) -> None:
         class FakeSerial:

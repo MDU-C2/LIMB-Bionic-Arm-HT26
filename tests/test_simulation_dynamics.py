@@ -225,12 +225,27 @@ class SimulationDynamicsTests(unittest.TestCase):
             "shoulder_abduction": 5.0,
             "elbow_flexion": 60.0,
         })
+        axial_right = apply({
+            "shoulder_flexion": 90.0,
+            "shoulder_abduction": 5.0,
+            "shoulder_rotation_proxy": 60.0,
+            "elbow_flexion": 60.0,
+        })
+        axial_left = apply({
+            "shoulder_flexion": 90.0,
+            "shoulder_abduction": 5.0,
+            "shoulder_rotation_proxy": -60.0,
+            "elbow_flexion": 60.0,
+        })
 
         self.assertGreater(arm_forward[1], arm_down[1] + 0.4)
         self.assertGreater(arm_forward[2], arm_down[2] + 0.4)
         self.assertLess(arm_outward[0], arm_forward[0] - 0.3)
         self.assertGreater(elbow_bent[1], arm_down[1] + 0.2)
         self.assertGreater(elbow_bent[2], arm_down[2] + 0.2)
+        # A positive camera axial proxy is the tracked hand moving right.  The
+        # left-arm URDF must follow it right rather than mirroring it left.
+        self.assertGreater(axial_right[0], axial_left[0] + 0.5)
 
     def test_left_arm_uses_the_established_orange_and_dark_appearance(self) -> None:
         urdf = (

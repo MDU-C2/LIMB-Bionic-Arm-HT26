@@ -24,6 +24,16 @@ from record_ble_sensors import BleRecorder, record, SENSOR_UUIDS
 
 
 class LabeledBleCaptureTests(unittest.TestCase):
+    def test_sensor_selection_only_creates_requested_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            session = Path(temporary)
+            recorder = BleRecorder(session, sensors=("imu",))
+            recorder.close()
+            self.assertTrue((session / "imu.csv").is_file())
+            self.assertFalse((session / "emg.csv").exists())
+            self.assertFalse((session / "piezo.csv").exists())
+            self.assertEqual(recorder.counts, {"imu": 0})
+
     def test_live_preview_decoder_needs_no_session_files(self) -> None:
         samples = []
         recorder = BleRecorder(None, lambda sensor, sequence, channels: samples.append(
@@ -123,6 +133,47 @@ class LabeledBleCaptureTests(unittest.TestCase):
 
 
 class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_missing_requested_sensor_does_not_stop_available_stream(self) -> None:
+        class FakeClient:
+            def __init__(self, _device):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def start_notify(self, uuid, _callback):
+                if uuid == SENSOR_UUIDS["emg"]:
+                    raise RuntimeError("EMG characteristic missing")
+
+        class FakeScanner:
+            @staticmethod
+            async def find_device_by_name(_name, timeout):
+                return "mock-limb-server"
+
+        async def no_wait(_seconds):
+            return None
+
+        args = argparse.Namespace(
+            device="LIMBServer", address="", scan_timeout=1.0,
+            subject="S01", duration=0.001, dataset_label="",
+            sensors=("imu", "emg"), preview=False,
+        )
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            with patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}), \
+                 patch("bleak.BleakClient", FakeClient), \
+                 patch("bleak.BleakScanner", FakeScanner), \
+                 patch("record_ble_sensors.asyncio.sleep", no_wait):
+                result = await record(args)
+            self.assertEqual(result, 0)
+            session = next(Path(temporary).iterdir())
+            meta = json.loads((session / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["requested_sensors"], ["imu", "emg"])
+            self.assertEqual(meta["subscribed_sensors"], ["imu"])
+            self.assertIn("EMG characteristic missing", meta["unavailable_sensors"]["emg"])
+
     async def test_mock_ble_session_stops_and_writes_metadata(self) -> None:
         class FakeClient:
             callbacks = {}

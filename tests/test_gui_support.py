@@ -18,9 +18,8 @@ sys.path.insert(0, str(ROOT / "src" / "recording"))
 sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
 
 from common import create_session_directory, experiment_metadata
-from imu_protocol import extract_imus, imu_configuration
+from imu_protocol import extract_imus, ImuStreamDecoder, imu_configuration
 from project_support import (
-    FIRMWARE_RUNNER_SCRIPT,
     FirmwareProject,
     discover_firmware_projects,
     discover_recording_programs,
@@ -79,23 +78,23 @@ class RecordingBatchTests(unittest.TestCase):
     def test_esp32_dual_imu_packet_has_physical_roles(self) -> None:
         packet = decode_sensor_packet(
             '{"device":"ESP32-C3","uptime_ms":1200,"imus":{'
-            '"shoulder":{"connected":true,"address":"0x6A",'
+            '"shoulder":{"connected":true,"address":"0x6B",'
             '"accel_g":{"x":0.1,"y":-0.2,"z":1.0},'
             '"gyro_dps":{"x":1,"y":2,"z":3}},'
-            '"wrist":{"connected":true,"address":"0x6B",'
+            '"wrist":{"connected":true,"address":"0x6A",'
             '"accel_g":{"x":0,"y":0,"z":1},'
             '"gyro_dps":{"x":0,"y":0,"z":0}}}}'
         )
         self.assertEqual(packet["device"], "ESP32-C3")
         sensors = extract_imus(packet)
-        self.assertEqual(sensors["shoulder"]["address"], "0x6A")
+        self.assertEqual(sensors["shoulder"]["address"], "0x6B")
         self.assertEqual(sensors["wrist"]["accel_g"]["z"], 1.0)
         self.assertIsNone(decode_sensor_packet("ESP-ROM: boot message"))
 
-    def test_default_capture_uses_camera_and_dual_imu_serial(self) -> None:
+    def test_default_capture_uses_camera_and_synchronized_dual_imu_ble(self) -> None:
         self.assertEqual(
             DEFAULT_BATCH_SOURCES,
-            {"record_oak_pose.py", "record_serial_sensors.py"},
+            {"record_oak_pose.py", "record_ble_sensors.py"},
         )
 
     def test_limb25_dual_packet_is_normalized_from_si_units(self) -> None:
@@ -171,7 +170,11 @@ class RecordingBatchTests(unittest.TestCase):
         self.assertEqual(estimator.update(wrist, 0.02), {})
 
     def test_imu_gyro_z_drives_shoulder_left_right_without_axial_drift(self) -> None:
-        estimator = DualImuArmEstimator(alpha=0.0, gyro_deadzone_dps=1.0)
+        estimator = DualImuArmEstimator(
+            alpha=0.0,
+            gyro_deadzone_dps=1.0,
+            gyro_abduction_gain=1.0,
+        )
         sensor = {
             "shoulder": {
                 "connected": True,
@@ -186,6 +189,65 @@ class RecordingBatchTests(unittest.TestCase):
             estimate = estimator.update(sensor, 0.1)
         self.assertAlmostEqual(estimate["shoulder_abduction"], 30.0)
         self.assertNotIn("shoulder_rotation_proxy", estimate)
+
+    def test_imu_gyro_direction_is_not_reflected_to_the_opposite_side(self) -> None:
+        estimator = DualImuArmEstimator(
+            alpha=0.0,
+            gyro_deadzone_dps=1.0,
+            gyro_abduction_gain=1.0,
+        )
+        sensor = {
+            "shoulder": {
+                "connected": True,
+                "accel_g": {"x": 0.0, "y": 0.0, "z": 1.0},
+                "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+            }
+        }
+        estimator.update(sensor, 0.1)
+        sensor["shoulder"]["gyro_dps"]["z"] = -31.0
+        for _ in range(10):
+            estimate = estimator.update(sensor, 0.1)
+        self.assertEqual(estimate["shoulder_abduction"], 0.0)
+
+    def test_default_imu_sensitivity_is_time_based_and_reduced(self) -> None:
+        def one_second(period: float) -> float:
+            estimator = DualImuArmEstimator(alpha=0.0)
+            sensor = {
+                "shoulder": {
+                    "connected": True,
+                    "accel_g": {"x": 0.0, "y": 0.0, "z": 1.0},
+                    "gyro_dps": {"x": 0.0, "y": 0.0, "z": 0.0},
+                }
+            }
+            estimator.update(sensor, period)
+            sensor["shoulder"]["gyro_dps"]["z"] = 42.5
+            estimate = None
+            for _ in range(round(1.0 / period)):
+                estimate = estimator.update(sensor, period)
+            return estimate["shoulder_abduction"]
+
+        slow_stream = one_second(0.2)
+        fast_stream = one_second(0.02)
+        self.assertAlmostEqual(slow_stream, 18.0, places=3)
+        self.assertAlmostEqual(fast_stream, slow_stream, places=3)
+
+    def test_camera_owns_absolute_horizontal_axes_when_enabled(self) -> None:
+        imu = {
+            "shoulder_abduction": 35.0,
+            "shoulder_rotation_proxy": -40.0,
+        }
+        camera = {
+            "shoulder_abduction": 10.0,
+            "shoulder_rotation_proxy": 15.0,
+        }
+        self.assertEqual(
+            fuse_control_angles(imu, camera, 0.25),
+            camera,
+        )
+        self.assertEqual(
+            fuse_control_angles(imu, camera, 0.0),
+            imu,
+        )
 
     def test_adding_wrist_imu_does_not_create_a_false_elbow_bend(self) -> None:
         estimator = DualImuArmEstimator(alpha=0.0)
@@ -230,11 +292,42 @@ class RecordingBatchTests(unittest.TestCase):
     def test_last_verified_single_imu_packet_remains_visible(self) -> None:
         packet = decode_sensor_packet(
             '{"device":"ESP32-C3","imu":{"connected":true,'
-            '"address":"0x6A","accel_g":{"x":0,"y":0,"z":1},'
+            '"address":"0x6B","accel_g":{"x":0,"y":0,"z":1},'
             '"gyro_dps":{"x":1,"y":2,"z":3}}}'
         )
         self.assertEqual(imu_configuration(packet), ("single", ("shoulder",)))
         self.assertEqual(extract_imus(packet)["shoulder"]["gyro_dps"]["z"], 3.0)
+
+    def test_single_imu_accepts_legacy_xyz_arrays_and_names(self) -> None:
+        packet = {
+            "imu": {
+                "connected": True,
+                "address": "0x6A",
+                "acceleration": [0.0, 0.0, 9.80665],
+                "gyroscope": [0.0, 0.0, 3.141592653589793],
+            }
+        }
+        shoulder = extract_imus(packet)["shoulder"]
+        self.assertTrue(shoulder["connected"])
+        self.assertAlmostEqual(shoulder["accel_g"]["z"], 1.0)
+        self.assertAlmostEqual(shoulder["gyro_dps"]["z"], 180.0)
+
+    def test_currently_flushed_legacy_text_stream_shows_single_imu_values(self) -> None:
+        decoder = ImuStreamDecoder()
+        self.assertIsNone(decoder.feed("IMU 1 WHO_AM_I: 0x6C"))
+        self.assertIsNone(decoder.feed("IMU 2 WHO_AM_I: 0xFF"))
+        self.assertIsNone(decoder.feed("IMU1 ACC: 875  -156  4052"))
+        packet = decoder.feed("IMU1 GYRO: 46  -95  -33")
+        self.assertIsNotNone(packet)
+        sensors = extract_imus(packet)
+        self.assertTrue(sensors["shoulder"]["connected"])
+        self.assertFalse(sensors["wrist"]["connected"])
+        self.assertAlmostEqual(
+            sensors["shoulder"]["accel_g"]["z"], 4052 / 4096
+        )
+        self.assertAlmostEqual(
+            sensors["shoulder"]["gyro_dps"]["y"], -95 / 65.5
+        )
 
     def test_camera_angles_are_normalized_before_they_reach_the_robot(self) -> None:
         normalized = camera_control_angles({
@@ -270,36 +363,53 @@ class RecordingBatchTests(unittest.TestCase):
         }), 0.5)
         self.assertIsNone(camera_hand_curl({"index": 30.0, "middle": 30.0}))
 
-    def test_firmware_project_uses_environment_platformio_commands(self) -> None:
+    def test_firmware_project_uses_native_esp_idf_commands(self) -> None:
         projects = discover_firmware_projects()
         project = projects["firmware\\dual_imu_serial"]
-        self.assertEqual(project.system, "PlatformIO (ESP-IDF)")
+        self.assertEqual(project.system, "ESP-IDF")
+        self.assertEqual(project.executable, "idf.py")
         with patch(
             "project_support.resolve_firmware_tool",
-            return_value=("python", "-m", "platformio"),
+            return_value=("idf.py",),
         ):
             self.assertEqual(
                 firmware_command(project, "build"),
+                ["idf.py", "build"],
+            )
+            self.assertEqual(
+                firmware_command(project, "flash", "COM4"),
+                ["idf.py", "-p", "COM4", "flash"],
+            )
+            self.assertEqual(
+                firmware_command(project, "monitor", "COM4"),
+                ["idf.py", "-p", "COM4", "monitor"],
+            )
+
+    def test_firmware_can_fall_back_to_platformio_with_esp_idf_only(self) -> None:
+        project = discover_firmware_projects()["firmware\\dual_imu_serial"]
+        platformio = r"C:\Users\tester\.platformio\platformio.exe"
+        with patch(
+            "project_support.resolve_firmware_tool",
+            return_value=(platformio, "run"),
+        ):
+            self.assertEqual(
+                firmware_command(project, "build"),
+                [platformio, "run"],
+            )
+            self.assertEqual(
+                firmware_command(project, "flash", "COM5"),
                 [
-                    sys.executable,
-                    str(FIRMWARE_RUNNER_SCRIPT),
-                    "build",
-                    "--project",
-                    str(project.directory),
-                    "--port",
-                    "",
-                    "--tool",
-                    "python",
-                    "-m",
-                    "platformio",
+                    platformio,
+                    "run",
+                    "-t",
+                    "upload",
+                    "--upload-port",
+                    "COM5",
                 ],
             )
             self.assertEqual(
-                firmware_command(project, "flash", "COM4")[2:8],
-                [
-                    "flash", "--project", str(project.directory), "--port", "COM4",
-                    "--tool",
-                ],
+                firmware_command(project, "monitor", "COM5"),
+                [platformio, "device", "monitor", "--port", "COM5"],
             )
 
     def test_fused_angles_map_to_interactive_left_arm_signs(self) -> None:
@@ -308,7 +418,7 @@ class RecordingBatchTests(unittest.TestCase):
                 "elbow_flexion": 35.0,
                 "shoulder_flexion": 40.0,
                 "shoulder_abduction": 20.0,
-                "shoulder_rotation_proxy": -15.0,
+            "shoulder_rotation_proxy": -15.0,
             }
         )
         self.assertEqual(
@@ -317,9 +427,20 @@ class RecordingBatchTests(unittest.TestCase):
                 "elbow_x": 35.0,
                 "shoulder_y": 50.0,
                 "shoulder_z": -20.0,
-                "shoulder_x": -15.0,
+                "shoulder_x": 15.0,
             },
         )
+
+    def test_firmware_wiring_and_role_addresses_match_the_current_arm(self) -> None:
+        source = (ROOT / "firmware" / "dual_imu_serial" / "main" / "main.c").read_text()
+        self.assertIn("#define I2C_SDA_PIN GPIO_NUM_2", source)
+        self.assertIn("#define I2C_SCL_PIN GPIO_NUM_3", source)
+        self.assertIn('{GPIO_NUM_4, GPIO_NUM_5, "previous-firmware"}', source)
+        self.assertIn('{GPIO_NUM_5, GPIO_NUM_4, "limb-ht25"}', source)
+        self.assertIn('{GPIO_NUM_8, GPIO_NUM_5, "aurora-prototype"}', source)
+        self.assertIn("#define I2C_FREQUENCY_HZ 100000", source)
+        self.assertIn("#define SHOULDER_ADDRESS 0x6B", source)
+        self.assertIn("#define WRIST_ADDRESS 0x6A", source)
 
     def test_anatomical_shoulder_zero_is_converted_to_cad_zero(self) -> None:
         arm_down = interactive_control_targets({"shoulder_flexion": 0.0})
@@ -343,8 +464,10 @@ class RecordingBatchTests(unittest.TestCase):
             ["--auto-start", *camera_options],
         )
         self.assertEqual(
-            batch_arguments("record_ble_sensors.py", camera_options, "1"),
-            ["--dataset-label", "1"],
+            batch_arguments(
+                "record_ble_sensors.py", camera_options, "1", ("imu", "emg")
+            ),
+            ["--sensors", "imu", "emg", "--dataset-label", "1"],
         )
         self.assertEqual(batch_arguments("record_serial_sensors.py", camera_options), [])
 

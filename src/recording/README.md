@@ -1,12 +1,13 @@
 # Sensor preview and recording
 
-The current recording pair is the OAK-D camera plus the shoulder/wrist IMU JSON
-stream from one ESP32-C3.
+The current recording workflow combines the OAK-D camera with selected
+acquisition-timestamped IMU, EMG, and piezo notifications from an ESP32.
 
 | Source | Preview | Recorded files |
 | --- | --- | --- |
-| Dual IMU serial | Dedicated shoulder/wrist window | `serial.jsonl` |
+| Bluetooth IMU / EMG / piezo | Separate BLE previews | Selected sensor CSVs, `packets.jsonl` |
 | OAK-D | RGB video, body pose, and hand landmarks | `video.mp4`, `pose.json` |
+| Dual IMU serial (diagnostic) | Dedicated shoulder/wrist window | `serial.jsonl` |
 
 Every recorder writes `meta.json`. In a batch, sources receive the same session
 ID and write separate folders below `outputs/recordings/`.
@@ -20,17 +21,17 @@ does not save until `R` or **START REC** is pressed.
 ## Record a session
 
 1. Open **Recording**.
-2. Keep OAK-D camera and Serial sensor stream selected.
-3. Choose the ESP32 port and enter subject/trial metadata.
-4. Press **Start selected sources**.
-5. Press **Stop recording sources** when finished.
+2. Keep OAK-D camera and ESP32 sensors (Bluetooth) selected.
+3. Choose IMU, EMG, and/or piezo. Missing characteristics do not stop available streams.
+4. Keep `LIMBServer` (or enter the configured BLE name) and enter subject/trial metadata.
+5. Press **Start selected sources**.
+6. Press **Stop recording sources** when finished.
 
-The sources share host-side session metadata but are not hardware-clock
-synchronized.
-
-`record_ble_sensors.py` remains as a compatibility entry point for the older
-LIMB25 `LIMBServer` cuff. That old firmware carried EMG, IMU, and piezo streams;
-those channels are not part of the current dual-IMU setup.
+The ESP32 acquisition clock is continuously mapped to the same host monotonic
+clock saved with every camera frame. Legacy LIMB25 `LIMBServer` devices still
+record, but their synchronized field remains empty because they do not expose
+the new time-sync characteristic. See
+[Bluetooth synchronization](../../docs/BLUETOOTH_SYNC.md).
 
 See [the sensor guide](../../docs/SENSOR_DATA.md) for wiring, flashing, and live
 fusion.

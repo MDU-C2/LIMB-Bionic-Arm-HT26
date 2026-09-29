@@ -64,7 +64,8 @@ class SimulationTabsMixin:
             "Interactive simulator with live sensors",
             "Open the same table-and-target scene, show the camera monitor, and control "
             "the arm from the OAK-D plus an automatically detected shoulder IMU and "
-            "optional wrist IMU. Hold the arm down and press K to recalibrate.",
+            "optional wrist IMU. Copy the simulator's straight-arm reference and press L "
+            "to start feedback. Press R to pause and align again.",
         )
         fusion_settings = ttk.Frame(fusion, style="Card.TFrame")
         fusion_settings.grid(row=2, column=0, sticky="ew")

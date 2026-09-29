@@ -1,8 +1,9 @@
 # Dual IMUs, camera, and recording
 
 The current hardware path is two LSM6DSO32 IMUs on one ESP32-C3. The shoulder
-and wrist readings leave the ESP32 as one newline-delimited JSON serial stream.
-The OAK-D camera is a separate computer-side source.
+and wrist readings leave the ESP32 as acquisition-timestamped ESP-IDF NimBLE
+notifications. A newline-delimited USB JSON stream remains available for live
+control and diagnostics. The OAK-D camera is a separate computer-side source.
 
 ## Wire the two IMUs
 
@@ -11,32 +12,43 @@ I2C addresses:
 
 | Role | Address | SA0/SDO | ESP32-C3-Zero |
 | --- | --- | --- | --- |
-| Shoulder | `0x6A` | GND / low | SDA GPIO 8, SCL GPIO 5 |
-| Wrist | `0x6B` | 3.3 V / high | SDA GPIO 8, SCL GPIO 5 |
+| Shoulder | `0x6B` | 3.3 V / high | SDA GPIO 2, SCL GPIO 3 |
+| Wrist | `0x6A` | GND / low | SDA GPIO 2, SCL GPIO 3 |
 
 Do not put two sensors with the same address on the shared bus. The firmware
-uses the GPIO 8/5 harness verified in the latest project change. If the physical
-harness changes, update `I2C_SDA_PIN` and `I2C_SCL_PIN` in
-`firmware/dual_imu_serial/main/main.c` deliberately rather than scanning random
-pin pairs at runtime.
+prefers the GPIO 2/3 harness on the current arm. For hardware diagnosis it can
+also recognize the finite set of pin pairs found in earlier AURORA/LIMB
+firmware, reports the active profile in serial JSON, and returns to 2/3 whenever
+that requested pair responds.
 
 ## Build and flash
 
-The source keeps the ESP-IDF layout and register configuration used by
-LIMB-HT25. The GUI invokes PlatformIO from `aurora-simulation`, so a separate
-global `idf.py` installation is not required. Select the detected COM port in
-the Firmware tab, then use Build and Flash. The equivalent commands are:
+The source uses ESP-IDF drivers and NimBLE directly, with no Arduino framework.
+Build and flash using a native ESP-IDF installation:
 
 ```powershell
 cd firmware/dual_imu_serial
-python -m platformio run
-python -m platformio run --target upload --upload-port COM4
-python -m platformio device monitor --port COM4 --baud 115200
+idf.py set-target esp32c3
+idf.py build
+idf.py -p COM4 flash monitor
+```
+
+The checked-in PlatformIO environment is also supported when `idf.py` is not
+installed. It is pinned to `framework = espidf`, never Arduino:
+
+```powershell
+cd firmware/dual_imu_serial
+platformio run
+platformio run -t upload --upload-port COM4
 ```
 
 The same Build, Flash, and Serial monitor actions are available under
-**Firmware** in the GUI. The serial output uses schema
+**Firmware** in the GUI through native IDF or that ESP-IDF PlatformIO fallback.
+The serial output uses schema
 `aurora.dual_imu.v1`, 115200 baud, and explicit `shoulder`/`wrist` names.
+The live monitor also recognizes the older line-oriented `IMU1 ACC` / `IMU1
+GYRO` diagnostic stream still flashed on some lab boards, including the
+`WHO_AM_I` result used to distinguish one connected IMU from two.
 
 ## View readings
 
@@ -50,8 +62,9 @@ Choose **Open camera monitor** in the header, Recording page, or Simulation
 page to see the OAK-D image, pose landmarks, arm angles, and hand tracking
 without starting a recording.
 
-The program accepts either one or two connected IMUs. A lone shoulder sensor
-drives shoulder elevation and left/right motion while the camera supplies the
+The program accepts either one or two connected IMUs. The IMU strapped over
+the brachialis/upper arm is the **shoulder** sensor (`0x6B`); it drives shoulder
+elevation and left/right motion while the camera supplies the
 elbow and axial-rotation channels. With both sensors, their relative mounted
 tilt also drives the elbow. A wrist-only sensor remains visible in the monitor,
 but does not impersonate an upper-arm sensor. The legacy single-IMU JSON packet
@@ -64,8 +77,9 @@ control**. It opens the full table-and-target simulator, annotated camera view,
 and a separate live sensor monitor. The live controller:
 
 1. detects whether zero, one, or two IMUs are reporting valid samples;
-2. reproduces HT25's installed-sensor mapping: smoothed `atan2(Y, Z)` tilt and
-   dead-zoned gyro Z for shoulder left/right;
+2. reproduces HT25's installed-sensor mapping: sample-rate-independent smoothed
+   `atan2(Y, Z)` tilt and scaled, dead-zoned, signed gyro Z for shoulder
+   left/right;
 3. computes elbow flexion from wrist tilt relative to shoulder tilt when both
    sensors are present;
 4. corrects the bounded targets with trunk-relative OAK-D/MediaPipe angles and
@@ -74,18 +88,21 @@ and a separate live sensor monitor. The live controller:
 
 Camera correction `0` means IMU-only control and `1` means camera-only control;
 `0.25` keeps the IMUs responsive while the camera supplies absolute-pose
-correction. Hold the arm down and still, then press `K` in the simulator or `C`
-in the camera window to recalibrate at anatomical zero. Press `Q` in the camera
-window to stop.
+correction. Live feedback initially stays paused with the simulated arm fully
+extended. Copy that pose with the real arm, then press `L` to calibrate and
+start feedback. Press `R` to pause, reset the scene, and show the reference pose
+again. `K` recalibrates at the current pose. Press `Q` in the camera window to
+stop.
 
 ## Record synchronized sources
 
-The Recording page selects **OAK-D camera** and **Serial sensor stream** by
-default. Both processes share a session ID and write separate folders below
-`outputs/recordings/`. Their host timestamps are recorded, but they are not
-hardware-clock synchronized.
+The Recording page selects **OAK-D camera** and **Dual-IMU ESP32 (Bluetooth)**
+by default. Both processes share a session ID and write separate folders below
+`outputs/recordings/`. The ESP32 acquisition clock is mapped continuously onto
+the host monotonic clock also saved with every camera frame, so the time series
+can be aligned without treating BLE notification arrival as sample time.
 
-The older LIMB25 `LIMBServer` BLE cuff recorder remains under
-`src/recording/record_ble_sensors.py` for compatibility. LIMB25 did include a
-piezo channel in that cuff; it is not part of the current two-IMU ESP32 workflow
-and is therefore not shown in the primary GUI.
+The recorder remains compatible with the older LIMB25 `LIMBServer` EMG, IMU,
+and piezo characteristics. Old firmware has no time-sync characteristic, so its
+rows retain arrival timestamps and leave the synchronized timestamp empty. See
+[Bluetooth synchronization](BLUETOOTH_SYNC.md) for the protocol and fields.

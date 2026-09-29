@@ -14,8 +14,6 @@ dependencies:
       - onnxruntime==1.23.2
       - bleak==0.22.3
       - pyserial==3.5
-      # Builds and uploads the ESP-IDF firmware without a separate global IDF install.
-      - platformio==6.1.18
       # Hardware libraries import correctly; device tests are pending.
       - depthai==3.10.0
       - opencv-contrib-python==4.10.0.84

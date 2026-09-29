@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
+import tempfile
 import time
 
 from common import create_session_directory, env_float, experiment_metadata, utc_now, write_metadata
@@ -37,6 +39,16 @@ FINGER_CHAINS = {
 }
 PALM_CONNECTIONS = ((0, 5), (5, 9), (9, 13), (13, 17), (17, 0))
 TIP_LABELS = {4: "T", 8: "I", 12: "M", 16: "R", 20: "P"}
+
+
+def configure_depthai_runtime() -> None:
+    """Use stable, local DepthAI diagnostics on Windows lab machines."""
+    os.environ.setdefault("DEPTHAI_CRASHDUMP", "0")
+    os.environ.setdefault("DEPTHAI_TELEMETRY", "0")
+    os.environ.setdefault(
+        "DEPTHAI_CACHE_DIR",
+        str(Path(tempfile.gettempdir()) / "aurora_depthai_cache"),
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -227,6 +239,11 @@ def finger_angles_deg(landmarks, np) -> tuple[dict[str, float], dict[str, float]
     return angles, curls
 
 
+def display_pixel(x: int, y: int, width: int) -> tuple[int, int]:
+    """Mirror one raw-camera point for display without changing saved data."""
+    return width - 1 - x, y
+
+
 def add_hand_tracking(output, observation, sample, hand_results, pose_wrist,
                       depth, width: int, height: int, cv2, np) -> bool:
     """Draw and save only the hand connected to the selected arm."""
@@ -235,11 +252,12 @@ def add_hand_tracking(output, observation, sample, hand_results, pose_wrist,
         return False
     _, hand, world, distance = selected
     landmarks = hand.landmark
-    pixels = [
+    raw_pixels = [
         (min(width - 1, max(0, int(point.x * width))),
          min(height - 1, max(0, int(point.y * height))))
         for point in landmarks
     ]
+    pixels = [display_pixel(x, y, width) for x, y in raw_pixels]
     for chain in FINGER_CHAINS.values():
         for first, second in zip(chain, chain[1:]):
             cv2.line(output, pixels[first], pixels[second], (80, 235, 105), 2)
@@ -331,11 +349,13 @@ def build_pipeline(dai, use_depth: bool = False):
 
 
 def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, hands=None):
-    """Track the selected arm and its hand on the unflipped frame."""
+    """Track on the raw frame and render a mirrored, readable operator view."""
     height, width = frame.shape[:2]
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = pose.process(rgb)
-    output = frame.copy()
+    # Tracking, depth, and saved coordinates stay in the camera's raw frame.
+    # Mirror only the pixels, then draw annotations so their text is readable.
+    output = frame[:, ::-1].copy()
     observation = {
         "person_visible": False, "arm_visible": False,
         "hand_visible": False, "reference_visible": False, "depth_valid": False,
@@ -362,11 +382,12 @@ def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, h
         name.rsplit("_", 1)[-1]: observation["keypoints_2d"][name]
         for name in arm_names
     }
-    arm_pixels = [
+    raw_arm_pixels = [
         (min(width - 1, max(0, int(selected[name].x * width))),
          min(height - 1, max(0, int(selected[name].y * height))))
         for name in arm_names
     ]
+    arm_pixels = [display_pixel(x, y, width) for x, y in raw_arm_pixels]
     for first, second in zip(arm_pixels, arm_pixels[1:]):
         cv2.line(output, first, second, (0, 220, 255), 3)
     for label, xy in zip(("S", "E", "W"), arm_pixels):
@@ -445,6 +466,7 @@ class CameraSession:
         self.writer = None
         self.session = None
         self.started = 0.0
+        self.started_host_monotonic_ns = 0
         self.started_utc = ""
         self.video_frames = 0
         self.pose_frames: list[dict[str, object]] = []
@@ -466,7 +488,8 @@ class CameraSession:
             self.session = None
             raise RuntimeError("Could not open video.mp4 in the selected output folder")
         self.writer = writer
-        self.started = time.monotonic()
+        self.started_host_monotonic_ns = time.monotonic_ns()
+        self.started = self.started_host_monotonic_ns / 1e9
         self.started_utc = utc_now()
         self.video_frames = 0
         self.pose_frames = []
@@ -476,10 +499,19 @@ class CameraSession:
     def add_frame(self, frame, sample, observation) -> None:
         if not self.recording:
             return
-        elapsed = time.monotonic() - self.started
-        self.observations.append({"time_s": round(elapsed, 4), **observation})
+        host_monotonic_ns = time.monotonic_ns()
+        elapsed = (host_monotonic_ns - self.started_host_monotonic_ns) / 1e9
+        self.observations.append({
+            **observation,
+            "time_s": round(elapsed, 4),
+            "host_monotonic_ns": host_monotonic_ns,
+        })
         if sample is not None:
-            self.pose_frames.append({"time_s": round(elapsed, 4), **sample})
+            self.pose_frames.append({
+                **sample,
+                "time_s": round(elapsed, 4),
+                "host_monotonic_ns": host_monotonic_ns,
+            })
         # VideoWriter uses fixed FPS; duplicate when tracking is slower so
         # playback duration stays close to wall-clock recording time.
         expected = min(max(self.video_frames + 1, round(elapsed * VIDEO_FPS)),
@@ -501,7 +533,7 @@ class CameraSession:
             "observations": self.observations,
             "coordinate_note": (
                 "keypoints_2d are normalized raw-camera x/y; data x/y are raw "
-                "camera pixels. video.mp4 is unflipped; depth_m "
+                "camera pixels. video.mp4 is mirrored for the operator; depth_m "
                 "is RGB-aligned stereo depth"
             ),
             "angle_note": (
@@ -517,11 +549,13 @@ class CameraSession:
         write_metadata(self.session, {
             "source": "oak_pose", "subject": self.subject, "side": self.side,
             "started_utc": self.started_utc, "duration_seconds": round(elapsed, 3),
+            "started_host_monotonic_ns": self.started_host_monotonic_ns,
+            "clock_domain": "host_monotonic_ns",
             "pose_frames": len(self.pose_frames),
             "observation_frames": len(self.observations),
             "video_frames": self.video_frames, "video_fps": VIDEO_FPS,
             "stereo_depth_enabled": self.depth_enabled,
-            "video_mirrored": False,
+            "video_mirrored": True,
             "hand_tracking": "selected_arm_nearest_wrist_21_landmarks",
             "cup_detector": "unavailable_no_model", **experiment_metadata(),
         })
@@ -583,6 +617,7 @@ def main() -> int:
     if args.duration < 0:
         print("Duration cannot be negative.")
         return 2
+    configure_depthai_runtime()
     try:
         import cv2
         import depthai as dai
@@ -633,7 +668,10 @@ def main() -> int:
         cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(WINDOW, on_mouse)
         print(f"Live OAK-D tracking: subject's {args.side} arm, hand and fingers.")
-        print("Camera video is unflipped; anatomical landmark selection uses the raw frame.")
+        print(
+            "Camera video is mirrored for the operator; tracking and saved "
+            "coordinates use the raw frame."
+        )
         print("Cup detection needs a model; no cup model is present in this repository.")
         if not args.depth:
             print("Stereo depth is off; use --depth to attempt depth-backed playback points.")

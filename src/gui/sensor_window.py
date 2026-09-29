@@ -152,7 +152,30 @@ class ImuMonitorWindow:
             if isinstance(uptime, (int, float)) and not isinstance(uptime, bool)
             else ""
         )
-        self.device.set(f"ESP32: {device} · {mode_text}{uptime_text}")
+        i2c = packet.get("i2c")
+        i2c_text = ""
+        if isinstance(i2c, dict):
+            sda_pin = i2c.get("sda_pin", "?")
+            scl_pin = i2c.get("scl_pin", "?")
+            profile = i2c.get("profile", "unknown")
+            sda_pullup = i2c.get("external_sda_pullup")
+            scl_pullup = i2c.get("external_scl_pullup")
+            if isinstance(sda_pullup, bool) and isinstance(scl_pullup, bool):
+                pullup_text = (
+                    "external pull-ups OK"
+                    if sda_pullup and scl_pullup
+                    else f"external pull-ups SDA={'yes' if sda_pullup else 'no'} "
+                    f"SCL={'yes' if scl_pullup else 'no'}"
+                )
+                pullup_text = f" · {pullup_text}"
+            else:
+                pullup_text = ""
+            i2c_text = (
+                f" · I2C {profile} SDA{sda_pin}/SCL{scl_pin}{pullup_text}"
+            )
+        self.device.set(
+            f"ESP32: {device} · {mode_text}{uptime_text}{i2c_text}"
+        )
         connected = 0
         for role in ("shoulder", "wrist"):
             sensor = sensors.get(role, {})

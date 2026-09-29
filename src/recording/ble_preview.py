@@ -362,9 +362,11 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
     def show_window(sensor: str) -> None:
         if sensor == "all":
             for name in PREVIEW_SENSORS:
+                if name not in sensor_uuids:
+                    continue
                 show_window(name)
             return
-        if sensor not in PREVIEW_SENSORS:
+        if sensor not in sensor_uuids:
             return
         window = windows.get(sensor)
         if window is None:

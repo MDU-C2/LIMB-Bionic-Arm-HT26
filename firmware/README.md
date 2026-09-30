@@ -1,9 +1,10 @@
 # Firmware
 
-`dual_imu_serial/` is the current ESP-IDF-only target for the ESP32-C3-Zero. It reads
-the shoulder LSM6DSO32 at `0x6B` and wrist LSM6DSO32 at `0x6A` on one I2C bus,
-then publishes acquisition-timestamped binary samples over ESP-IDF NimBLE and
-keeps the role-named USB serial JSON stream for setup and diagnostics.
+`dual_imu_serial/` is the only maintained ESP-IDF target for the ESP32-C3-Zero.
+It reads the shoulder LSM6DSO32 at `0x6B`, wrist LSM6DSO32 at `0x6A`, and the
+EMG analogue output on ADC1 channel 0 / GPIO0. It publishes all three on one
+acquisition clock over ESP-IDF NimBLE and keeps role-named USB JSON for setup,
+live simulation, and diagnostics.
 
 The source uses ESP-IDF drivers, FreeRTOS, NVS, and NimBLE directly. It contains
 no Arduino framework or Arduino BLE dependency. Build it with native `idf.py`

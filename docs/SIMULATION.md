@@ -40,7 +40,9 @@ IMU adds relative elbow motion when present; a wrist-only IMU is monitored but
 is not mistaken for an upper-arm sensor. Camera tracking supplies absolute pose,
 axial-rotation correction, and finger curl. The result passes through the
 existing joint and speed limits. The ESP32 port is released from the standalone
-IMU monitor automatically before live control starts.
+sensor monitor automatically before live control starts. EMG is calibrated from
+a brief relaxed-muscle baseline and controls grip; tracked hand curl is the
+fallback when no current EMG sample is available.
 
 **Open camera monitor** in the GUI header shows live OAK-D tracking without
 recording. Close that standalone monitor before starting live interactive

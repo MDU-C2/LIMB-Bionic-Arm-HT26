@@ -198,7 +198,7 @@ class ProjectGui(
         )
         ttk.Button(
             header,
-            text="Open IMU monitor",
+            text="Open sensor monitor",
             command=self.open_sensor_window,
         ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(0, 10))
         self.camera_monitor_button = ttk.Button(

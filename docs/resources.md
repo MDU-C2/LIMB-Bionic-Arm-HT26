@@ -28,4 +28,7 @@ This page collects the main references likely to be needed while evaluating and 
 | ST LSM6DSO32 | Accelerometer and gyroscope model implemented by the legacy ESP32 IMU component. Confirm the markings and orientation of installed sensors. | [STMicroelectronics LSM6DSO32](https://www.st.com/en/mems-and-sensors/lsm6dso32.html) | Needs verification |
 | TI SN65HVD232 | 3.3 V CAN transceiver family identified by the legacy CAN and hardware documentation. Confirm fitted part numbers, termination, and board revisions. | [Texas Instruments SN65HVD232](https://www.ti.com/product/SN65HVD232) | Needs verification |
 
-The old repository also refers to potentiometers, pressure sensors, EMG sensors, piezo sensors, and camera hardware. Their exact installed models or current relevance were not clear enough to list as confirmed resources. Add them only after checking the BOM, schematics, source code, and physical hardware.
+The current analogue EMG path is confirmed on ESP32-C3 ADC1 channel 0 / GPIO0,
+but the module's exact model still needs to be copied from its markings or BOM.
+Old references to potentiometers, pressure sensors, and piezo sensors are not
+treated as current hardware until the physical arm and schematics confirm them.

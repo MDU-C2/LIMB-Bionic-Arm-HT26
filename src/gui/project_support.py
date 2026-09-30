@@ -45,7 +45,7 @@ RECORDING_EXTENSIONS = {
 RECORDING_ENTRYPOINT_PREFIXES = ("record", "capture")
 RECORDER_DETAILS = {
     "record_ble_sensors.py": (
-        "Synchronized AURORA/LIMB BLE recorder for IMU, EMG, and piezo data."
+        "Synchronized AURORA BLE recorder for dual-IMU and EMG data."
     ),
     "record_serial_sensors.py": (
         "Serial recorder for newline-delimited JSON and other sensor messages."

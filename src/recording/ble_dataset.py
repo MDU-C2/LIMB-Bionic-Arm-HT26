@@ -27,6 +27,7 @@ IMU_COLUMNS = (
 class WindowState:
     expected_sequence: int | None = None
     values: list[object] = field(default_factory=list)
+    samples_per_packet: int = 0
 
 
 class LabeledBleCapture:
@@ -55,6 +56,7 @@ class LabeledBleCapture:
         self.sequence_gaps = {name: 0 for name in SAMPLES_PER_WINDOW}
         self.invalid_windows = {name: 0 for name in SAMPLES_PER_WINDOW}
         self.last_sequences: dict[str, int] = {}
+        self.samples_per_window: dict[tuple[str, int], int] = {}
         self.started = False
         self.last_progress = time.monotonic()
         self.saved_files: list[str] = []
@@ -63,6 +65,7 @@ class LabeledBleCapture:
         """Discard countdown packets and begin at the next packet boundary."""
         self.states.clear()
         self.last_sequences.clear()
+        self.samples_per_window.clear()
         for channels in self.windows.values():
             channels.clear()
         self.last_progress = time.monotonic()
@@ -112,6 +115,7 @@ class LabeledBleCapture:
             state = self.states.setdefault(key, WindowState())
             if packet_index == 0:
                 state.values = list(values)
+                state.samples_per_packet = len(values)
                 state.expected_sequence = sequence + 1
             elif state.expected_sequence == sequence:
                 state.values.extend(values)
@@ -125,7 +129,9 @@ class LabeledBleCapture:
 
             if packet_index != PACKETS_PER_WINDOW - 1:
                 continue
-            if len(state.values) == SAMPLES_PER_WINDOW[sensor]:
+            expected_samples = state.samples_per_packet * PACKETS_PER_WINDOW
+            if expected_samples and len(state.values) == expected_samples:
+                self.samples_per_window[key] = expected_samples
                 saved.append((utc_now(), state.values.copy()))
                 if sensor == "emg" and channel == 0:
                     self.last_progress = time.monotonic()
@@ -160,7 +166,9 @@ class LabeledBleCapture:
                 else:
                     self._write_wide(
                         path, windows, "Raw_Label", self.capture_id,
-                        SAMPLES_PER_WINDOW[sensor],
+                        self.samples_per_window.get(
+                            (sensor, channel), SAMPLES_PER_WINDOW[sensor]
+                        ),
                     )
                 self.saved_files.append(str(path.relative_to(self.session)))
 
@@ -212,7 +220,15 @@ class LabeledBleCapture:
         )
         for label, data, filename in segments:
             path = directory / filename
-            self._write_wide(path, data, "Label", label, SAMPLES_PER_WINDOW["emg"])
+            self._write_wide(
+                path,
+                data,
+                "Label",
+                label,
+                self.samples_per_window.get(
+                    ("emg", channel), SAMPLES_PER_WINDOW["emg"]
+                ),
+            )
             self.saved_files.append(str(path.relative_to(self.session)))
 
     def summary(self) -> dict[str, object]:
@@ -229,5 +245,9 @@ class LabeledBleCapture:
             },
             "sequence_gaps": self.sequence_gaps,
             "invalid_windows": self.invalid_windows,
+            "samples_per_window": {
+                f"{sensor}:{channel}": count
+                for (sensor, channel), count in self.samples_per_window.items()
+            },
             "files": self.saved_files,
         }

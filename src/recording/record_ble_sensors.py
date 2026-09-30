@@ -1,4 +1,4 @@
-"""Record LIMB EMG, IMU, and piezo notifications over BLE."""
+"""Record synchronized AURORA IMU and EMG notifications over BLE."""
 
 from __future__ import annotations
 
@@ -35,6 +35,8 @@ TIMESTAMPED_PACKETS = {
     "imu": struct.Struct("<HIQ12h"),
     "piezo": struct.Struct("<HIQ10H"),
 }
+DEFAULT_SENSORS = ("imu", "emg")
+CURRENT_EMG_PACKET = struct.Struct("<HIQH")
 LEGACY_EMG_PACKET = struct.Struct("<40HI")
 LEGACY_IMU_PACKET = struct.Struct("<9fI")
 IMU_COLUMNS = (
@@ -104,7 +106,7 @@ class BleRecorder:
         self.session = session
         self.sample_sink = sample_sink
         self.clock_sync = clock_sync
-        self.sensors = tuple(SENSOR_UUIDS) if sensors is None else sensors
+        self.sensors = DEFAULT_SENSORS if sensors is None else sensors
         self.imu_units = ("device units", "device units")
         self.counts = {name: 0 for name in self.sensors}
         self.raw_file = (
@@ -195,6 +197,8 @@ class BleRecorder:
 
     @staticmethod
     def _packet_device_time(sensor: str, payload: bytes) -> int | None:
+        if sensor == "emg" and len(payload) == CURRENT_EMG_PACKET.size:
+            return CURRENT_EMG_PACKET.unpack(payload)[2]
         packet = TIMESTAMPED_PACKETS.get(sensor)
         if packet is None or len(payload) != packet.size:
             return None
@@ -229,7 +233,13 @@ class BleRecorder:
     def _decode_emg(
         self, host_time: str, host_monotonic_ns: int, data: bytes
     ) -> None:
-        if len(data) == TIMESTAMPED_PACKETS["emg"].size:
+        if len(data) == CURRENT_EMG_PACKET.size:
+            format_flags, sequence, device_time, value = CURRENT_EMG_PACKET.unpack(data)
+            version = format_flags >> 8
+            if version != 1:
+                raise ValueError(f"unsupported current EMG packet version {version}")
+            channels = [[value]] if format_flags & 0x01 else []
+        elif len(data) == TIMESTAMPED_PACKETS["emg"].size:
             _, sequence, device_time, *values = TIMESTAMPED_PACKETS["emg"].unpack(data)
             channels = [values[:40], values[40:]]
         elif len(data) == LEGACY_EMG_PACKET.size:
@@ -326,11 +336,11 @@ class BleRecorder:
 async def record(args: argparse.Namespace) -> int:
     """Connect to a LIMB server and record every available sensor stream."""
     requested_value = getattr(args, "sensors", None)
-    requested = tuple(SENSOR_UUIDS) if requested_value is None else tuple(
+    requested = DEFAULT_SENSORS if requested_value is None else tuple(
         dict.fromkeys(requested_value)
     )
     if not requested or any(name not in SENSOR_UUIDS for name in requested):
-        print("Choose at least one known sensor: imu, emg, or piezo.")
+        print("Choose at least one sensor: imu or emg (piezo is legacy-only).")
         return 2
     if getattr(args, "preview", False):
         if args.dataset_label:

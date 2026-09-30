@@ -2,15 +2,16 @@
 
 This folder contains small standalone checks.
 
-To require complete live acceleration and gyroscope values from both ESP32
-IMUs (the port is auto-detected when possible):
+To require complete live acceleration/gyroscope values from both IMUs plus EMG
+(the port is auto-detected when possible):
 
 ```powershell
-micromamba run -n aurora-simulation python scripts/check_dual_imu.py --port COM5
+micromamba run -n aurora-simulation python scripts/check_dual_imu.py --port COM5 --require-emg
 ```
 
-This exits with a failure code when either address is absent and translates the
-firmware's pull-up continuity fields into a wiring-specific diagnostic.
+Omit `--require-emg` for an IMU-only harness. The check exits with a failure
+code when required data is absent and translates the firmware's pull-up fields
+into a wiring-specific diagnostic.
 
 To test the OAK-D RGB camera without recording:
 

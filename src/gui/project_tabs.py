@@ -260,7 +260,7 @@ class ProjectTabsMixin:
             "The GUI can run from any clone location without path edits.",
             "",
             "SUPPORTED ENTRY POINTS\n",
-            "Simulation: interactive task scene with keyboard or live camera + IMU control",
+            "Simulation: interactive task scene with keyboard or live camera + IMU + EMG control",
             "Motion AI: pose-recording playback and GRU profile recognition",
             "Recording: dual-IMU serial data and OAK-D pose capture",
             "Firmware: ESP-IDF projects built and flashed through the project environment",

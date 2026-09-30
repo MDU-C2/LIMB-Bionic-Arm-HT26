@@ -1,28 +1,28 @@
 # Sensor preview and recording
 
-The current recording workflow combines the OAK-D camera with selected
-acquisition-timestamped IMU, EMG, and piezo notifications from an ESP32.
+The current recording workflow combines the OAK-D camera with
+acquisition-timestamped dual-IMU and EMG notifications from one ESP32.
 
 | Source | Preview | Recorded files |
 | --- | --- | --- |
-| Bluetooth IMU / EMG / piezo | Separate BLE previews | Selected sensor CSVs, `packets.jsonl` |
+| Bluetooth dual IMU + EMG | Separate live previews | `imu.csv`, `emg.csv`, `packets.jsonl` |
 | OAK-D | RGB video, body pose, and hand landmarks | `video.mp4`, `pose.json` |
-| Dual IMU serial (diagnostic) | Dedicated shoulder/wrist window | `serial.jsonl` |
+| USB serial sensors (diagnostic) | Dedicated IMU/EMG window | `serial.jsonl` |
 
 Every recorder writes `meta.json`. In a batch, sources receive the same session
 ID and write separate folders below `outputs/recordings/`.
 
 ## Preview
 
-Use **Open IMU monitor** anywhere in the GUI for live ESP32 data. The monitor
-does not save files. Open the camera through the advanced recorder preview; it
-does not save until `R` or **START REC** is pressed.
+Use **Open sensor monitor** anywhere in the GUI for live ESP32 data. The monitor
+shows both IMUs plus raw/calibrated EMG and does not save files. The camera
+monitor also stays preview-only until `R` or **START REC** is pressed.
 
 ## Record a session
 
 1. Open **Recording**.
 2. Keep OAK-D camera and ESP32 sensors (Bluetooth) selected.
-3. Choose IMU, EMG, and/or piezo. Missing characteristics do not stop available streams.
+3. Leave both IMU and EMG selected. A missing characteristic does not stop the other stream.
 4. Keep `LIMBServer` (or enter the configured BLE name) and enter subject/trial metadata.
 5. Press **Start selected sources**.
 6. Press **Stop recording sources** when finished.

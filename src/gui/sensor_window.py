@@ -1,4 +1,4 @@
-"""Dedicated live window for the shoulder and wrist IMUs."""
+"""Dedicated live window for the shoulder/wrist IMUs and EMG channel."""
 
 from __future__ import annotations
 
@@ -14,25 +14,30 @@ for module_dir in (SRC_DIR / "recording", SRC_DIR / "simulation" / "ai"):
     if str(module_dir) not in sys.path:
         sys.path.insert(0, str(module_dir))
 
+from emg_protocol import EmgActivationEstimator, extract_emg
 from imu_protocol import ROLE_LABELS, extract_imus, i2c_wiring_hint
 from sensor_fusion import DualImuArmEstimator
 
 
 class ImuMonitorWindow:
-    """Render one or two connected IMUs outside the main control window."""
+    """Render the ESP32 IMU and EMG streams outside the main window."""
 
     def __init__(self, parent: tk.Misc, reconnect_command, disconnect_command) -> None:
         self.window = tk.Toplevel(parent)
-        self.window.title("AURORA | Shoulder and wrist IMUs")
-        self.window.geometry("900x520")
-        self.window.minsize(700, 460)
+        self.window.title("AURORA | Live IMU and EMG sensors")
+        self.window.geometry("900x650")
+        self.window.minsize(700, 580)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.closed = False
         self.estimator = DualImuArmEstimator()
+        self.emg_estimator = EmgActivationEstimator()
         self.last_sample_time: float | None = None
         self.connection = tk.StringVar(value="Waiting for serial connection")
         self.device = tk.StringVar(value="ESP32: no data")
         self.joints = tk.StringVar(value="Waiting for IMU data")
+        self.emg_value = tk.StringVar(value="Waiting for EMG data")
+        self.emg_meta = tk.StringVar(value="ADC channel: -    GPIO: -")
+        self.emg_progress = tk.DoubleVar(value=0.0)
         self.sensor_values: dict[str, dict[str, tk.StringVar]] = {}
 
         root = ttk.Frame(self.window, padding=18)
@@ -40,7 +45,7 @@ class ImuMonitorWindow:
         root.columnconfigure(0, weight=1)
         root.columnconfigure(1, weight=1)
 
-        ttk.Label(root, text="Live IMU monitor", font=("Segoe UI", 17, "bold")).grid(
+        ttk.Label(root, text="Live sensor monitor", font=("Segoe UI", 17, "bold")).grid(
             row=0, column=0, sticky="w"
         )
         ttk.Label(
@@ -100,8 +105,24 @@ class ImuMonitorWindow:
                 row=5, column=0, sticky="w", pady=(3, 0)
             )
 
+        emg = ttk.LabelFrame(root, text="EMG muscle signal", padding=14)
+        emg.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        emg.columnconfigure(0, weight=1)
+        ttk.Label(emg, textvariable=self.emg_value, font=("Cascadia Mono", 10)).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(emg, textvariable=self.emg_meta, foreground="#667085").grid(
+            row=1, column=0, sticky="w", pady=(3, 0)
+        )
+        ttk.Progressbar(
+            emg,
+            variable=self.emg_progress,
+            maximum=100.0,
+            length=250,
+        ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(12, 0))
+
         fused = ttk.LabelFrame(root, text="Relative arm estimate", padding=14)
-        fused.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        fused.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(14, 0))
         fused.columnconfigure(0, weight=1)
         ttk.Label(fused, textvariable=self.joints, font=("Cascadia Mono", 10)).grid(
             row=0, column=0, sticky="w"
@@ -139,6 +160,9 @@ class ImuMonitorWindow:
     def show_packet(self, packet: dict[str, object]) -> None:
         if not self.exists:
             return
+        now = time.monotonic()
+        dt = 0.02 if self.last_sample_time is None else now - self.last_sample_time
+        self.last_sample_time = now
         device = str(packet.get("device", "ESP32"))
         sensors = extract_imus(packet)
         roles = tuple(
@@ -210,9 +234,28 @@ class ImuMonitorWindow:
             values["accel"].set(self._axes(sensor.get("accel_g"), 4))
             values["gyro"].set(self._axes(sensor.get("gyro_dps"), 2))
 
-        now = time.monotonic()
-        dt = 0.02 if self.last_sample_time is None else now - self.last_sample_time
-        self.last_sample_time = now
+        emg = extract_emg(packet)
+        if emg.get("connected") is True:
+            raw = int(emg["adc_raw"])
+            activation = self.emg_estimator.update(raw, dt)
+            if activation is None:
+                percent = round(self.emg_estimator.calibration_progress * 100)
+                self.emg_value.set(f"Raw {raw:4d} ADC   Calibrating rest {percent:3d}%")
+                self.emg_progress.set(percent)
+            else:
+                self.emg_value.set(
+                    f"Raw {raw:4d} ADC   Activation {activation * 100:5.1f}%"
+                )
+                self.emg_progress.set(activation * 100.0)
+            self.emg_meta.set(
+                f"ADC channel: {emg.get('adc_channel', '?')}    "
+                f"GPIO: {emg.get('gpio', '?')}"
+            )
+        else:
+            self.emg_value.set(f"Disconnected · {emg.get('error', 'no data')}")
+            self.emg_meta.set("ADC channel: -    GPIO: -")
+            self.emg_progress.set(0.0)
+
         estimate = self.estimator.update(sensors, dt)
         if estimate is None:
             self.joints.set(f"Waiting for an IMU ({connected}/2 connected)")
@@ -243,8 +286,11 @@ class ImuMonitorWindow:
 
     def calibrate(self) -> None:
         self.estimator.reset_calibration()
+        self.emg_estimator.reset()
         self.last_sample_time = None
         self.joints.set("Calibration reset · hold the arm still for the next sample")
+        self.emg_value.set("Calibration reset · relax the muscle briefly")
+        self.emg_progress.set(0.0)
 
     def close(self) -> None:
         if self.closed:

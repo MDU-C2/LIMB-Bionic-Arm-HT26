@@ -18,6 +18,11 @@ for module_dir in (AI_DIR, RECORDING_DIR):
     if str(module_dir) not in sys.path:
         sys.path.insert(0, str(module_dir))
 
+from emg_protocol import (
+    EmgActivationEstimator,
+    extract_emg,
+    select_grip_source,
+)
 from imu_protocol import extract_imus, ImuStreamDecoder, imu_configuration
 from record_oak_pose import (
     FRAME_SIZE,
@@ -64,6 +69,9 @@ class LiveFusionSnapshot:
     imu_ready: bool
     status: str
     hand_curl: float | None = None
+    grip_source: str = "--"
+    emg_raw: int | None = None
+    emg_activation: float | None = None
     stop_requested: bool = False
 
 
@@ -111,7 +119,11 @@ class SerialPacketReader:
                         packet = self.decoder.feed(
                             raw.decode("utf-8", errors="ignore")
                         )
-                        if not isinstance(packet, dict) or not extract_imus(packet):
+                        if not isinstance(packet, dict):
+                            continue
+                        if not extract_imus(packet) and not extract_emg(packet).get(
+                            "connected"
+                        ):
                             continue
                         if self.packets.full():
                             try:
@@ -131,6 +143,7 @@ def _draw_overlay(
     fused: dict[str, float] | None,
     cv2,
     hand_curl: float | None = None,
+    grip_source: str = "--",
 ):
     """Render compact tracking and control telemetry over the camera image."""
     canvas = frame.copy()
@@ -149,7 +162,11 @@ def _draw_overlay(
         def angle(name: str) -> str:
             return f"{fused[name]:.1f}" if name in fused else "--"
 
-        grip = f"{hand_curl * 100:.0f}%" if hand_curl is not None else "--"
+        grip = (
+            f"{hand_curl * 100:.0f}% ({grip_source})"
+            if hand_curl is not None
+            else "--"
+        )
         values = (
             f"Flex {angle('shoulder_flexion')}  "
             f"L/R {angle('shoulder_abduction')}  "
@@ -211,6 +228,9 @@ class LiveSensorInput:
         self.camera_time = 0.0
         self.hand_curl: float | None = None
         self.hand_time = 0.0
+        self.emg_raw: int | None = None
+        self.emg_activation: float | None = None
+        self.emg_time = 0.0
         self.previous_camera_time = time.monotonic()
         self.imu_angles: dict[str, float] | None = None
         self.imu_time = 0.0
@@ -220,6 +240,7 @@ class LiveSensorInput:
         self.imu_mode = "none"
         self.imu_roles: tuple[str, ...] = ()
         self.estimator = DualImuArmEstimator()
+        self.emg_estimator = EmgActivationEstimator()
         self.camera_smoother = ControlAngleSmoother()
         self._closed = False
 
@@ -274,6 +295,7 @@ class LiveSensorInput:
 
     def calibrate(self) -> None:
         self.estimator.reset_calibration()
+        self.emg_estimator.reset()
         self.camera_smoother.reset()
         self.imu_angles = None
         self.imu_time = 0.0
@@ -292,6 +314,11 @@ class LiveSensorInput:
             self.imu_angles = self.estimator.update(self.sensors, dt)
             if self.imu_angles:
                 self.imu_time = now
+            emg = extract_emg(packet)
+            if emg.get("connected") is True:
+                self.emg_raw = int(emg["adc_raw"])
+                self.emg_activation = self.emg_estimator.update(self.emg_raw, dt)
+                self.emg_time = now
 
         if self.depth_queue is not None:
             depth_message = self.depth_queue.tryGet()
@@ -338,6 +365,12 @@ class LiveSensorInput:
         recent_imu = self.imu_angles if now - self.imu_time <= 0.5 else None
         recent_camera = self.camera_angles if now - self.camera_time <= 0.5 else None
         recent_hand_curl = self.hand_curl if now - self.hand_time <= 0.5 else None
+        recent_emg = (
+            self.emg_activation
+            if now - self.emg_time <= 0.5
+            else None
+        )
+        grip, grip_source = select_grip_source(recent_emg, recent_hand_curl)
         imu_connected = (
             self.imu_mode != "none" and now - self.imu_packet_time <= 0.5
         )
@@ -348,7 +381,16 @@ class LiveSensorInput:
             imu_status = f"IMU 1/2 ({self.imu_roles[0]})"
         else:
             imu_status = "IMUs --"
-        source_status = f"Camera {'OK' if recent_camera else '--'} | {imu_status}"
+        emg_status = (
+            f"EMG {recent_emg * 100:.0f}%"
+            if recent_emg is not None
+            else "EMG calibrating"
+            if now - self.emg_time <= 0.5
+            else "EMG --"
+        )
+        source_status = (
+            f"Camera {'OK' if recent_camera else '--'} | {imu_status} | {emg_status}"
+        )
         if self.reader is not None and self.reader.error:
             source_status += f" | Serial: {self.reader.error}"
 
@@ -362,7 +404,8 @@ class LiveSensorInput:
                 f"{source_status} | {self.camera_status}",
                 fused,
                 self.cv2,
-                recent_hand_curl,
+                grip,
+                grip_source,
             )
             self.cv2.imshow(WINDOW, canvas)
         key = self.cv2.waitKey(1) & 0xFF
@@ -382,7 +425,10 @@ class LiveSensorInput:
             camera_ready=recent_camera is not None,
             imu_ready=imu_connected,
             status=f"{source_status} | {self.camera_status}",
-            hand_curl=recent_hand_curl,
+            hand_curl=grip,
+            grip_source=grip_source,
+            emg_raw=self.emg_raw if now - self.emg_time <= 0.5 else None,
+            emg_activation=recent_emg,
             stop_requested=stop_requested,
         )
 

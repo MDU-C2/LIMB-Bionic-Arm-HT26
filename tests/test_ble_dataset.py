@@ -20,7 +20,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
 
 from ble_dataset import LabeledBleCapture
-from record_ble_sensors import BleRecorder, record, SENSOR_UUIDS
+from record_ble_sensors import BleRecorder, CURRENT_EMG_PACKET, record, SENSOR_UUIDS
 
 
 class LabeledBleCaptureTests(unittest.TestCase):
@@ -46,6 +46,32 @@ class LabeledBleCaptureTests(unittest.TestCase):
         self.assertEqual(len(samples[0][2]), 2)
         self.assertEqual(samples[1][2][1][0][0], 0.006)
         self.assertEqual(recorder.imu_units, ("g", "dps"))
+
+    def test_current_single_channel_emg_packet_keeps_device_time(self) -> None:
+        samples = []
+        recorder = BleRecorder(
+            None,
+            lambda sensor, sequence, channels: samples.append(
+                (sensor, sequence, channels)
+            ),
+            sensors=("emg",),
+        )
+        recorder.handle(
+            "emg",
+            bytearray(CURRENT_EMG_PACKET.pack(0x0101, 12, 345_000, 2024)),
+        )
+        recorder.close()
+        self.assertEqual(samples, [("emg", 12, [[2024]])])
+
+    def test_current_emg_rate_builds_ten_sample_labeled_windows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            session = Path(temporary)
+            capture = LabeledBleCapture(session, "1", "S01")
+            capture.start()
+            for sequence in range(10):
+                capture.add_packet("emg", sequence, [[2000 + sequence]])
+            self.assertEqual(len(capture.windows["emg"][0]), 1)
+            self.assertEqual(capture.samples_per_window[("emg", 0)], 10)
 
         current = BleRecorder(None)
         current.handle("imu", bytearray(struct.pack("<I6f", 9, 1000, 0, 0, 500, 0, 0)))

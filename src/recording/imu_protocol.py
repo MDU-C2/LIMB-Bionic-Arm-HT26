@@ -30,6 +30,7 @@ class ImuStreamDecoder:
         r"^IMU\s*(?P<sensor>[12])\s+(?P<kind>ACC|GYRO):\s*"
         r"(?P<x>-?\d+)\s+(?P<y>-?\d+)\s+(?P<z>-?\d+)$"
     )
+    _legacy_emg = re.compile(r"^(?P<time>\d+),(?P<raw>\d+)$")
 
     def __init__(self) -> None:
         self.reset()
@@ -49,6 +50,22 @@ class ImuStreamDecoder:
                 value = None
             if isinstance(value, dict):
                 return value
+
+        emg = self._legacy_emg.match(line)
+        if emg is not None:
+            raw = int(emg.group("raw"))
+            if 0 <= raw <= 4095:
+                return {
+                    "schema": "aurora.legacy_emg_csv.v1",
+                    "device": "ESP32-C3 legacy EMG firmware",
+                    "sample_time_us": int(emg.group("time")),
+                    "emg": {
+                        "connected": True,
+                        "adc_channel": 0,
+                        "gpio": 0,
+                        "adc_raw": raw,
+                    },
+                }
 
         identity = self._identity.match(line)
         if identity is not None:

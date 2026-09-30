@@ -28,7 +28,7 @@ class SimulationTabsMixin:
         self._heading(
             tab,
             "LIMB simulation",
-            "Use the left-arm task scene with keyboard control or live camera + IMUs.",
+            "Use the left-arm task scene with keyboard control or live camera + IMUs + EMG.",
         )
 
         interactive = self._card(
@@ -63,8 +63,9 @@ class SimulationTabsMixin:
             3,
             "Interactive simulator with live sensors",
             "Open the same table-and-target scene, show the camera monitor, and control "
-            "the arm from the OAK-D plus an automatically detected shoulder IMU and "
-            "optional wrist IMU. Copy the simulator's straight-arm reference and press L "
+            "the arm from the OAK-D plus an automatically detected shoulder IMU, "
+            "optional wrist IMU, and EMG-controlled grip. Copy the simulator's straight-arm "
+            "reference and press L "
             "to start feedback. Press R to pause and align again.",
         )
         fusion_settings = ttk.Frame(fusion, style="Card.TFrame")
@@ -111,7 +112,7 @@ class SimulationTabsMixin:
         self.fusion_button.pack(side="left", padx=(0, 8))
         ttk.Button(
             fusion_actions,
-            text="Open IMU monitor",
+            text="Open sensor monitor",
             command=self.open_sensor_window,
         ).pack(side="left", padx=(0, 8))
         ttk.Button(

@@ -10,15 +10,15 @@ micromamba run -n aurora-simulation python src/gui/app.py
 
 | Tab | Use |
 | --- | --- |
-| Simulation | Run the interactive task arm by keyboard or live camera/IMU fusion. |
-| Recording | Capture OAK-D and synchronized dual-IMU Bluetooth data as one session. |
+| Simulation | Run the interactive task arm by keyboard or live camera/IMU/EMG control. |
+| Recording | Capture OAK-D, dual-IMU, and EMG data as one synchronized session. |
 | Recordings | Browse files created by the recorders. |
 | Motion AI | Play camera poses or run movement recognition. |
 | Firmware | Build, flash, and monitor the ESP-IDF project through the project environment. |
 | Info | Check local files, tools, and dependencies. |
 
-IMU values are intentionally not embedded in the main window. **Open IMU
-monitor** opens a dedicated window with separate shoulder and wrist panels. The
+Live values are intentionally not embedded in the main window. **Open sensor
+monitor** opens a dedicated window with shoulder, wrist, and EMG panels. The
 GUI connects to the selected serial port at startup when a port is available.
 It releases the port before recording, flashing, or starting live sensor fusion.
 
@@ -26,18 +26,17 @@ It releases the port before recording, flashing, or starting live sensor fusion.
 a recording. Live interactive control opens its own annotated camera monitor,
 so close the standalone preview before starting that mode.
 
-The Recording page defaults to OAK-D plus the Bluetooth IMU stream published by
-the current dual-IMU firmware. Legacy EMG and piezo streams can be enabled
-independently when using old LIMBServer firmware; if a selected characteristic
-is unavailable, the recorder keeps every other connected stream running. Device
+The Recording page defaults to OAK-D plus both IMU and EMG Bluetooth streams
+published by the current firmware. A selected unavailable characteristic does
+not stop the other connected stream. Device
 timestamps are mapped to the same host monotonic clock saved with camera frames.
-The serial IMU stream remains available for diagnostics and the legacy LIMB25
+The serial sensor stream remains available for diagnostics and the legacy LIMB25
 BLE characteristics remain readable.
 
 ## GUI files
 
 - `app.py` composes the window, tabs, shared controls, and activity panel.
-- `sensor_window.py` renders the separate dual-IMU monitor.
+- `sensor_window.py` renders the separate IMU and EMG monitor.
 - `recording_tab.py` coordinates preview, capture, and recording browsing.
 - `simulation_tabs.py` launches simulation, fusion, and Motion AI tools.
 - `project_tabs.py` handles native ESP-IDF commands and project status.

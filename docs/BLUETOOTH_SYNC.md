@@ -1,6 +1,6 @@
 # Bluetooth sensor time synchronization
 
-The dual-IMU ESP32 uses the LIMB-HT25 service and IMU UUIDs so the existing
+The dual-IMU/EMG ESP32 uses the LIMB-HT25 service and sensor UUIDs so the existing
 Bleak tools continue to work. The firmware keeps the useful HT25 choices—ESP-IDF
 NimBLE, compact binary notifications, acquisition sequence numbers, and one
 notification per IMU sample—but fixes the old recorder's timing limitation.
@@ -31,7 +31,7 @@ even when notifications arrive late or in bursts.
 
 ## Recorded fields
 
-`imu.csv`, `emg.csv`, and `piezo.csv` retain the notification arrival field
+Current `imu.csv` and `emg.csv` files retain the notification arrival field
 `host_monotonic_ns` for diagnostics and add `synced_host_monotonic_ns` for data
 alignment. `packets.jsonl` preserves raw payloads and both timestamps. The
 session `meta.json` contains exchange count, clock rate/drift, minimum round
@@ -47,6 +47,7 @@ synchronization.
 | Purpose | UUID |
 | --- | --- |
 | Sensor service | `23011525-1212-efde-1523-785feabcd122` |
+| EMG notification | `24011525-1212-efde-1523-785feabcd122` |
 | IMU notification | `25011525-1212-efde-1523-785feabcd122` |
 | Time-sync write/notify | `27011525-1212-efde-1523-785feabcd122` |
 

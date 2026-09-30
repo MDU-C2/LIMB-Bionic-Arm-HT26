@@ -1,4 +1,4 @@
-/* ESP-IDF NimBLE transport for synchronized AURORA IMU samples.
+/* ESP-IDF NimBLE transport for synchronized AURORA IMU and EMG samples.
  *
  * The service and IMU characteristic UUIDs intentionally match LIMB-HT25 so
  * the existing Bleak tooling remains compatible.  A new time-sync
@@ -32,11 +32,16 @@
 #define DEVICE_NAME "LIMBServer"
 #define SYNC_PROTOCOL_VERSION 1U
 #define IMU_PACKET_VERSION 1U
+#define EMG_PACKET_VERSION 1U
 
 /* 23011525-1212-efde-1523-785feabcd122 */
 static const ble_uuid128_t k_service_uuid = BLE_UUID128_INIT(
     0x22, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef, 0x12, 0x12,
     0x25, 0x15, 0x01, 0x23);
+/* 24011525-1212-efde-1523-785feabcd122 */
+static const ble_uuid128_t k_emg_uuid = BLE_UUID128_INIT(
+    0x22, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef, 0x12, 0x12,
+    0x25, 0x15, 0x01, 0x24);
 /* 25011525-1212-efde-1523-785feabcd122 */
 static const ble_uuid128_t k_imu_uuid = BLE_UUID128_INIT(
     0x22, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef, 0x12, 0x12,
@@ -56,6 +61,14 @@ typedef struct __attribute__((packed)) {
 } imu_packet_t;
 
 typedef struct __attribute__((packed)) {
+  /* High byte: protocol version. Low bit: ADC sample valid. */
+  uint16_t format_flags;
+  uint32_t sequence;
+  uint64_t device_time_us;
+  uint16_t adc_raw;
+} emg_packet_t;
+
+typedef struct __attribute__((packed)) {
   uint16_t version;
   uint16_t flags;
   uint32_t exchange_id;
@@ -72,6 +85,7 @@ typedef struct __attribute__((packed)) {
 } time_sync_response_t;
 
 _Static_assert(sizeof(imu_packet_t) == 38, "IMU packet wire size changed");
+_Static_assert(sizeof(emg_packet_t) == 16, "EMG packet wire size changed");
 _Static_assert(sizeof(time_sync_request_t) == 16,
                "time-sync request wire size changed");
 _Static_assert(sizeof(time_sync_response_t) == 32,
@@ -80,10 +94,13 @@ _Static_assert(sizeof(time_sync_response_t) == 32,
 static const char *const k_tag = "AURORA_BLE";
 static uint8_t s_own_address_type;
 static uint16_t s_connection_handle = BLE_HS_CONN_HANDLE_NONE;
+static uint16_t s_emg_value_handle;
 static uint16_t s_imu_value_handle;
 static uint16_t s_time_sync_value_handle;
+static bool s_emg_notify_enabled;
 static bool s_imu_notify_enabled;
 static bool s_time_sync_notify_enabled;
+static emg_packet_t s_latest_emg;
 static imu_packet_t s_latest_imu;
 static time_sync_response_t s_latest_sync;
 static portMUX_TYPE s_state_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -92,6 +109,12 @@ static int sensor_access(uint16_t connection_handle, uint16_t attribute_handle,
                          struct ble_gatt_access_ctxt *context, void *argument);
 
 static const struct ble_gatt_chr_def k_characteristics[] = {
+    {
+        .uuid = &k_emg_uuid.u,
+        .access_cb = sensor_access,
+        .val_handle = &s_emg_value_handle,
+        .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
+    },
     {
         .uuid = &k_imu_uuid.u,
         .access_cb = sensor_access,
@@ -140,6 +163,16 @@ static int notify_custom(uint16_t connection_handle, uint16_t value_handle,
 static int sensor_access(uint16_t connection_handle, uint16_t attribute_handle,
                          struct ble_gatt_access_ctxt *context, void *argument) {
   (void)argument;
+  if (attribute_handle == s_emg_value_handle) {
+    if (context->op != BLE_GATT_ACCESS_OP_READ_CHR) {
+      return BLE_ATT_ERR_WRITE_NOT_PERMITTED;
+    }
+    emg_packet_t packet;
+    taskENTER_CRITICAL(&s_state_mux);
+    packet = s_latest_emg;
+    taskEXIT_CRITICAL(&s_state_mux);
+    return append_value(context->om, &packet, sizeof(packet));
+  }
   if (attribute_handle == s_imu_value_handle) {
     if (context->op != BLE_GATT_ACCESS_OP_READ_CHR) {
       return BLE_ATT_ERR_WRITE_NOT_PERMITTED;
@@ -231,6 +264,7 @@ static int gap_event(struct ble_gap_event *event, void *argument) {
     case BLE_GAP_EVENT_DISCONNECT:
       taskENTER_CRITICAL(&s_state_mux);
       s_connection_handle = BLE_HS_CONN_HANDLE_NONE;
+      s_emg_notify_enabled = false;
       s_imu_notify_enabled = false;
       s_time_sync_notify_enabled = false;
       taskEXIT_CRITICAL(&s_state_mux);
@@ -239,7 +273,9 @@ static int gap_event(struct ble_gap_event *event, void *argument) {
       return 0;
     case BLE_GAP_EVENT_SUBSCRIBE:
       taskENTER_CRITICAL(&s_state_mux);
-      if (event->subscribe.attr_handle == s_imu_value_handle) {
+      if (event->subscribe.attr_handle == s_emg_value_handle) {
+        s_emg_notify_enabled = event->subscribe.cur_notify != 0;
+      } else if (event->subscribe.attr_handle == s_imu_value_handle) {
         s_imu_notify_enabled = event->subscribe.cur_notify != 0;
       } else if (event->subscribe.attr_handle == s_time_sync_value_handle) {
         s_time_sync_notify_enabled = event->subscribe.cur_notify != 0;
@@ -371,7 +407,8 @@ static void write_sensor(int16_t *destination,
 
 void ble_transport_publish(uint32_t sequence, uint64_t device_time_us,
                            const aurora_ble_imu_sample_t *shoulder,
-                           const aurora_ble_imu_sample_t *wrist) {
+                           const aurora_ble_imu_sample_t *wrist,
+                           bool emg_connected, uint16_t emg_raw) {
   const uint16_t connected_mask =
       (shoulder != NULL && shoulder->connected ? 0x01U : 0U) |
       (wrist != NULL && wrist->connected ? 0x02U : 0U);
@@ -380,20 +417,38 @@ void ble_transport_publish(uint32_t sequence, uint64_t device_time_us,
       .sequence = sequence,
       .device_time_us = device_time_us,
   };
+  emg_packet_t emg_packet = {
+      .format_flags = (uint16_t)((EMG_PACKET_VERSION << 8) |
+                                 (emg_connected ? 0x01U : 0U)),
+      .sequence = sequence,
+      .device_time_us = device_time_us,
+      .adc_raw = emg_connected ? emg_raw : 0U,
+  };
   write_sensor(&packet.values[0], shoulder);
   write_sensor(&packet.values[6], wrist);
 
   taskENTER_CRITICAL(&s_state_mux);
+  s_latest_emg = emg_packet;
   s_latest_imu = packet;
   const uint16_t connection_handle = s_connection_handle;
-  const bool subscribed = s_imu_notify_enabled;
+  const bool emg_subscribed = s_emg_notify_enabled;
+  const bool imu_subscribed = s_imu_notify_enabled;
   taskEXIT_CRITICAL(&s_state_mux);
-  if (!subscribed || connection_handle == BLE_HS_CONN_HANDLE_NONE) {
+  if (connection_handle == BLE_HS_CONN_HANDLE_NONE) {
     return;
   }
-  const int error = notify_custom(connection_handle, s_imu_value_handle, &packet,
-                                  sizeof(packet));
-  if (error != 0 && error != BLE_HS_ENOTCONN) {
-    ESP_LOGW(k_tag, "IMU notification failed: %d", error);
+  if (emg_subscribed) {
+    const int error = notify_custom(connection_handle, s_emg_value_handle,
+                                    &emg_packet, sizeof(emg_packet));
+    if (error != 0 && error != BLE_HS_ENOTCONN) {
+      ESP_LOGW(k_tag, "EMG notification failed: %d", error);
+    }
+  }
+  if (imu_subscribed) {
+    const int error = notify_custom(connection_handle, s_imu_value_handle,
+                                    &packet, sizeof(packet));
+    if (error != 0 && error != BLE_HS_ENOTCONN) {
+      ESP_LOGW(k_tag, "IMU notification failed: %d", error);
+    }
   }
 }

@@ -1,4 +1,4 @@
-"""Verify live shoulder and wrist IMU values from the ESP32 serial stream."""
+"""Verify live shoulder/wrist IMUs and optional EMG from the ESP32 stream."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "recording"))
 
+from emg_protocol import extract_emg
 from imu_protocol import ImuStreamDecoder, extract_imus, i2c_wiring_hint
 
 
@@ -38,6 +39,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=5,
         help="Complete packets required from each IMU.",
+    )
+    parser.add_argument(
+        "--require-emg",
+        action="store_true",
+        help="Also require valid GPIO0 ADC readings from the integrated EMG input.",
     )
     return parser.parse_args()
 
@@ -74,7 +80,13 @@ def _format_axes(value: dict[str, Any]) -> str:
     return " ".join(f"{axis.upper()}={float(value[axis]):+.4f}" for axis in ("x", "y", "z"))
 
 
-def verify_stream(port: str, baud: int, seconds: float, min_samples: int) -> bool:
+def verify_stream(
+    port: str,
+    baud: int,
+    seconds: float,
+    min_samples: int,
+    require_emg: bool = False,
+) -> bool:
     import serial
 
     decoder = ImuStreamDecoder()
@@ -83,6 +95,8 @@ def verify_stream(port: str, baud: int, seconds: float, min_samples: int) -> boo
     latest_packet: dict[str, Any] | None = None
     current_bus: dict[str, Any] | None = None
     packet_count = 0
+    emg_count = 0
+    latest_emg: dict[str, Any] = {}
     deadline = time.monotonic() + seconds
 
     print(f"Reading {port} at {baud} baud for up to {seconds:g} s...")
@@ -111,7 +125,14 @@ def verify_stream(port: str, baud: int, seconds: float, min_samples: int) -> boo
                 ):
                     counts[role] += 1
                     latest[role] = sensor
-            if all(counts[role] >= min_samples for role in ROLE_ORDER):
+            emg = extract_emg(packet)
+            if emg.get("connected") is True and "adc_raw" in emg:
+                emg_count += 1
+                latest_emg = emg
+            if (
+                all(counts[role] >= min_samples for role in ROLE_ORDER)
+                and (not require_emg or emg_count >= min_samples)
+            ):
                 break
 
     if packet_count == 0:
@@ -135,6 +156,15 @@ def verify_stream(port: str, baud: int, seconds: float, min_samples: int) -> boo
             f"({counts[role]} packets)"
         )
 
+    if latest_emg:
+        print(
+            f"PASS: emg      GPIO{latest_emg.get('gpio', '?')} "
+            f"raw={latest_emg['adc_raw']} ADC  ({emg_count} packets)"
+        )
+    elif require_emg:
+        success = False
+        print("FAIL: emg      no valid ADC sample")
+
     if not success:
         hint = i2c_wiring_hint(current_bus or (latest_packet or {}).get("i2c"))
         if hint:
@@ -151,7 +181,17 @@ def main() -> int:
     if args.baud < 1 or args.seconds <= 0 or args.min_samples < 1:
         raise ValueError("baud, seconds, and min-samples must be positive")
     port = select_port(args.port)
-    return 0 if verify_stream(port, args.baud, args.seconds, args.min_samples) else 1
+    return (
+        0
+        if verify_stream(
+            port,
+            args.baud,
+            args.seconds,
+            args.min_samples,
+            args.require_emg,
+        )
+        else 1
+    )
 
 
 if __name__ == "__main__":

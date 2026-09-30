@@ -33,7 +33,8 @@ from project_support import (
     resolve_firmware_tool,
 )
 from process_manager import ManagedProcess, ProcessManagerMixin
-from recording_tab import DEFAULT_BATCH_SOURCES, batch_arguments
+from emg_protocol import EmgActivationEstimator, extract_emg, select_grip_source
+from recording_tab import DEFAULT_BATCH_SOURCES, DEFAULT_BLE_SENSORS, batch_arguments
 from sensor_fusion import (
     ControlAngleSmoother,
     DualImuArmEstimator,
@@ -103,6 +104,29 @@ class RecordingBatchTests(unittest.TestCase):
             DEFAULT_BATCH_SOURCES,
             {"record_oak_pose.py", "record_ble_sensors.py"},
         )
+        self.assertEqual(DEFAULT_BLE_SENSORS, ("imu", "emg"))
+
+    def test_serial_packet_exposes_emg_and_data_driven_activation(self) -> None:
+        packet = {
+            "emg": {
+                "connected": True,
+                "gpio": 0,
+                "adc_channel": 0,
+                "adc_raw": 2025,
+            }
+        }
+        self.assertEqual(extract_emg(packet)["adc_raw"], 2025)
+        estimator = EmgActivationEstimator(calibration_samples=4)
+        for value in (2000, 2002, 1998, 2000):
+            estimator.update(value)
+        self.assertTrue(estimator.calibrated)
+        activation = None
+        for value in (2600,) * 20:
+            activation = estimator.update(value)
+        self.assertIsNotNone(activation)
+        self.assertGreater(activation, 0.25)
+        self.assertEqual(select_grip_source(activation, 0.1)[1], "EMG")
+        self.assertEqual(select_grip_source(None, 0.1), (0.1, "camera"))
 
     def test_limb25_dual_packet_is_normalized_from_si_units(self) -> None:
         packet = {
@@ -493,6 +517,9 @@ class RecordingBatchTests(unittest.TestCase):
         self.assertIn("#define I2C_FREQUENCY_HZ 100000", source)
         self.assertIn("#define SHOULDER_ADDRESS 0x6B", source)
         self.assertIn("#define WRIST_ADDRESS 0x6A", source)
+        self.assertIn("#define EMG_ADC_CHANNEL ADC1_CHANNEL_0", source)
+        self.assertIn("#define EMG_GPIO_NUM GPIO_NUM_0", source)
+        self.assertIn("adc1_get_raw(EMG_ADC_CHANNEL)", source)
 
     def test_dual_imu_check_identifies_an_open_scl_conductor(self) -> None:
         self.assertEqual(

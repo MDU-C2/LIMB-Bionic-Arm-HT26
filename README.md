@@ -1,8 +1,9 @@
 # AURORA - Adaptive User Robotic Rehabilitation Arm
 
 AURORA is a student project at Mälardalen University. This repository currently
-contains the computer-side software for sensor previews, recording, camera
-tracking, movement data, robot simulation, and ESP32-C3 dual-IMU firmware.
+contains the computer-side software for sensor previews, synchronized recording,
+camera tracking, movement data, robot simulation, and ESP32-C3 dual-IMU/EMG
+firmware.
 
 ## Run the program
 
@@ -15,10 +16,10 @@ micromamba run -n aurora-simulation python src/gui/app.py
 
 The GUI can:
 
-- monitor shoulder and wrist IMUs in a dedicated window;
+- monitor shoulder/wrist IMUs and EMG in a dedicated window;
 - monitor the OAK-D camera and pose tracking without recording;
-- record clock-synchronized dual-IMU Bluetooth data and OAK-D camera data;
-- fuse live camera and IMU angles to control the PyBullet arm;
+- record clock-synchronized dual-IMU, EMG, and OAK-D camera data together;
+- fuse live camera and IMU angles while EMG controls the simulated grip;
 - run the interactive PyBullet arm simulation;
 - play saved camera poses; and
 - run the experimental movement-recognition tools.
@@ -30,7 +31,7 @@ The GUI can:
 | `src/gui/` | The desktop application. |
 | `src/recording/` | BLE, camera, and serial preview and recording tools. |
 | `src/simulation/` | PyBullet simulation and Motion AI tools. |
-| `firmware/` | ESP-IDF firmware for the dual-IMU ESP32-C3. |
+| `firmware/` | ESP-IDF firmware for the dual-IMU/EMG ESP32-C3. |
 | `src/ml/` | Movement-data capture and model training. |
 | `data/` | The movement training data currently included in the project. |
 | `docs/` | Short usage guides. |

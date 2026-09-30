@@ -183,7 +183,7 @@ class ProcessManagerMixin:
                 ):
                     # Native USB commonly disappears and returns while the C3
                     # resets. Give Windows time to enumerate it, then resume
-                    # the in-process IMU monitor on the refreshed port.
+                    # the in-process sensor monitor on the refreshed port.
                     self.after(750, self._refresh_recording_ports)
                     self.after(1000, self._start_serial_dashboard_if_available)
         except queue.Empty:

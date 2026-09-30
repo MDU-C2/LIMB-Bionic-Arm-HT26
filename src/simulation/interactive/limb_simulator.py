@@ -65,7 +65,7 @@ parser.add_argument(
     default="keyboard",
     help="Use keyboard controls or live OAK-D plus one/two-IMU control",
 )
-parser.add_argument("--port", help="Dual-IMU ESP32 serial port for live control")
+parser.add_argument("--port", help="Dual-IMU/EMG ESP32 serial port for live control")
 parser.add_argument("--baud", type=int, default=115200)
 parser.add_argument("--side", choices=("left", "right"), default="left")
 parser.add_argument("--camera-weight", type=float, default=0.25)
@@ -776,8 +776,8 @@ tk.Label(imu_frame, textvariable=sensor_vars["imu_yaw"], font=tk_font).pack(anch
 bio_frame = tk.Frame(sensor_window, padx=10, pady=10)
 bio_frame.pack(fill='x')
 
-tk.Label(bio_frame, text="--- BIO-SENSORS (Simulated) ---", font=tk_font_bold).pack(anchor='w')
-sensor_vars["emg_shoulder"] = tk.StringVar(value="EMG: open BLE live preview")
+tk.Label(bio_frame, text="--- HAND INPUT AND CONTACT ---", font=tk_font_bold).pack(anchor='w')
+sensor_vars["emg_shoulder"] = tk.StringVar(value="EMG: not available in keyboard mode")
 sensor_vars["pressure_hand"] = tk.StringVar(value="Fingertip contact: 0/5")
 
 tk.Label(bio_frame, textvariable=sensor_vars["emg_shoulder"], font=tk_font).pack(anchor='w')
@@ -804,7 +804,7 @@ live_frame = tk.Frame(sensor_window, padx=10, pady=6)
 live_frame.pack(fill='x')
 tk.Label(live_frame, text="--- LIVE CONTROL SOURCES ---", font=tk_font_bold).pack(anchor='w')
 sensor_vars["live_status"] = tk.StringVar(
-    value="Keyboard control" if args.control == "keyboard" else "Starting camera and IMUs"
+    value="Keyboard control" if args.control == "keyboard" else "Starting camera, IMUs, and EMG"
 )
 sensor_vars["live_shoulder"] = tk.StringVar(value="Shoulder IMU: --")
 sensor_vars["live_wrist"] = tk.StringVar(value="Wrist IMU: --")
@@ -996,7 +996,7 @@ if args.control == "camera-imu":
         pygame.quit()
         if p.isConnected():
             p.disconnect()
-        raise SystemExit(f"Could not start live camera + IMU control: {error}") from error
+        raise SystemExit(f"Could not start live camera + IMU + EMG control: {error}") from error
 
 
 while running and p.isConnected():
@@ -1871,6 +1871,17 @@ while running and p.isConnected():
             sensor_vars["live_wrist"].set(
                 format_live_imu("wrist", live_snapshot.sensors)
             )
+            if live_snapshot.emg_raw is None:
+                sensor_vars["emg_shoulder"].set("EMG: waiting for a valid ADC sample")
+            elif live_snapshot.emg_activation is None:
+                sensor_vars["emg_shoulder"].set(
+                    f"EMG: {live_snapshot.emg_raw} ADC · calibrating rest"
+                )
+            else:
+                sensor_vars["emg_shoulder"].set(
+                    f"EMG: {live_snapshot.emg_raw} ADC · "
+                    f"activation {live_snapshot.emg_activation * 100:.1f}% · controls grip"
+                )
 
         displayed_fingertip_force_n = {
             finger: max(

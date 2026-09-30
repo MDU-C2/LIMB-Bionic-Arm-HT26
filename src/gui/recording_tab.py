@@ -28,6 +28,7 @@ from project_support import (
     project_path,
     serial_ports,
 )
+from emg_protocol import extract_emg
 from imu_protocol import extract_imus, ImuStreamDecoder
 from serial_sensor import SerialSensorReader
 from sensor_window import ImuMonitorWindow
@@ -42,15 +43,15 @@ MAINTAINED_SOURCES = (
     (
         "record_ble_sensors.py",
         "ESP32 sensors (Bluetooth)",
-        "Save selected IMU, EMG, and piezo streams on the shared clock.",
+        "Save both IMUs and EMG on the same acquisition clock.",
     ),
 )
 
 DEFAULT_BATCH_SOURCES = {"record_ble_sensors.py", "record_oak_pose.py"}
+DEFAULT_BLE_SENSORS = ("imu", "emg")
 BLE_SENSOR_OPTIONS = (
     ("imu", "IMU"),
     ("emg", "EMG"),
-    ("piezo", "Piezo"),
 )
 
 
@@ -85,7 +86,7 @@ class RecordingTabMixin:
         self.recording_camera_side = tk.StringVar(value="left")
         self.recording_ble_device = tk.StringVar(value="LIMBServer")
         self.recording_ble_sensors = {
-            name: tk.BooleanVar(value=name == "imu")
+            name: tk.BooleanVar(value=name in DEFAULT_BLE_SENSORS)
             for name, _label in BLE_SENSOR_OPTIONS
         }
         self.recording_ble_dataset = tk.BooleanVar(value=False)
@@ -212,7 +213,7 @@ class RecordingTabMixin:
             text="Open camera monitor",
             command=self.open_camera_monitor,
         ).grid(row=2, column=0, sticky="w", pady=(8, 0))
-        ttk.Label(device_row, text="Dual-IMU ESP32 port / baud", style="Card.TLabel").grid(
+        ttk.Label(device_row, text="IMU + EMG ESP32 port / baud", style="Card.TLabel").grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
         serial_row = ttk.Frame(device_row, style="Card.TFrame")
@@ -244,7 +245,7 @@ class RecordingTabMixin:
         )
         ttk.Label(
             ble_row,
-            text="Sensor streams (each connects independently)",
+            text="Sensor streams (record both for a complete session)",
             style="Card.TLabel",
         ).grid(row=0, column=1, sticky="w", padx=(12, 0))
         sensor_choices = ttk.Frame(ble_row, style="Card.TFrame")
@@ -477,7 +478,7 @@ class RecordingTabMixin:
         return self.imu_monitor
 
     def open_sensor_window(self) -> None:
-        """Open the dedicated shoulder/wrist monitor and connect if needed."""
+        """Open the dedicated IMU/EMG monitor and connect if needed."""
         monitor = self._ensure_imu_monitor()
         monitor.focus()
         if not self.serial_sensor_reader.running:
@@ -493,7 +494,7 @@ class RecordingTabMixin:
             self.imu_monitor.set_connection(text)
 
     def start_serial_dashboard(self, show_window: bool = True) -> None:
-        """Read the selected ESP32 port and send packets to the IMU window."""
+        """Read the selected ESP32 port and send packets to the sensor window."""
         if show_window:
             self._ensure_imu_monitor().focus()
         port = self.recording_serial_port.get().strip()
@@ -549,9 +550,13 @@ class RecordingTabMixin:
     def _show_serial_sensor_packet(self, packet: dict[str, object]) -> None:
         """Forward one ESP32 packet to the separate monitor window."""
         sensors = extract_imus(packet)
-        if not sensors:
+        emg = extract_emg(packet)
+        if not sensors and emg.get("connected") is not True:
             return
-        if any(sensor.get("connected") is True for sensor in sensors.values()):
+        if (
+            any(sensor.get("connected") is True for sensor in sensors.values())
+            or emg.get("connected") is True
+        ):
             self.latest_serial_sensor_packet = packet
         self._set_serial_connection(
             f"Live data from {self.serial_sensor_reader.port} at "
@@ -628,7 +633,7 @@ class RecordingTabMixin:
         if "record_ble_sensors.py" in filenames and not self._selected_ble_sensors():
             messagebox.showerror(
                 "Bluetooth sensor required",
-                "Select at least one Bluetooth sensor stream (IMU, EMG, or piezo).",
+                "Select at least one Bluetooth sensor stream (IMU or EMG).",
             )
             return None
         if "record_ble_sensors.py" in filenames and self.recording_ble_dataset.get():

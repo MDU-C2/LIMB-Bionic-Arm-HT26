@@ -1,4 +1,4 @@
-/* Dual LSM6DSO32 serial streamer for the ESP32-C3.
+/* Dual LSM6DSO32 and EMG serial streamer for the ESP32-C3.
  *
  * The I2C register setup and scaling follow the verified LIMB-HT25 ESP-IDF
  * IMU component.  This target extends it to the two legal LSM6DSO32 addresses
@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include "driver/gpio.h"
+#include "driver/adc.h"
 #include "driver/i2c.h"
 #include "esp_err.h"
 #include "esp_system.h"
@@ -27,6 +28,10 @@
 
 #define SHOULDER_ADDRESS 0x6B
 #define WRIST_ADDRESS 0x6A
+
+/* Jonas's hardware-verified ADC_CHANNEL_0 is GPIO0 on ESP32-C3. */
+#define EMG_ADC_CHANNEL ADC1_CHANNEL_0
+#define EMG_GPIO_NUM GPIO_NUM_0
 
 #define WHO_AM_I 0x0F
 #define WHO_AM_I_VALUE 0x6C
@@ -62,9 +67,8 @@ typedef struct {
   const char *profile;
 } i2c_bus_profile_t;
 
-/* Keep 2/1 authoritative. The two fallbacks are the source-backed bus pairs
- * from LIMB-HT25 (4/5) and the earlier AURORA prototype (8/5). Do not probe
- * arbitrary GPIOs: doing so hides wiring faults and can drive unrelated pins. */
+/* Keep 2/1 authoritative. GPIO0 is reserved for EMG. The two source-backed
+ * I2C fallbacks remain available because neither uses that ADC pin. */
 static const i2c_bus_profile_t I2C_BUS_PROFILES[] = {
     {I2C_SDA_PIN, I2C_SCL_PIN, "current-harness"},
     {GPIO_NUM_4, GPIO_NUM_5, "limb-ht25"},
@@ -234,6 +238,9 @@ static void probe_imus(bool *shoulder_ready, bool *wrist_ready,
 
 void app_main(void) {
   setvbuf(stdout, NULL, _IONBF, 0);
+  ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
+  ESP_ERROR_CHECK(
+      adc1_config_channel_atten(EMG_ADC_CHANNEL, ADC_ATTEN_DB_12));
   size_t active_bus_index = 0;
   const i2c_bus_profile_t *active_bus = &I2C_BUS_PROFILES[active_bus_index];
   ESP_ERROR_CHECK(install_i2c_bus(active_bus->sda_pin, active_bus->scl_pin));
@@ -280,6 +287,10 @@ void app_main(void) {
     }
 
     const int64_t sample_time_us = esp_timer_get_time();
+    const int emg_reading = adc1_get_raw(EMG_ADC_CHANNEL);
+    const bool emg_connected = emg_reading >= 0;
+    const uint16_t emg_raw =
+        emg_connected ? (uint16_t)emg_reading : 0U;
     imu_sample_t shoulder = {.connected = shoulder_ready};
     imu_sample_t wrist = {.connected = wrist_ready};
     if (shoulder_ready) {
@@ -293,25 +304,28 @@ void app_main(void) {
     const aurora_ble_imu_sample_t shoulder_ble = ble_sample(&shoulder);
     const aurora_ble_imu_sample_t wrist_ble = ble_sample(&wrist);
     ble_transport_publish(sequence, (uint64_t)sample_time_us, &shoulder_ble,
-                          &wrist_ble);
+                          &wrist_ble, emg_connected, emg_raw);
 
     if (sequence % SERIAL_PERIOD_SAMPLES == 0) {
       const int sda_level = gpio_get_level(active_bus->sda_pin);
       const int scl_level = gpio_get_level(active_bus->scl_pin);
-      printf("{\"schema\":\"aurora.dual_imu.v1\",\"device\":\"ESP32-C3\","
+      printf("{\"schema\":\"aurora.sensors.v1\",\"device\":\"ESP32-C3\","
              "\"sequence\":%lu,\"sample_time_us\":%lld,"
              "\"uptime_ms\":%lld,\"free_heap_bytes\":%lu,"
              "\"i2c\":{\"sda_pin\":%d,\"scl_pin\":%d,"
              "\"profile\":\"%s\",\"fallback\":%s,"
              "\"sda_level\":%d,\"scl_level\":%d,"
              "\"external_sda_pullup\":%s,\"external_scl_pullup\":%s},"
-             "\"imus\":{",
+             "\"emg\":{\"connected\":%s,\"gpio\":%d,"
+             "\"adc_channel\":%d,\"adc_raw\":%u},\"imus\":{",
              (unsigned long)sequence, sample_time_us, sample_time_us / 1000LL,
              (unsigned long)esp_get_free_heap_size(), active_bus->sda_pin,
              active_bus->scl_pin, active_bus->profile,
              active_bus_index == 0 ? "false" : "true", sda_level, scl_level,
              external_sda_pullup ? "true" : "false",
-             external_scl_pullup ? "true" : "false");
+             external_scl_pullup ? "true" : "false",
+             emg_connected ? "true" : "false", EMG_GPIO_NUM,
+             EMG_ADC_CHANNEL, emg_raw);
       print_sensor("shoulder", SHOULDER_ADDRESS, &shoulder, &shoulder_probe,
                    sda_level, scl_level);
       printf(",");

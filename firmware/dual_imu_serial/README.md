@@ -1,9 +1,8 @@
-# Dual-IMU ESP32-C3 ESP-IDF firmware
+# Dual-IMU and EMG ESP32-C3 firmware
 
-This ESP-IDF-only target replaces the temporary single-IMU scanner. It keeps the
-GPIO 2/1 wiring detected on the current arm harness and the LSM6DSO32 register
-setup/scaling from LIMB-HT25. Bluetooth uses ESP-IDF NimBLE directly; there is
-no Arduino framework or third-party BLE library.
+This is the maintained ESP-IDF-only target. It combines the working dual-IMU
+firmware with Jonas's verified EMG ADC acquisition. Bluetooth uses ESP-IDF
+NimBLE directly; there is no Arduino framework or third-party BLE library.
 
 Both IMUs share one I2C bus and must use different addresses:
 
@@ -15,6 +14,12 @@ Both IMUs share one I2C bus and must use different addresses:
 The sensor currently strapped over the brachialis is the shoulder-role sensor,
 so it must use address `0x6B`. The wrist sensor may be absent; firmware and GUI
 continue in single-IMU mode.
+
+Connect the EMG module's analogue output to **GPIO0**, which ESP-IDF identifies
+as ADC1 channel 0 on ESP32-C3. Jonas's prototype selected `ADC_CHANNEL_0`; its
+old `// GPIO4` comment was inconsistent with the chip pin map. The combined
+firmware preserves the proven channel selection and reports both channel and
+GPIO in serial JSON.
 
 Connect both SDA pins to ESP32-C3 GPIO 2, both SCL pins to GPIO 1, and share
 3.3 V and ground. Do not connect two sensors with the same address to this bus.
@@ -62,24 +67,24 @@ exact content-addressed mirror under the system temporary directory when the
 repository is inside a spaced OneDrive path. The source repository is not moved
 or modified by that workaround.
 
-The device emits one `aurora.dual_imu.v1` JSON line every 20 ms at 115200 baud.
-The GUI labels the two entries as shoulder and wrist rather than relying on
-ambiguous `imu1`/`imu2` names. A missing address is emitted as disconnected, so
-the desktop program automatically changes between `1/2` and `2/2` IMU mode.
+The device emits one `aurora.sensors.v1` JSON line every 20 ms at 115200 baud.
+Each line contains the GPIO0 EMG ADC value plus role-named shoulder and wrist
+IMUs. A missing I2C address is emitted as disconnected, so the desktop program
+automatically changes between `1/2` and `2/2` IMU mode while EMG continues.
 
 To verify both sensors without opening the GUI, run this from the repository
 root (replace `COM5` when necessary):
 
 ```powershell
-micromamba run -n aurora-simulation python scripts/check_dual_imu.py --port COM5
+micromamba run -n aurora-simulation python scripts/check_dual_imu.py --port COM5 --require-emg
 ```
 
-The command succeeds only after it has received complete acceleration and
-angular-velocity vectors from both physical addresses.
+The command succeeds only after it receives complete vectors from both physical
+IMU addresses and valid EMG ADC samples.
 
 At the sensor rate (100 Hz), the device also advertises as `LIMBServer` and
-notifies the existing LIMB IMU characteristic
-`25011525-1212-efde-1523-785feabcd122`. Its 38-byte little-endian packet is:
+notifies the existing LIMB EMG and IMU characteristics. The 38-byte IMU packet
+on `25011525-1212-efde-1523-785feabcd122` is:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -87,6 +92,16 @@ notifies the existing LIMB IMU characteristic
 | sequence | `uint32` | increments once per acquisition |
 | device time | `uint64` | ESP monotonic microseconds at acquisition |
 | samples | `12 × int16` | shoulder then wrist; accel g and gyro dps, each ×1000 |
+
+The 16-byte EMG packet on `24011525-1212-efde-1523-785feabcd122` uses the same
+sequence and device timestamp:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| format/flags | `uint16` | high byte `1`; bit 0 means the ADC sample is valid |
+| sequence | `uint32` | same acquisition sequence as the IMU packet |
+| device time | `uint64` | same ESP monotonic acquisition time |
+| sample | `uint16` | raw 12-bit EMG ADC value |
 
 The time-sync characteristic `27011525-1212-efde-1523-785feabcd122` accepts a
 host transmit timestamp and returns device receive/transmit timestamps. The

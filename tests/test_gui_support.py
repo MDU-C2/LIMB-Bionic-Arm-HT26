@@ -18,12 +18,19 @@ sys.path.insert(0, str(ROOT / "src" / "recording"))
 sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
 
 from common import create_session_directory, experiment_metadata
-from imu_protocol import extract_imus, ImuStreamDecoder, imu_configuration
+from imu_protocol import (
+    extract_imus,
+    i2c_wiring_hint,
+    ImuStreamDecoder,
+    imu_configuration,
+)
 from project_support import (
+    FIRMWARE_WORKSPACE_SCRIPT,
     FirmwareProject,
     discover_firmware_projects,
     discover_recording_programs,
     firmware_command,
+    resolve_firmware_tool,
 )
 from process_manager import ManagedProcess, ProcessManagerMixin
 from recording_tab import DEFAULT_BATCH_SOURCES, batch_arguments
@@ -364,8 +371,12 @@ class RecordingBatchTests(unittest.TestCase):
         self.assertIsNone(camera_hand_curl({"index": 30.0, "middle": 30.0}))
 
     def test_firmware_project_uses_native_esp_idf_commands(self) -> None:
-        projects = discover_firmware_projects()
-        project = projects["firmware\\dual_imu_serial"]
+        discovered = discover_firmware_projects()["firmware\\dual_imu_serial"]
+        project = FirmwareProject(
+            Path(r"C:\firmware\dual_imu_serial"),
+            discovered.system,
+            discovered.executable,
+        )
         self.assertEqual(project.system, "ESP-IDF")
         self.assertEqual(project.executable, "idf.py")
         with patch(
@@ -386,11 +397,16 @@ class RecordingBatchTests(unittest.TestCase):
             )
 
     def test_firmware_can_fall_back_to_platformio_with_esp_idf_only(self) -> None:
-        project = discover_firmware_projects()["firmware\\dual_imu_serial"]
+        discovered = discover_firmware_projects()["firmware\\dual_imu_serial"]
+        project = FirmwareProject(
+            Path(r"C:\firmware\dual_imu_serial"),
+            discovered.system,
+            discovered.executable,
+        )
         platformio = r"C:\Users\tester\.platformio\platformio.exe"
         with patch(
             "project_support.resolve_firmware_tool",
-            return_value=(platformio, "run"),
+            return_value=(platformio,),
         ):
             self.assertEqual(
                 firmware_command(project, "build"),
@@ -410,6 +426,40 @@ class RecordingBatchTests(unittest.TestCase):
             self.assertEqual(
                 firmware_command(project, "monitor", "COM5"),
                 [platformio, "device", "monitor", "--port", "COM5"],
+            )
+
+    def test_firmware_finds_platformio_installed_in_the_python_environment(self) -> None:
+        project = discover_firmware_projects()["firmware\\dual_imu_serial"]
+        python = Path(r"C:\env with spaces\python.exe")
+        with (
+            patch("project_support.shutil.which", return_value=None),
+            patch("project_support.importlib.util.find_spec", return_value=object()),
+            patch.object(sys, "executable", str(python)),
+        ):
+            self.assertEqual(
+                resolve_firmware_tool(project),
+                (str(python), "-m", "platformio"),
+            )
+
+    def test_firmware_build_is_staged_when_repository_path_contains_spaces(self) -> None:
+        project = discover_firmware_projects()["firmware\\dual_imu_serial"]
+        platformio = (sys.executable, "-m", "platformio")
+        with patch("project_support.resolve_firmware_tool", return_value=platformio):
+            self.assertEqual(
+                firmware_command(project, "flash", "COM5"),
+                [
+                    sys.executable,
+                    str(FIRMWARE_WORKSPACE_SCRIPT),
+                    "--project",
+                    str(project.directory),
+                    "--",
+                    *platformio,
+                    "run",
+                    "-t",
+                    "upload",
+                    "--upload-port",
+                    "COM5",
+                ],
             )
 
     def test_fused_angles_map_to_interactive_left_arm_signs(self) -> None:
@@ -434,13 +484,29 @@ class RecordingBatchTests(unittest.TestCase):
     def test_firmware_wiring_and_role_addresses_match_the_current_arm(self) -> None:
         source = (ROOT / "firmware" / "dual_imu_serial" / "main" / "main.c").read_text()
         self.assertIn("#define I2C_SDA_PIN GPIO_NUM_2", source)
-        self.assertIn("#define I2C_SCL_PIN GPIO_NUM_3", source)
-        self.assertIn('{GPIO_NUM_4, GPIO_NUM_5, "previous-firmware"}', source)
-        self.assertIn('{GPIO_NUM_5, GPIO_NUM_4, "limb-ht25"}', source)
+        self.assertIn("#define I2C_SCL_PIN GPIO_NUM_1", source)
+        self.assertIn('{I2C_SDA_PIN, I2C_SCL_PIN, "current-harness"}', source)
+        self.assertIn('{GPIO_NUM_4, GPIO_NUM_5, "limb-ht25"}', source)
         self.assertIn('{GPIO_NUM_8, GPIO_NUM_5, "aurora-prototype"}', source)
+        self.assertNotIn("legacy-6-7", source)
+        self.assertNotIn("legacy-8-9", source)
         self.assertIn("#define I2C_FREQUENCY_HZ 100000", source)
         self.assertIn("#define SHOULDER_ADDRESS 0x6B", source)
         self.assertIn("#define WRIST_ADDRESS 0x6A", source)
+
+    def test_dual_imu_check_identifies_an_open_scl_conductor(self) -> None:
+        self.assertEqual(
+            i2c_wiring_hint(
+                {
+                    "sda_pin": 2,
+                    "scl_pin": 1,
+                    "external_sda_pullup": True,
+                    "external_scl_pullup": False,
+                }
+            ),
+            "SDA reaches GPIO2, but SCL does not reach GPIO1. "
+            "Check the SCL conductor and sensor power/ground.",
+        )
 
     def test_anatomical_shoulder_zero_is_converted_to_cad_zero(self) -> None:
         arm_down = interactive_control_targets({"shoulder_flexion": 0.0})

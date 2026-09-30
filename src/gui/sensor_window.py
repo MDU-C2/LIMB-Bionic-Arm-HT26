@@ -14,7 +14,7 @@ for module_dir in (SRC_DIR / "recording", SRC_DIR / "simulation" / "ai"):
     if str(module_dir) not in sys.path:
         sys.path.insert(0, str(module_dir))
 
-from imu_protocol import ROLE_LABELS, extract_imus
+from imu_protocol import ROLE_LABELS, extract_imus, i2c_wiring_hint
 from sensor_fusion import DualImuArmEstimator
 
 
@@ -57,7 +57,13 @@ class ImuMonitorWindow:
             side="left", padx=(0, 8)
         )
         ttk.Button(actions, text="Disconnect", command=disconnect_command).pack(side="left")
-        ttk.Label(root, textvariable=self.device, foreground="#667085").grid(
+        ttk.Label(
+            root,
+            textvariable=self.device,
+            foreground="#667085",
+            wraplength=850,
+            justify="left",
+        ).grid(
             row=3, column=0, columnspan=2, sticky="w", pady=(5, 14)
         )
 
@@ -173,6 +179,10 @@ class ImuMonitorWindow:
             i2c_text = (
                 f" · I2C {profile} SDA{sda_pin}/SCL{scl_pin}{pullup_text}"
             )
+            if len(roles) == 0:
+                hint = i2c_wiring_hint(i2c)
+                if hint and not (sda_pullup and scl_pullup):
+                    i2c_text = f"{i2c_text} · {hint}"
         self.device.set(
             f"ESP32: {device} · {mode_text}{uptime_text}{i2c_text}"
         )

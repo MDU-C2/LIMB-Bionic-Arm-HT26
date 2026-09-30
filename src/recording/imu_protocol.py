@@ -220,6 +220,34 @@ def connected_roles(packet: object) -> tuple[str, ...]:
     )
 
 
+def i2c_wiring_hint(i2c: object) -> str | None:
+    """Translate firmware pull-up checks into an actionable wiring message."""
+    if not isinstance(i2c, dict):
+        return None
+    sda = i2c.get("external_sda_pullup")
+    scl = i2c.get("external_scl_pullup")
+    if not isinstance(sda, bool) or not isinstance(scl, bool):
+        return None
+    sda_pin = i2c.get("sda_pin", "?")
+    scl_pin = i2c.get("scl_pin", "?")
+    if sda and scl:
+        return f"External pull-ups reach SDA GPIO{sda_pin} and SCL GPIO{scl_pin}."
+    if sda:
+        return (
+            f"SDA reaches GPIO{sda_pin}, but SCL does not reach GPIO{scl_pin}. "
+            "Check the SCL conductor and sensor power/ground."
+        )
+    if scl:
+        return (
+            f"SCL reaches GPIO{scl_pin}, but SDA does not reach GPIO{sda_pin}. "
+            "Check the SDA conductor and sensor power/ground."
+        )
+    return (
+        f"Neither external pull-up reaches SDA GPIO{sda_pin}/SCL GPIO{scl_pin}. "
+        "Check 3.3 V, ground, and both I2C conductors."
+    )
+
+
 def imu_configuration(packet: object) -> tuple[str, tuple[str, ...]]:
     """Return ``none``, ``single`` or ``dual`` plus the connected roles."""
     roles = connected_roles(packet)

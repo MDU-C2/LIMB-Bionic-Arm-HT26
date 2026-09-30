@@ -21,7 +21,7 @@
 
 #define I2C_PORT I2C_NUM_0
 #define I2C_SDA_PIN GPIO_NUM_2
-#define I2C_SCL_PIN GPIO_NUM_3
+#define I2C_SCL_PIN GPIO_NUM_1
 #define I2C_FREQUENCY_HZ 100000
 #define I2C_TIMEOUT_MS 20
 
@@ -62,19 +62,13 @@ typedef struct {
   const char *profile;
 } i2c_bus_profile_t;
 
-/* Keep 2/3 authoritative. These are the finite wiring variants found in the
- * current and archived AURORA/LIMB projects, not a scan of arbitrary GPIOs. */
+/* Keep 2/1 authoritative. The two fallbacks are the source-backed bus pairs
+ * from LIMB-HT25 (4/5) and the earlier AURORA prototype (8/5). Do not probe
+ * arbitrary GPIOs: doing so hides wiring faults and can drive unrelated pins. */
 static const i2c_bus_profile_t I2C_BUS_PROFILES[] = {
-    {I2C_SDA_PIN, I2C_SCL_PIN, "requested"},
-    {GPIO_NUM_3, GPIO_NUM_2, "requested-swapped"},
-    {GPIO_NUM_4, GPIO_NUM_5, "previous-firmware"},
-    {GPIO_NUM_5, GPIO_NUM_4, "limb-ht25"},
+    {I2C_SDA_PIN, I2C_SCL_PIN, "current-harness"},
+    {GPIO_NUM_4, GPIO_NUM_5, "limb-ht25"},
     {GPIO_NUM_8, GPIO_NUM_5, "aurora-prototype"},
-    {GPIO_NUM_5, GPIO_NUM_8, "aurora-prototype-swapped"},
-    {GPIO_NUM_6, GPIO_NUM_7, "legacy-6-7"},
-    {GPIO_NUM_7, GPIO_NUM_6, "legacy-7-6"},
-    {GPIO_NUM_8, GPIO_NUM_9, "legacy-8-9"},
-    {GPIO_NUM_9, GPIO_NUM_8, "legacy-9-8"},
 };
 #define I2C_BUS_PROFILE_COUNT                                                \
   (sizeof(I2C_BUS_PROFILES) / sizeof(I2C_BUS_PROFILES[0]))
@@ -107,7 +101,28 @@ static esp_err_t configure_imu(uint8_t address, imu_probe_t *probe) {
     return ESP_ERR_NOT_FOUND;
   }
 
-  /* BDU + IF_INC.  Both sensors sample at 104 Hz; serial output is 50 Hz. */
+  /* Reset each sensor as the last hardware-verified AURORA scanner did. This
+   * prevents a warm ESP32 reboot from inheriting stale register state. */
+  if ((error = write_register(address, CTRL3_C, 0x01)) != ESP_OK) {
+    probe->error = error;
+    return error;
+  }
+  const int64_t reset_started_us = esp_timer_get_time();
+  do {
+    vTaskDelay(pdMS_TO_TICKS(2));
+    error = read_registers(address, CTRL3_C, &identity, 1);
+    if (error != ESP_OK) {
+      probe->error = error;
+      return error;
+    }
+  } while ((identity & 0x01) != 0 &&
+           esp_timer_get_time() - reset_started_us < 100000LL);
+  if ((identity & 0x01) != 0) {
+    probe->error = ESP_ERR_TIMEOUT;
+    return probe->error;
+  }
+
+  /* BDU + IF_INC. Both sensors sample at 104 Hz; serial output is 50 Hz. */
   if ((error = write_register(address, CTRL3_C, 0x44)) != ESP_OK ||
       (error = write_register(address, CTRL1_XL, 0x40)) != ESP_OK ||
       (error = write_register(address, CTRL2_G, 0x40)) != ESP_OK) {

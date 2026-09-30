@@ -14,7 +14,7 @@ dependencies:
       - onnxruntime==1.23.2
       - bleak==0.22.3
       - pyserial==3.5
-      # Hardware libraries import correctly; device tests are pending.
+      # Hardware versions validated with the ESP32-C3 and OAK-D Lite checks.
       - depthai==3.10.0
       - opencv-contrib-python==4.10.0.84
       - mediapipe==0.10.14

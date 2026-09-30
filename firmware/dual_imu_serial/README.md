@@ -1,7 +1,7 @@
 # Dual-IMU ESP32-C3 ESP-IDF firmware
 
 This ESP-IDF-only target replaces the temporary single-IMU scanner. It keeps the
-GPIO 2/3 wiring from the current arm harness and the LSM6DSO32 register
+GPIO 2/1 wiring detected on the current arm harness and the LSM6DSO32 register
 setup/scaling from LIMB-HT25. Bluetooth uses ESP-IDF NimBLE directly; there is
 no Arduino framework or third-party BLE library.
 
@@ -16,18 +16,17 @@ The sensor currently strapped over the brachialis is the shoulder-role sensor,
 so it must use address `0x6B`. The wrist sensor may be absent; firmware and GUI
 continue in single-IMU mode.
 
-Connect both SDA pins to ESP32-C3 GPIO 2, both SCL pins to GPIO 3, and share
+Connect both SDA pins to ESP32-C3 GPIO 2, both SCL pins to GPIO 1, and share
 3.3 V and ground. Do not connect two sensors with the same address to this bus.
 At startup the firmware checks those requested pins first. If neither address
-answers, it also checks the verified LIMB-HT25 wiring on SDA GPIO 5/SCL GPIO 4
-and the previous archived firmware's SDA GPIO 4/SCL GPIO 5, followed by the
-older AURORA prototype wiring on SDA GPIO 8/SCL GPIO 5. It continues on
-whichever pair responds. The bus runs at the previous repo's reliable 100 kHz.
+answers, it also checks the verified LIMB-HT25 wiring on SDA GPIO 4/SCL GPIO 5,
+followed by the older AURORA prototype wiring on SDA GPIO 8/SCL GPIO 5. It
+continues on whichever pair responds. The bus runs at the previous repo's
+reliable 100 kHz.
 The JSON `i2c` object reports the active pins/profile and sets `fallback` to
-`true` when an old pair is in use. For diagnosis it also tries the reversed and
-remaining pin pairs documented by the previous scanner. With no sensor
-connected it cycles these known pairs once per second, so hot-plugging is
-detected without a reboot.
+`true` when an old pair is in use. With no sensor connected it cycles these
+three source-backed pairs once per second, so hot-plugging is detected without
+a reboot.
 
 The `external_sda_pullup` and `external_scl_pullup` fields test whether the
 powered breakout's pull-ups physically reach each ESP32 pin. Both should be
@@ -58,11 +57,25 @@ PlatformIO is only the build runner here; Arduino is not installed or linked.
 
 The GUI's **Firmware** page prefers `idf.py` and automatically uses this
 ESP-IDF-only PlatformIO environment when the native command is unavailable.
+Because ESP-IDF 4.4 rejects project paths containing spaces, the GUI builds an
+exact content-addressed mirror under the system temporary directory when the
+repository is inside a spaced OneDrive path. The source repository is not moved
+or modified by that workaround.
 
 The device emits one `aurora.dual_imu.v1` JSON line every 20 ms at 115200 baud.
 The GUI labels the two entries as shoulder and wrist rather than relying on
 ambiguous `imu1`/`imu2` names. A missing address is emitted as disconnected, so
 the desktop program automatically changes between `1/2` and `2/2` IMU mode.
+
+To verify both sensors without opening the GUI, run this from the repository
+root (replace `COM5` when necessary):
+
+```powershell
+micromamba run -n aurora-simulation python scripts/check_dual_imu.py --port COM5
+```
+
+The command succeeds only after it has received complete acceleration and
+angular-velocity vectors from both physical addresses.
 
 At the sensor rate (100 Hz), the device also advertises as `LIMBServer` and
 notifies the existing LIMB IMU characteristic

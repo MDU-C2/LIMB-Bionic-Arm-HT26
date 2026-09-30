@@ -85,7 +85,7 @@ class RecordingTabMixin:
         self.recording_camera_side = tk.StringVar(value="left")
         self.recording_ble_device = tk.StringVar(value="LIMBServer")
         self.recording_ble_sensors = {
-            name: tk.BooleanVar(value=name in {"imu", "emg"})
+            name: tk.BooleanVar(value=name == "imu")
             for name, _label in BLE_SENSOR_OPTIONS
         }
         self.recording_ble_dataset = tk.BooleanVar(value=False)

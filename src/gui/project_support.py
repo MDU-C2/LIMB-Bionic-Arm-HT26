@@ -8,6 +8,7 @@ focused on composing the interface.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -35,6 +36,7 @@ DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/references")
 DEFAULT_SIMULATION_OUTPUT_DIRECTORY = Path("outputs/simulation")
 DOCUMENTATION_FILE = REPOSITORY_ROOT / "docs" / "SIMULATION.md"
 GUI_DOCUMENTATION_FILE = GUI_DIR / "README.md"
+FIRMWARE_WORKSPACE_SCRIPT = GUI_DIR / "firmware_workspace.py"
 
 RECORDING_EXTENSIONS = {
     ".avi", ".bag", ".csv", ".flac", ".json", ".mcap", ".mkv", ".mov",
@@ -325,7 +327,13 @@ def resolve_firmware_tool(project: FirmwareProject) -> tuple[str, ...] | None:
         local = Path.home() / ".platformio" / "penv" / "Scripts" / "platformio.exe"
         if local.is_file():
             platformio = str(local)
-    return (platformio, "run") if platformio else None
+    if platformio:
+        return (platformio,)
+    if importlib.util.find_spec("platformio") is not None:
+        # The simulation environment installs PlatformIO as a Python module.
+        # It does not always create a PATH-visible platformio.exe on Windows.
+        return (str(console_python(Path(sys.executable))), "-m", "platformio")
+    return None
 
 
 def firmware_command(
@@ -340,15 +348,33 @@ def firmware_command(
     if action not in {"build", "flash", "monitor"}:
         raise ValueError(f"Unsupported firmware action: {action}")
 
-    if len(tool) == 2 and tool[1] == "run":
+    is_platformio = (
+        tool[-1] == "platformio" or Path(tool[0]).stem.lower() == "platformio"
+    )
+    if is_platformio:
+        command = [*tool, "run"]
         if action == "build":
-            return list(tool)
-        if action == "flash":
-            return [*tool, "-t", "upload", "--upload-port", port]
-        return [tool[0], "device", "monitor", "--port", port]
+            pass
+        elif action == "flash":
+            command.extend(["-t", "upload", "--upload-port", port])
+        else:
+            command = [*tool, "device", "monitor", "--port", port]
+    else:
+        command = list(tool)
+        if action in {"flash", "monitor"}:
+            command.extend(["-p", port])
+        command.append(action)
 
-    command = list(tool)
-    if action in {"flash", "monitor"}:
-        command.extend(["-p", port])
-    command.append(action)
+    # ESP-IDF 4.4 rejects whitespace anywhere in a project path. Keep the
+    # user's OneDrive checkout in place and build an exact source mirror from
+    # a content-addressed temporary path instead.
+    if any(character.isspace() for character in str(project.directory.resolve())):
+        return [
+            str(console_python(Path(sys.executable))),
+            str(FIRMWARE_WORKSPACE_SCRIPT),
+            "--project",
+            str(project.directory),
+            "--",
+            *command,
+        ]
     return command

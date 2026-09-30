@@ -12,14 +12,14 @@ I2C addresses:
 
 | Role | Address | SA0/SDO | ESP32-C3-Zero |
 | --- | --- | --- | --- |
-| Shoulder | `0x6B` | 3.3 V / high | SDA GPIO 2, SCL GPIO 3 |
-| Wrist | `0x6A` | GND / low | SDA GPIO 2, SCL GPIO 3 |
+| Shoulder | `0x6B` | 3.3 V / high | SDA GPIO 2, SCL GPIO 1 |
+| Wrist | `0x6A` | GND / low | SDA GPIO 2, SCL GPIO 1 |
 
 Do not put two sensors with the same address on the shared bus. The firmware
-prefers the GPIO 2/3 harness on the current arm. For hardware diagnosis it can
-also recognize the finite set of pin pairs found in earlier AURORA/LIMB
-firmware, reports the active profile in serial JSON, and returns to 2/3 whenever
-that requested pair responds.
+prefers the GPIO 2/1 harness on the current arm. Its only fallback pairs are the
+source-backed LIMB-HT25 bus (SDA 4/SCL 5) and earlier AURORA prototype bus
+(SDA 8/SCL 5). It reports the active profile in serial JSON and returns to 2/1
+whenever that requested pair responds.
 
 ## Build and flash
 
@@ -49,6 +49,13 @@ The serial output uses schema
 The live monitor also recognizes the older line-oriented `IMU1 ACC` / `IMU1
 GYRO` diagnostic stream still flashed on some lab boards, including the
 `WHO_AM_I` result used to distinguish one connected IMU from two.
+
+For a terminal-level hardware check that requires valid vectors from both
+sensors, run:
+
+```powershell
+micromamba run -n aurora-simulation python scripts/check_dual_imu.py --port COM5
+```
 
 ## View readings
 

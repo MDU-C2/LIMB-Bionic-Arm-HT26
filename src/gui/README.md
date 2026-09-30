@@ -26,8 +26,9 @@ It releases the port before recording, flashing, or starting live sensor fusion.
 a recording. Live interactive control opens its own annotated camera monitor,
 so close the standalone preview before starting that mode.
 
-The Recording page defaults to OAK-D plus the Bluetooth IMU and EMG streams.
-IMU, EMG, and piezo can be enabled independently; if a selected characteristic
+The Recording page defaults to OAK-D plus the Bluetooth IMU stream published by
+the current dual-IMU firmware. Legacy EMG and piezo streams can be enabled
+independently when using old LIMBServer firmware; if a selected characteristic
 is unavailable, the recorder keeps every other connected stream running. Device
 timestamps are mapped to the same host monotonic clock saved with camera frames.
 The serial IMU stream remains available for diagnostics and the legacy LIMB25

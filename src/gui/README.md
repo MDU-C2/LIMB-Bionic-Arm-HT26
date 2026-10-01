@@ -1,6 +1,10 @@
 # GUI
 
-Run the control center with:
+For the easiest setup, double-click `Setup.bat` at the repository root, then
+use `Start.bat` for later launches. On macOS/Linux, use `Setup.command` and
+`Start.command`. See the [root README](../../README.md) for platform details.
+
+If you use an existing manually installed environment, run:
 
 ```powershell
 micromamba run -n aurora-simulation python src/gui/app.py

@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.aurora/
 venv/
 artifacts/.matplotlib/
 artifacts/models/*
@@ -13,6 +14,7 @@ outputs/
 .DS_Store
 Thumbs.db
 firmware/**/build/
+firmware/**/.pio/
 firmware/**/sdkconfig
 firmware/**/sdkconfig.old
 firmware/**/sdkconfig.*-*

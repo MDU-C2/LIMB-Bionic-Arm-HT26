@@ -1,0 +1,3 @@
+# Unix launchers must retain LF even when committed from Windows.
+*.command text eol=lf
+*.bat text eol=crlf

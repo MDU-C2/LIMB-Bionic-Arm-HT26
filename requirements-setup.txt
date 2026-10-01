@@ -1,0 +1,6 @@
+# Desktop/camera/simulation packages are in src/simulation/environment.yml.
+# Install these into the same environment to cover training and firmware too.
+-r src/ml/requirements.txt
+platformio==6.1.18
+# ONNX and MediaPipe share protobuf; keep the camera's supported version.
+protobuf>=4.25.3,<5

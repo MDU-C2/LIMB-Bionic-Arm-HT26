@@ -2,6 +2,12 @@
 
 This folder contains small standalone checks.
 
+`setup.ps1` and `setup_project.py` power the root-level `Setup.bat`/`Start.bat`
+and `Setup.command`/`Start.command` launchers. Setup downloads its own Python,
+installs all desktop and ML dependencies, checks native imports and a headless
+simulation, and builds the firmware through PlatformIO without flashing it.
+Start reuses a completed setup and detects changes to dependency definitions.
+
 To require complete live acceleration/gyroscope values from both IMUs plus EMG
 (the port is auto-detected when possible):
 

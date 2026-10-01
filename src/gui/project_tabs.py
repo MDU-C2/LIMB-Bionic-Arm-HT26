@@ -179,7 +179,7 @@ class ProjectTabsMixin:
             self.firmware_status.configure(
                 text=(
                     f"{project.system} project found, but its build tool is missing. "
-                    "Update aurora-simulation from src/simulation/environment.yml, "
+                    "Run Setup.bat (Windows) or Setup.command (macOS/Linux), "
                     "then press Refresh."
                 )
             )
@@ -195,7 +195,7 @@ class ProjectTabsMixin:
         if command is None:
             messagebox.showerror(
                 "Tool unavailable",
-                "Update aurora-simulation from src/simulation/environment.yml to "
+                "Run Setup.bat (Windows) or Setup.command (macOS/Linux) to "
                 f"install the build tool for {project.system}.",
             )
             return

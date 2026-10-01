@@ -1,4 +1,5 @@
 numpy==1.26.4
-torch>=2.2,<3
+# Keep the legacy ONNX opset-12 exporter used by train_gru.py.
+torch>=2.2,<2.6
 matplotlib>=3.8,<4
-onnx>=1.16,<2
+onnx>=1.16,<1.18

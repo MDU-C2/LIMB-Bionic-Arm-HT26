@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -177,8 +178,14 @@ def simulation_python_candidates() -> list[Path]:
     if configured:
         candidates.append(Path(configured).expanduser())
 
-    candidates.append(console_python(Path(sys.executable)))
     relative_python = Path("python.exe") if os.name == "nt" else Path("bin/python")
+    try:
+        runtime = json.loads((REPOSITORY_ROOT / ".aurora/runtime.json").read_text(encoding="utf-8-sig"))
+        candidates.append(Path(runtime["prefix"]) / relative_python)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    candidates.append(REPOSITORY_ROOT / ".aurora" / "env" / relative_python)
+    candidates.append(console_python(Path(sys.executable)))
     if os.name == "nt":
         candidates.extend([
             REPOSITORY_ROOT / ".venv" / "Scripts" / "python.exe",

@@ -7,8 +7,13 @@ dependencies:
   - numpy=1.26.4
   - scipy=1.15.2
   - pybullet=3.25
+  - tk
   - pip
   - pip:
+      # Keep MediaPipe's JAX dependencies compatible with NumPy 1.x.
+      - numpy==1.26.4
+      - jax==0.4.38
+      - jaxlib==0.4.38
       # The conda-forge Windows build failed to load SDL in the tested setup.
       - pygame==2.6.1
       - onnxruntime==1.23.2

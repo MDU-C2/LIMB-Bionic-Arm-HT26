@@ -336,6 +336,20 @@ esp_err_t imu_read_data(ImuRawData* data) {
   return ESP_OK;
 }
 
+esp_err_t secondarySensorConfig() {
+   esp_err_t ret = lsm6dso32_configure();
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to configure sensor");
+    i2c_driver_delete(s_imu_config.i2c_port);
+    return ret;
+  }
+  return ret;
+}
+void imu_change_sensor_addr(ImuAddress new_addr) {
+  s_imu_config.sensor_addr = new_addr;
+  //put security check and logging here too
+}
+
 bool imu_is_present(void) {
   if (!s_imu_initialized) {
     return false;

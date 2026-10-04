@@ -8,7 +8,7 @@
 
 // Table 44 in the LSM6DSO32 datasheet.
 // How often the accelerometer refreshes its data.
-typedef enum : uint8_t {
+typedef enum {
   IMU_ODR_XL_OFF = 0,
   IMU_ODR_XL_12_5_HZ = 1,
   IMU_ODR_XL_26_HZ = 2,
@@ -24,7 +24,7 @@ typedef enum : uint8_t {
 
 // Table 45 in the LSM6DSO32 datasheet.
 // The +- range of the accelerometer in standard gravity (g).
-typedef enum : uint8_t {
+typedef enum {
   IMU_FS_XL_4_G = 0,    // 0b0000
   IMU_FS_XL_8_G = 8,    // 0b1000
   IMU_FS_XL_16_G = 12,  // 0b1100
@@ -33,7 +33,7 @@ typedef enum : uint8_t {
 
 // Table 48 in the LSM6DSO32 datasheet.
 // How often the gyroscope refreshes its data.
-typedef enum : uint8_t {
+typedef enum {
   IMU_ODR_G_OFF = 0,
   IMU_ODR_G_12_5_HZ = 1,
   IMU_ODR_G_26_HZ = 2,
@@ -49,7 +49,7 @@ typedef enum : uint8_t {
 
 // Table 47 in the LSM6DSO32 datasheet.
 // The +- range of the gyroscope in degrees per second (dps).
-typedef enum : uint8_t {
+typedef enum {
   IMU_FS_G_125_DPS = 2,    // 0b0010
   IMU_FS_G_250_DPS = 0,    // 0b0000
   IMU_FS_G_500_DPS = 4,    // 0b0100
@@ -151,6 +151,9 @@ typedef struct {
  * @param config Configuration structure for the IMU
  * @return esp_err_t ESP_OK on success
  */
+
+esp_err_t secondarySensorConfig();
+
 esp_err_t imu_init(const ImuConfig* config);
 
 /**
@@ -174,6 +177,14 @@ esp_err_t imu_read_data(ImuRawData* data);
  * @return true if sensor is detected, false otherwise
  */
 bool imu_is_present(void);
+
+/**
+ * @brief Changinges static sensor adress,
+ * enables the imu_read_data to retrieve values 
+ * from two IMU on the same i2C bus
+ * @return to be implemented (may be just a safety log)
+ */
+void imu_change_sensor_addr(ImuAddress new_addr);
 
 /**
  * @brief Convert raw IMU data to mg and mdps.

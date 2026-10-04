@@ -17,27 +17,13 @@
 // ============================================================
 
 static const char *TAG = "EMG";
-
-// ESP-IDF ADC handle
-static adc_continuous_handle_t adc_handle = NULL;
-
-// True after successful initialization
-static bool emg_initialized = false;
-
-// Actual hardware ADC sampling frequency
-static uint32_t adc_hardware_sample_rate = 0;
-
-// Number of hardware samples between each retained EMG sample
-static uint32_t adc_decimation = 1;
-
-// Keeps track of samples during decimation
-static uint32_t adc_decimation_counter = 0;
-
-// Temporary buffer used when reading data from the ADC driver
-#define ADC_READ_BUFFER_SIZE 1024
-
+static adc_continuous_handle_t adc_handle = NULL;   // ESP-IDF ADC handle
+static bool emg_initialized = false;                // True after successful initialization
+static uint32_t adc_hardware_sample_rate = 0;       // Actual hardware ADC sampling frequency
+static uint32_t adc_decimation = 1;                 // Number of hardware samples between each retained EMG sample
+static uint32_t adc_decimation_counter = 0;         // Keeps track of samples during decimation
+#define ADC_READ_BUFFER_SIZE 1024                   // Temporary buffer used when reading data from the ADC driver
 static uint8_t adc_read_buffer[ADC_READ_BUFFER_SIZE];
-
 
 // ============================================================
 // EMG INITIALIZATION

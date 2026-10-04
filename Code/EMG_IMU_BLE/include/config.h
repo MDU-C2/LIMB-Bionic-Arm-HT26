@@ -33,8 +33,6 @@ typedef enum {
 // EMG CONFIGURATION
 // ============================================================
 
-// ESP32-C3:
-// GPIO0 corresponds to ADC1 Channel 0.
 #define EMG_ADC_UNIT       ADC_UNIT_1
 #define EMG_ADC_CHANNEL    ADC_CHANNEL_0    //Choose GP. GP0 = Pin0
 #define EMG_SAMPLE_RATE_HZ 4000             // Desired EMG sample rate.
@@ -47,22 +45,15 @@ typedef enum {
 // IMU CONFIGURATION
 // ============================================================
 
-// I2C controller
-#define IMU_I2C_PORT         I2C_NUM_0
+#define IMU_I2C_PORT       I2C_NUM_0
 
-// Change these if your physical wiring uses other pins.
-#define IMU_SDA_PIN          GPIO_NUM_2
-#define IMU_SCL_PIN          GPIO_NUM_1
+#define IMU_SDA_PIN        GPIO_NUM_2
+#define IMU_SCL_PIN        GPIO_NUM_1
 
-#define IMU_I2C_FREQ_HZ      100000
-#define IMU_I2C_TIMEOUT_MS   20
+#define IMU_I2C_FREQ_HZ    400000
 
-// Two legal LSM6DSO32 I2C addresses
-#define IMU1_ADDRESS         0x6A
-#define IMU2_ADDRESS         0x6B
+// Same roles as the existing dual-IMU main.c
+#define IMU_PRIMARY_ADDR   0x6B
+#define IMU_SECONDARY_ADDR 0x6A
 
-// Target IMU output rate
-#define IMU_SAMPLE_RATE_HZ   100
-
-// Period used by the USB test loop
 #define IMU_SAMPLE_PERIOD_MS 10

@@ -25,7 +25,7 @@ typedef enum {
 // ============================================================
 // Change these when selecting another test mode.
 
-#define SENSOR_MODE      SENSOR_MODE_IMU
+#define SENSOR_MODE      SENSOR_MODE_EMG
 #define TRANSPORT_MODE   TRANSPORT_USB
 
 

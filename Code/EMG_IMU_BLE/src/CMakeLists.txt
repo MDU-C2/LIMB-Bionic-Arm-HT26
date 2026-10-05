@@ -3,6 +3,7 @@ idf_component_register(
         "main.c"
         "emg.c"
         "imu.c"
+        "ble.c"
 
     INCLUDE_DIRS
         "../include"

@@ -10,7 +10,7 @@ from statistics import median
 # CONFIGURATION
 # ==========================================
 
-PORT = "COM9"
+PORT = "COM10"
 BAUD = 115200
 
 RECORDING_FOLDER = Path("recordings")

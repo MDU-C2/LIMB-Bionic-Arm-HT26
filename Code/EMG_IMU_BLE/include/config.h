@@ -25,7 +25,7 @@ typedef enum {
 // ============================================================
 // Change these when selecting another test mode.
 
-#define SENSOR_MODE      SENSOR_MODE_EMG
+#define SENSOR_MODE      SENSOR_MODE_EMG_IMU
 #define TRANSPORT_MODE   TRANSPORT_USB
 
 
@@ -46,14 +46,11 @@ typedef enum {
 // ============================================================
 
 #define IMU_I2C_PORT       I2C_NUM_0
-
 #define IMU_SDA_PIN        GPIO_NUM_2
 #define IMU_SCL_PIN        GPIO_NUM_1
-
 #define IMU_I2C_FREQ_HZ    400000
-
-// Same roles as the existing dual-IMU main.c
 #define IMU_PRIMARY_ADDR   0x6B
 #define IMU_SECONDARY_ADDR 0x6A
-
 #define IMU_SAMPLE_PERIOD_MS 10
+
+#define EMG_IMU_READ_TIMEOUT_MS       2

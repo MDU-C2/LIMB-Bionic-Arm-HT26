@@ -220,3 +220,15 @@ float imu_to_mg(int16_t raw_accel_value);
  * @return Converted raw gyro value in mdps.
  */
 float imu_to_mdps(int16_t raw_gyro_value);
+
+typedef struct
+{
+    uint32_t sequence;
+
+    uint64_t imu1_time_us;
+    uint64_t imu2_time_us;
+
+    ImuData imu1;
+    ImuData imu2;
+
+} imu_frame_t;

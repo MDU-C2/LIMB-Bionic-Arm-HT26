@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <limits.h>
 
 #include "esp_idf_version.h"
 #include "esp_log.h"
@@ -32,6 +33,8 @@
 #define SYNC_PROTOCOL_VERSION 1U
 #define IMU_PACKET_VERSION 1U
 #define EMG_PACKET_VERSION 1U
+#define BLE_EMG_SAMPLES_PER_PACKET 40U
+
 
 /* 23011525-1212-efde-1523-785feabcd122 */
 static const ble_uuid128_t k_service_uuid = BLE_UUID128_INIT(
@@ -53,22 +56,35 @@ static const ble_uuid128_t k_time_sync_uuid = BLE_UUID128_INIT(
 //------------------------------------------------------
 //PACKAGES DEFINITIONS: Packages sent over BLE are packed to avoid any padding bytes, which would break the protocol. The static asserts ensure that the wire size of each packet is as expected.
 //------------------------------------------------------
-typedef struct __attribute__((packed)) {
-  /* High byte: protocol version. Low bits: shoulder/wrist connected mask. */
-  uint16_t format_flags;
-  uint32_t sequence;
-  uint64_t device_time_us; //ESP32N timer value in microseconds, monotonically increasing since boot
-  /* shoulder accel/gyro followed by wrist accel/gyro, scaled by 1000. */
-  int16_t values[12];
-} imu_packet_t;
 
-typedef struct __attribute__((packed)) {
-  /* High byte: protocol version. Low bit: ADC sample valid. */
-  uint16_t format_flags;
-  uint32_t sequence;
-  uint64_t device_time_us;
-  uint16_t adc_raw;
-} emg_packet_t;
+typedef struct __attribute__((packed))
+{
+    uint16_t format_flags;
+    uint32_t sequence;
+    uint64_t imu1_time_us;
+    uint64_t imu2_time_us;
+    int16_t values[12];
+    /*
+     * Accelerometer: stored as mg
+     * Gyroscope: stored as 0.01 dps
+     * Layout:
+     * values[0..5]   = IMU1
+     * values[6..11]  = IMU2
+     * AX AY AZ GX GY GZ
+     */
+
+} ble_imu_packet_t;
+
+typedef struct __attribute__((packed))
+{
+    uint16_t format_flags;
+    uint32_t sequence;
+    uint64_t first_sample_time_us;        //Timestamp of the first sample in this packet.
+    uint32_t sample_period_us;            //Time between EMG samples.
+    uint16_t sample_count;                //Number of valid samples in samples[].
+    uint16_t block_offset;                //Offset of this packet inside the original emg_block_t.
+    uint16_t samples[BLE_EMG_SAMPLES_PER_PACKET];
+} ble_emg_packet_t;
 
 typedef struct __attribute__((packed)) {
   uint16_t version;
@@ -86,8 +102,8 @@ typedef struct __attribute__((packed)) {
   uint64_t device_tx_us;
 } time_sync_response_t;
 
-_Static_assert(sizeof(imu_packet_t) == 38, "IMU packet wire size changed");
-_Static_assert(sizeof(emg_packet_t) == 16, "EMG packet wire size changed");
+_Static_assert(sizeof(ble_imu_packet_t) == 46, "IMU packet wire size changed");
+_Static_assert(sizeof(ble_emg_packet_t) == 102, "EMG packet wire size changed");
 _Static_assert(sizeof(time_sync_request_t) == 16, "time-sync request wire size changed");
 _Static_assert(sizeof(time_sync_response_t) == 32, "time-sync response wire size changed");
 
@@ -104,8 +120,8 @@ static uint16_t s_time_sync_value_handle;
 static bool s_emg_notify_enabled;
 static bool s_imu_notify_enabled;
 static bool s_time_sync_notify_enabled;
-static emg_packet_t s_latest_emg;
-static imu_packet_t s_latest_imu;
+static ble_emg_packet_t s_latest_emg;
+static ble_imu_packet_t s_latest_imu;
 static time_sync_response_t s_latest_sync;
 static portMUX_TYPE s_state_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -151,29 +167,27 @@ static int append_value(struct os_mbuf *output, const void *value, size_t size) 
                                                   : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
 
-static int notify_custom(uint16_t connection_handle, uint16_t value_handle,
-                         const void *value, size_t size) {
+static int notify_custom(uint16_t connection_handle, uint16_t value_handle, const void *value, size_t size) {
   struct os_mbuf *packet = ble_hs_mbuf_from_flat(value, size);
   if (packet == NULL) {
     return BLE_HS_ENOMEM;
   }
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-  return ble_gatts_notify_custom(connection_handle, value_handle, packet);
-#else
-  /* NimBLE 1.x names the server-side notification helper gattc because the
-   * resulting ATT operation is consumed by the connected GATT client. */
-  return ble_gattc_notify_custom(connection_handle, value_handle, packet);
-#endif
+  #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    return ble_gatts_notify_custom(connection_handle, value_handle, packet);
+  #else
+    /* NimBLE 1.x names the server-side notification helper gattc because the
+    * resulting ATT operation is consumed by the connected GATT client. */
+    return ble_gattc_notify_custom(connection_handle, value_handle, packet);
+  #endif
 }
 
-static int sensor_access(uint16_t connection_handle, uint16_t attribute_handle,
-                         struct ble_gatt_access_ctxt *context, void *argument) {
+static int sensor_access(uint16_t connection_handle, uint16_t attribute_handle,struct ble_gatt_access_ctxt *context, void *argument) {
   (void)argument;
   if (attribute_handle == s_emg_value_handle) {
     if (context->op != BLE_GATT_ACCESS_OP_READ_CHR) {
       return BLE_ATT_ERR_WRITE_NOT_PERMITTED;
     }
-    emg_packet_t packet;
+    ble_emg_packet_t packet;
     taskENTER_CRITICAL(&s_state_mux);
     packet = s_latest_emg;
     taskEXIT_CRITICAL(&s_state_mux);
@@ -183,7 +197,7 @@ static int sensor_access(uint16_t connection_handle, uint16_t attribute_handle,
     if (context->op != BLE_GATT_ACCESS_OP_READ_CHR) {
       return BLE_ATT_ERR_WRITE_NOT_PERMITTED;
     }
-    imu_packet_t packet;
+    ble_imu_packet_t packet;
     taskENTER_CRITICAL(&s_state_mux);
     packet = s_latest_imu;
     taskEXIT_CRITICAL(&s_state_mux);
@@ -388,197 +402,178 @@ esp_err_t app_ble_init(void) {
   return ESP_OK;
 }
 
-//Converts a float value in the range [-32.768, 32.767] to a signed 16-bit integer by scaling it by 1000 and rounding to the nearest integer. Values outside this range are clamped to the maximum or minimum representable value.
-static int16_t scaled_value(float value) {
-  float scaled = value * 1000.0F;
-  if (scaled > 32767.0F) {
-    scaled = 32767.0F;
-  } else if (scaled < -32768.0F) {
-    scaled = -32768.0F;
-  }
-  return (int16_t)(scaled + (scaled >= 0.0F ? 0.5F : -0.5F));
-}
-
-//Fills package destination with the scaled IMU sample values. If the sample is NULL or not connected, fills the destination with zeros.
-static void write_sensor(int16_t *destination,const ble_imu_sample_t *sample) {
-  if (sample == NULL || !sample->connected) {
-    memset(destination, 0, 6 * sizeof(*destination));
-    return;
-  }
-  for (size_t axis = 0; axis < 3; ++axis) {
-    destination[axis] = scaled_value(sample->accel_g[axis]);
-    destination[axis + 3] = scaled_value(sample->gyro_dps[axis]);
-  }
-}
-
-//Sends the latest IMU and EMG samples to the connected PC over BLE. If the PC has subscribed to notifications, it will receive the samples automatically. Otherwise, the PC can read the latest samples by reading the corresponding characteristics.
-void ble_transport_publish(
-    uint32_t sequence,
-    uint64_t device_time_us,
-    const ble_imu_sample_t *shoulder,
-    const ble_imu_sample_t *wrist,
-    bool emg_connected,
-    uint16_t emg_raw)
+static int16_t clamp_int16(int32_t value)
 {
-    // --------------------------------------------------------
-    // Determine which IMUs are connected
-    // --------------------------------------------------------
+    if (value > INT16_MAX)
+    {
+        return INT16_MAX;
+    }
 
-    const uint16_t connected_mask =
-        (shoulder != NULL && shoulder->connected ? 0x01U : 0U) |
-        (wrist != NULL && wrist->connected ? 0x02U : 0U);
+    if (value < INT16_MIN)
+    {
+        return INT16_MIN;
+    }
 
+    return (int16_t)value;
+}
 
-    // --------------------------------------------------------
-    // Build IMU packet metadata
-    // --------------------------------------------------------
+static int16_t accel_to_ble(float accel_mg)
+{
+    /*
+     * ImuData acceleration is already represented in mg.
+     */
+    return clamp_int16(
+        (int32_t)accel_mg
+    );
+}
 
-    imu_packet_t packet = {
-        .format_flags =
-            (uint16_t)(
-                (IMU_PACKET_VERSION << 8) |
-                connected_mask
-            ),
+static int16_t gyro_to_ble(float gyro_mdps)
+{
+    /*
+     * ImuData gyro is represented in mdps.
+     *
+     * BLE stores gyro in 0.01 dps:
+     *
+     * 0.01 dps = 10 mdps
+     *
+     * Example:
+     * 250000 mdps -> 25000 BLE units.
+     */
+    return clamp_int16(
+        (int32_t)(gyro_mdps / 10.0f)
+    );
+}
 
-        .sequence = sequence,
-        .device_time_us = device_time_us,
+//imu_frame_t -> ble_imu_packet_t
+esp_err_t ble_send_imu_frame(const imu_frame_t *frame)
+{
+    if (frame == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ble_imu_packet_t packet = {
+        .format_flags = (uint16_t)(IMU_PACKET_VERSION << 8),
+        .sequence = frame->sequence,
+        .imu1_time_us = frame->imu1_time_us,
+        .imu2_time_us = frame->imu2_time_us,
     };
-
-
-    // --------------------------------------------------------
-    // Build EMG packet
-    //
-    // NOTE:
-    // This is still the OLD one-sample EMG packet.
-    // We will replace this with block-based EMG later.
-    // --------------------------------------------------------
-
-    emg_packet_t emg_packet = {
-        .format_flags =
-            (uint16_t)(
-                (EMG_PACKET_VERSION << 8) |
-                (emg_connected ? 0x01U : 0U)
-            ),
-
-        .sequence = sequence,
-        .device_time_us = device_time_us,
-        .adc_raw = emg_connected ? emg_raw : 0U,
-    };
-
-
-    // --------------------------------------------------------
-    // Prepare IMU values in an aligned local array.
-    //
-    // Do NOT write directly through packet.values because
-    // imu_packet_t is packed and values[] may be unaligned.
-    // --------------------------------------------------------
 
     int16_t values[12] = {0};
 
-    write_sensor(
-        &values[0],
-        shoulder
-    );
+    // ========================================================
+    // IMU1
+    // ========================================================
 
-    write_sensor(
-        &values[6],
-        wrist
-    );
+    values[0] = accel_to_ble(frame->imu1.accel.x);
+    values[1] = accel_to_ble(frame->imu1.accel.y);
+    values[2] = accel_to_ble(frame->imu1.accel.z);
 
-
-    // --------------------------------------------------------
-    // Copy the prepared values into the packed BLE packet.
-    //
-    // Using byte offset avoids taking an int16_t pointer
-    // directly to a packed struct member.
-    // --------------------------------------------------------
-
-    memcpy(
-        ((uint8_t *)&packet) +
-            offsetof(imu_packet_t, values),
-
-        values,
-        sizeof(values)
-    );
+    values[3] = gyro_to_ble(frame->imu1.gyro.pitch);
+    values[4] = gyro_to_ble(frame->imu1.gyro.roll);
+    values[5] = gyro_to_ble(frame->imu1.gyro.yaw);
 
 
-    // --------------------------------------------------------
-    // Store latest packets
-    // --------------------------------------------------------
+    // ========================================================
+    // IMU2
+    // ========================================================
+
+    values[6] = accel_to_ble(frame->imu2.accel.x);
+    values[7] = accel_to_ble(frame->imu2.accel.y);
+    values[8] = accel_to_ble(frame->imu2.accel.z);
+
+    values[9]  = gyro_to_ble(frame->imu2.gyro.pitch);
+    values[10] = gyro_to_ble(frame->imu2.gyro.roll);
+    values[11] = gyro_to_ble(frame->imu2.gyro.yaw);
+
+
+    //Copy through byte offset because packet is packed.
+    memcpy(((uint8_t *)&packet) + offsetof(ble_imu_packet_t, values), values, sizeof(values));
 
     taskENTER_CRITICAL(&s_state_mux);
-
-    s_latest_emg = emg_packet;
     s_latest_imu = packet;
-
-    const uint16_t connection_handle =
-        s_connection_handle;
-
-    const bool emg_subscribed =
-        s_emg_notify_enabled;
-
-    const bool imu_subscribed =
-        s_imu_notify_enabled;
-
+    const uint16_t connection_handle = s_connection_handle;
+    const bool subscribed = s_imu_notify_enabled;
     taskEXIT_CRITICAL(&s_state_mux);
 
-
-    // No central connected
-    if (connection_handle ==
-        BLE_HS_CONN_HANDLE_NONE)
+    if (connection_handle ==BLE_HS_CONN_HANDLE_NONE)
     {
-        return;
+        return ESP_OK;
     }
 
-
-    // --------------------------------------------------------
-    // EMG notification
-    // --------------------------------------------------------
-
-    if (emg_subscribed)
+    if (!subscribed)
     {
-        const int error =
-            notify_custom(
-                connection_handle,
-                s_emg_value_handle,
-                &emg_packet,
-                sizeof(emg_packet)
-            );
+        return ESP_OK;
+    }
 
-        if (error != 0 &&
-            error != BLE_HS_ENOTCONN)
+    const int error = notify_custom(connection_handle, s_imu_value_handle, &packet, sizeof(packet));
+    if (error != 0 && error != BLE_HS_ENOTCONN)
+    {
+        ESP_LOGW(
+            k_tag,
+            "IMU notification failed: %d",
+            error
+        );
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+//emg_frame_t -> ble_emg_packet_t
+esp_err_t ble_send_emg_block(const emg_block_t *block)
+{
+    if (block == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (block->sample_count == 0)
+    {
+        return ESP_OK;
+    }
+
+    uint16_t offset = 0;
+    while (offset < block->sample_count)
+    {
+        uint16_t remaining = block->sample_count - offset;
+        uint16_t chunk_count = remaining > BLE_EMG_SAMPLES_PER_PACKET ? BLE_EMG_SAMPLES_PER_PACKET: remaining;
+        ble_emg_packet_t packet = {
+            .format_flags = (uint16_t)(EMG_PACKET_VERSION << 8),
+            .sequence = block->sequence,
+            .first_sample_time_us = block->first_sample_time_us + ((uint64_t)offset * block->sample_period_us),
+            .sample_period_us = block->sample_period_us,
+            .sample_count = chunk_count,
+            .block_offset = offset,
+        };
+
+        memcpy(((uint8_t *)&packet) + offsetof(ble_emg_packet_t, samples),
+            &block->samples[offset],
+            chunk_count * sizeof(uint16_t)
+        );
+
+        taskENTER_CRITICAL(&s_state_mux);
+        s_latest_emg = packet;
+        const uint16_t connection_handle = s_connection_handle;
+        const bool subscribed = s_emg_notify_enabled;
+        taskEXIT_CRITICAL(&s_state_mux);
+
+        if (connection_handle != BLE_HS_CONN_HANDLE_NONE && subscribed)
         {
-            ESP_LOGW(
-                k_tag,
-                "EMG notification failed: %d",
-                error
-            );
+            // Only send the bytes that actually contain valid samples
+            const size_t packet_size = offsetof(ble_emg_packet_t, samples) + chunk_count * sizeof(uint16_t);
+            const int error = notify_custom(connection_handle, s_emg_value_handle, &packet, packet_size);
+
+            if (error != 0 && error != BLE_HS_ENOTCONN)
+            {
+                ESP_LOGW(
+                    k_tag,
+                    "EMG notification failed: %d",
+                    error
+                );
+                return ESP_FAIL;
+            }
         }
+        offset += chunk_count;
     }
-
-
-    // --------------------------------------------------------
-    // IMU notification
-    // --------------------------------------------------------
-
-    if (imu_subscribed)
-    {
-        const int error =
-            notify_custom(
-                connection_handle,
-                s_imu_value_handle,
-                &packet,
-                sizeof(packet)
-            );
-
-        if (error != 0 &&
-            error != BLE_HS_ENOTCONN)
-        {
-            ESP_LOGW(
-                k_tag,
-                "IMU notification failed: %d",
-                error
-            );
-        }
-    }
+    return ESP_OK;
 }

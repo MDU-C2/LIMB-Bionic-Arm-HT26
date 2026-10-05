@@ -4,6 +4,7 @@
 #include "config.h"
 #include "emg.h"
 #include "imu.h"
+#include "ble.h"
 
 #include "esp_err.h"
 #include "esp_log.h"

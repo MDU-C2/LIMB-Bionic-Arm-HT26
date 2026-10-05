@@ -13,7 +13,7 @@ typedef struct {
 }ble_imu_sample_t;
 
 /* Start the ESP-IDF NimBLE peripheral and AURORA GATT service. */
-esp_err_t ble_transport_init(void);
+esp_err_t app_ble_init(void);
 
 /* Publish one acquisition-time-stamped pair of role-ordered IMU samples and
  * the EMG ADC sample acquired on the same firmware tick. */

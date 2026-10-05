@@ -11,4 +11,7 @@ idf_component_register(
     REQUIRES
         esp_adc
         driver
+        bt
+        nvs_flash
+        esp_timer
 )

@@ -202,16 +202,9 @@ static void run_imu_usb(void)
         "ax,ay,az,"
         "gx,gy,gz\n"
     );
-
-
-    TickType_t last_wake =
-        xTaskGetTickCount();
-
-
-    int64_t start_time_us =
-        esp_timer_get_time();
-
-
+    
+    int64_t start_time_us = esp_timer_get_time();
+    
     while (true)
     {
         ImuRawData raw_primary = {0};
@@ -227,7 +220,6 @@ static void run_imu_usb(void)
         imu_change_sensor_addr(IMU_PRIMARY_ADDR);
         int64_t primary_time_us = esp_timer_get_time() - start_time_us;
         esp_err_t primary_err = imu_read_data(&raw_primary);
-
 
         // CONVERT + PRINT SECONDARY
         if (secondary_err == ESP_OK)
@@ -263,14 +255,7 @@ static void run_imu_usb(void)
         {
             ESP_LOGW( TAG, "Primary IMU read failed: %s", esp_err_to_name(primary_err));
         }
-        
-
-        /*vTaskDelayUntil(
-            &last_wake,
-            pdMS_TO_TICKS(
-                IMU_SAMPLE_PERIOD_MS
-            )
-        );*/
+        //vTaskDelayUntil(&last_wake,pdMS_TO_TICKS(IMU_SAMPLE_PERIOD_MS));
     }
 }
 
@@ -487,6 +472,218 @@ static void run_emg_imu_usb(void)
 }
 
 // ============================================================
+// EMG + IMU -> USB
+// ============================================================
+
+static void run_ble(void)
+{
+    float gyro1x = 0.0f;
+    float gyro1y = 0.0f;
+    float gyro1z = 0.0f;
+    float gyro2x = 0.0f;
+    float gyro2y = 0.0f;
+    float gyro2z = 0.0f;
+    
+    float accel1x = 0.0f;
+    float accel1y = 0.0f;
+    float accel1z = 0.0f;
+    float accel2x = 0.0f;
+    float accel2y = 0.0f;
+    float accel2z = 0.0f;
+    
+    bool imu1_filter_initialized = false;
+    bool imu2_filter_initialized = false;
+
+    uint32_t imu_sequence = 0;
+    uint32_t emg_sequence = 0;
+
+    ESP_LOGI(TAG, "Starting EMG + IMU -> BLE");
+
+    // EMG variables
+    uint16_t emg_samples[EMG_BLOCK_SIZE];
+
+    // IMU variables
+    ImuRawData raw_primary = {0};
+    ImuRawData raw_secondary = {0};
+
+    // Common ESP32 timebase
+    const int64_t start_time_us = esp_timer_get_time();
+    int64_t next_imu_time_us = start_time_us;
+
+    while (true)
+    {
+        // EMG
+        size_t emg_sample_count = 0;
+        esp_err_t emg_err = emg_read_samples(emg_samples, EMG_BLOCK_SIZE, &emg_sample_count, EMG_IMU_READ_TIMEOUT_MS);
+        if (emg_err == ESP_OK)
+        {
+            if (emg_sample_count > 0)
+            {
+                const uint64_t sample_period_us = 1000000ULL / EMG_SAMPLE_RATE_HZ;
+                int64_t block_read_time_us = esp_timer_get_time() - start_time_us;
+                uint64_t block_duration_us = (emg_sample_count - 1) * sample_period_us;
+                int64_t first_sample_time_us = block_read_time_us - (int64_t)block_duration_us;
+                emg_block_t emg_block = {0};
+                emg_block.sequence = emg_sequence++;
+                emg_block.first_sample_time_us = (uint64_t)first_sample_time_us;
+                emg_block.sample_period_us = (uint32_t)sample_period_us;
+                emg_block.sample_count = (uint16_t)emg_sample_count;
+                
+                for (size_t i = 0; i < emg_sample_count; i++)
+                {
+                    emg_block.samples[i] = emg_samples[i];
+                }
+
+                esp_err_t ble_err = ble_send_emg_block(&emg_block);
+
+                if (ble_err != ESP_OK)
+                {
+                    ESP_LOGW(
+                        TAG,
+                        "BLE EMG send failed: %s",
+                        esp_err_to_name(ble_err)
+                    );
+                }
+            }
+        }
+
+        //ERROR HANDLING
+        else if (emg_err != ESP_ERR_TIMEOUT)
+        {
+            ESP_LOGW(
+                TAG,
+                "EMG read failed: %s",
+                esp_err_to_name(emg_err)
+            );
+        }
+
+        // Check if it is time to read the IMUs
+        int64_t current_time_us = esp_timer_get_time();
+        if (current_time_us >= next_imu_time_us)
+        {
+            // Secondary IMU - 0x6A
+            imu_change_sensor_addr(IMU_SECONDARY_ADDR);
+            int64_t secondary_timestamp_us = esp_timer_get_time() - start_time_us;
+            esp_err_t secondary_err = imu_read_data(&raw_secondary);
+
+            // Primary IMU - 0x6B
+            imu_change_sensor_addr(IMU_PRIMARY_ADDR);
+            int64_t primary_timestamp_us = esp_timer_get_time() - start_time_us;
+            esp_err_t primary_err = imu_read_data(&raw_primary);
+            imu_frame_t imu_frame = {0};
+
+            imu_frame.sequence = imu_sequence++;
+            imu_frame.imu1_time_us = (uint64_t)primary_timestamp_us;
+            imu_frame.imu2_time_us = (uint64_t)secondary_timestamp_us;
+            
+            // Process Secondary IMU
+            if (secondary_err == ESP_OK)
+            {
+                ImuData secondary = imu_to_mg_and_mdps(raw_secondary);
+                if (!imu2_filter_initialized)
+                {
+                    accel2x = secondary.accel.x;
+                    accel2y = secondary.accel.y;
+                    accel2z = secondary.accel.z;
+
+                    gyro2x = secondary.gyro.pitch;
+                    gyro2y = secondary.gyro.roll;
+                    gyro2z = secondary.gyro.yaw;
+
+                    imu2_filter_initialized = true;
+                }
+                else
+                {
+                    expAvgR3(&accel2x,&accel2y,&accel2z,secondary.accel.x,secondary.accel.y,secondary.accel.z);
+                    expAvgR3(&gyro2x,&gyro2y,&gyro2z,secondary.gyro.pitch,secondary.gyro.roll,secondary.gyro.yaw);
+                }
+                imu_frame.imu2.accel.x = accel2x;
+                imu_frame.imu2.accel.y = accel2y;
+                imu_frame.imu2.accel.z = accel2z;
+
+                imu_frame.imu2.gyro.pitch = gyro2x;
+                imu_frame.imu2.gyro.roll  = gyro2y;
+                imu_frame.imu2.gyro.yaw   = gyro2z;
+            }
+            else
+            {
+                ESP_LOGW(
+                    TAG,
+                    "Secondary IMU read failed: %s",
+                    esp_err_to_name(secondary_err)
+                );
+            }
+
+            // Process Primary IMU
+            if (primary_err == ESP_OK)
+            {
+                ImuData primary = imu_to_mg_and_mdps(raw_primary);
+                if (!imu1_filter_initialized)
+                {
+                    accel1x = primary.accel.x;
+                    accel1y = primary.accel.y;
+                    accel1z = primary.accel.z;
+                    
+                    gyro1x = primary.gyro.pitch;
+                    gyro1y = primary.gyro.roll;
+                    gyro1z = primary.gyro.yaw;
+                    
+                    imu1_filter_initialized = true;
+                }
+                else
+                {
+                    expAvgR3(&accel1x,&accel1y,&accel1z,primary.accel.x,primary.accel.y,primary.accel.z);
+                    expAvgR3(&gyro1x,&gyro1y,&gyro1z,primary.gyro.pitch,primary.gyro.roll,primary.gyro.yaw);
+                }
+                imu_frame.imu1.accel.x = accel1x;
+                imu_frame.imu1.accel.y = accel1y;
+                imu_frame.imu1.accel.z = accel1z;
+
+                imu_frame.imu1.gyro.pitch = gyro1x;
+                imu_frame.imu1.gyro.roll  = gyro1y;
+                imu_frame.imu1.gyro.yaw   = gyro1z;
+            }
+            else
+            {
+                ESP_LOGW(
+                    TAG,
+                    "Primary IMU read failed: %s",
+                    esp_err_to_name(primary_err)
+                );
+            }
+
+            //Send IMU frame over BLE if both IMUs were read successfully
+            if (secondary_err == ESP_OK && primary_err == ESP_OK)
+            {
+                esp_err_t ble_err = ble_send_imu_frame(&imu_frame);
+                if (ble_err != ESP_OK)
+                {
+                    ESP_LOGW(
+                        TAG,
+                        "BLE IMU send failed: %s",
+                        esp_err_to_name(ble_err)
+                    );
+                }
+            }
+            // Schedule next IMU sample
+            next_imu_time_us += IMU_SAMPLE_PERIOD_MS * 1000LL;
+            /*
+             * If something delayed us significantly,
+             * prevent the program from trying to catch up
+             * by reading many IMU samples immediately.
+             */
+            current_time_us = esp_timer_get_time();
+            if (next_imu_time_us < current_time_us)
+            {
+                next_imu_time_us = current_time_us + IMU_SAMPLE_PERIOD_MS * 1000LL;
+            }
+        }
+        taskYIELD();
+    }
+}
+
+
+// ============================================================
 // MAIN
 // ============================================================
 
@@ -557,17 +754,11 @@ void app_main(void)
 
     if (TRANSPORT_MODE == TRANSPORT_BLE)
     {
-        ESP_LOGW(
-            TAG,
-            "BLE transport not implemented yet"
-        );
+        ESP_LOGI(TAG, "Initializing BLE");
+        ESP_ERROR_CHECK(app_ble_init());
+        ESP_LOGI(TAG, "BLE initialized");
 
+        run_ble();
 
-        while (true)
-        {
-            vTaskDelay(
-                pdMS_TO_TICKS(1000)
-            );
-        }
     }
 }

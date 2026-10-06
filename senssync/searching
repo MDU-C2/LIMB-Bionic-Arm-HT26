@@ -1,0 +1,37 @@
+import asyncio
+from bleak import BleakScanner
+
+
+async def main():
+    print("Scanning for BLE devices...\n")
+
+    devices = await BleakScanner.discover(
+        return_adv=True
+    )
+
+    for device, advertisement in devices.values():
+
+        print("=" * 60)
+
+        print(f"Name:    {device.name}")
+        print(f"Address: {device.address}")
+
+        print(
+            f"RSSI:    {advertisement.rssi}"
+        )
+
+        print(
+            f"Service UUIDs: "
+            f"{advertisement.service_uuids}"
+        )
+
+        print(
+            f"Manufacturer data: "
+            f"{advertisement.manufacturer_data}"
+        )
+
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,0 +1,19 @@
+#include <BLEDevice.h>
+#include <BLEServer.h>
+
+void setup() {
+    Serial.begin(115200);
+
+    // Start BLE
+    BLEDevice::init("LIMBServer");
+
+    // Create BLE server
+    BLEServer *server = BLEDevice::createServer();
+
+    Serial.println("BLE started!");
+    Serial.println("Device name: LIMBServer");
+}
+
+void loop() {
+    delay(1000);
+}

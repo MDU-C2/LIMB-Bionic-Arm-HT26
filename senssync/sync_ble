@@ -1,0 +1,1018 @@
+# pip install -r requirements.txt
+
+import asyncio
+import struct
+import csv
+import os
+from bleak import BleakScanner, BleakClient
+from datetime import datetime
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+# CONFIGURATION
+
+TARGET_NAME = "LIMBServer"
+EMG_CHAR_UUID = "24011525-1212-efde-1523-785feabcd122"
+IMU1_CHAR_UUID = "25011525-1212-efde-1523-785feabcd122"
+IMU2_CHAR_UUID = "26011525-1212-efde-1523-785feabcd122"
+
+
+# ASSEMBLY PARAMETERS
+
+CHUNKS_PER_WINDOW = 10
+
+
+# EMG SETTINGS
+
+EMG_SAMPLES_PER_CHUNK = 40
+EMG_WINDOW_SAMPLES = CHUNKS_PER_WINDOW * EMG_SAMPLES_PER_CHUNK
+EMG_PACKET_FORMAT = f'<{EMG_SAMPLES_PER_CHUNK}H I'
+
+
+# IMU SETTINGS
+
+IMU_SAMPLES_PER_CHUNK = 1
+IMU_WINDOW_SAMPLES = CHUNKS_PER_WINDOW * IMU_SAMPLES_PER_CHUNK
+IMU_PACKET_FORMAT = '<9f I'
+IMU_HEADER = [
+    'accel_x',
+    'accel_y',
+    'accel_z',
+    'gyro_x',
+    'gyro_y',
+    'gyro_z',
+    'temp',
+    'pitch',
+    'roll'
+]
+
+
+# DATASET SEGMENTATION
+
+WINDOWS_PER_CAPTURE = 80
+# starting windows of the gesture
+REST_START_WINDOWS = 20
+# ending window of the gesture
+GESTURE_END_WINDOWS = 60
+
+
+# PLOT EMG
+
+def plot_emg_capture(captured_emg_list, raw_label, main_label):
+    """
+    Visualize all windows of a single EMG capture.
+
+    captured_emg_list: list of windows
+    raw_label:RAW identifier of the capture (ej: 1_20251210_091500).
+    param main_label: main label of the capture (1: Holding o 2: Resting).
+    """
+
+    if not captured_emg_list:
+        print("Error: empty EMG capture")
+        return
+
+    print(f"\n--- Creating figure for EMG capture {raw_label}")
+
+    # 1. create a dataframe with windows
+    # Columns 0 y 1 are Raw_Label and Timestamp
+    # Remaining columns are data
+
+    data_columns = [
+        f"v{i}" for i in range(EMG_WINDOW_SAMPLES)
+    ]
+    header = [
+        "Raw_Label",
+        "Timestamp"
+    ] + data_columns
+
+    df = pd.DataFrame(
+        captured_emg_list,
+        columns=header
+    )
+
+    # 2. flat the dataframe
+    # Exclude non numerical columns
+    numeric_data = df.drop(
+        columns=df.columns[[0, 1]],
+        errors='ignore'
+    )
+    numeric_data = numeric_data.select_dtypes(
+        include=[np.number]
+    )
+
+    y_values = numeric_data.values.flatten()
+    x_values = np.arange(len(y_values))
+    window_size = EMG_WINDOW_SAMPLES
+
+    # 3. Create the figure
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    ax.plot(
+        x_values,
+        y_values,
+        label='EMG signal',
+        color='#1f77b4',
+        linewidth=0.8
+    )
+    ax.set_ylabel("ADC value")
+
+    title_text = f"RAW EMG Value: {raw_label}"
+    ax.set_title(title_text)
+    ax.set_xlabel("Samples")
+
+    
+    # 4. vertical lines for each window
+   
+    for x in range(
+        window_size,
+        len(x_values),
+        window_size
+    ):
+        ax.axvline(
+            x=x,
+            color='red',
+            linestyle='--',
+            linewidth=0.5,
+            alpha=0.4
+        )
+
+
+    # 5. draw rest - gesture - rest zones
+
+    # initial rest zone (Label 2)
+    start_rest_end_x = (
+        REST_START_WINDOWS *
+        window_size
+    )
+
+    ax.axvspan(
+        0,
+        start_rest_end_x,
+        alpha=0.2,
+        color='green',
+        label='Initial rest (2)'
+    )
+
+
+    # main gesture (Label 1)
+    gesture_end_x = (
+        GESTURE_END_WINDOWS *
+        window_size
+    )
+
+    ax.axvspan(
+        start_rest_end_x,
+        gesture_end_x,
+        alpha=0.2,
+        color='orange',
+        label=f'Gesture ({main_label})'
+    )
+
+    
+    # final rest (Label 2)
+    end_capture_x = (
+        WINDOWS_PER_CAPTURE *
+        window_size
+    )
+
+    ax.axvspan(
+        gesture_end_x,
+        end_capture_x,
+        alpha=0.2,
+        color='green',
+        label='Final rest (2)'
+    )
+
+    ax.grid(
+        True,
+        linestyle=':',
+        alpha=0.6
+    )
+
+    ax.legend(
+        loc='upper right'
+    )
+
+    ax.set_xlim(
+        0,
+        len(x_values)
+    )
+
+    plt.tight_layout()
+
+    plt.show()
+
+
+
+def count_csv(folder_path):
+    """
+    Counts the number of CSV files in a folder.
+    """
+
+    if not os.path.exists(folder_path):
+        return 0
+
+    # 2. List all the elements in the folder
+    elements = os.listdir(folder_path)
+
+    counter_csv = 0
+
+    # 3. Count '.csv' ending files
+    for element in elements:
+
+        full_path = os.path.join(
+            folder_path,
+            element
+        )
+
+        if (
+            os.path.isfile(full_path)
+            and element.lower().endswith('.csv')
+        ):
+            counter_csv += 1
+
+    return counter_csv
+
+
+class LimbSensorClient:
+
+    def __init__(self):
+        self.queue = asyncio.Queue()
+        self.client = None
+        self.running = False
+
+        self.emg_buffer = []
+        self.imu1_buffer = []
+        self.imu2_buffer = []
+
+        self.exp_emg_seq = None
+        self.exp_imu1_seq = None
+        self.exp_imu2_seq = None
+
+        self.subject_name = None
+
+
+    # BLE HANDLERS
+
+    async def _handle_emg(self, data):
+
+        try:
+
+            *payload, seq = struct.unpack(
+                EMG_PACKET_FORMAT,
+                data
+            )
+
+        except Exception as e:
+
+            print(
+                f"\nEMG packet error: {e}"
+            )
+
+            self.exp_emg_seq = None
+
+            self.emg_buffer.clear()
+
+            return
+
+        if self.exp_emg_seq is None:
+
+            if seq % CHUNKS_PER_WINDOW == 0:
+
+                self.emg_buffer = list(payload)
+
+                self.exp_emg_seq = seq + 1
+
+
+        elif seq == self.exp_emg_seq:
+
+            self.emg_buffer.extend(payload)
+
+            self.exp_emg_seq += 1
+
+
+            if len(self.emg_buffer) == EMG_WINDOW_SAMPLES:
+
+                await self.queue.put(
+                    (
+                        'EMG',
+                        list(self.emg_buffer)
+                    )
+                )
+
+                self.exp_emg_seq = None
+
+                self.emg_buffer.clear()
+
+        else:
+
+            self.exp_emg_seq = None
+
+            self.emg_buffer.clear()
+
+
+
+    async def _handle_imu1(self, data):
+
+        try:
+
+            *payload, seq = struct.unpack(
+                IMU_PACKET_FORMAT,
+                data
+            )
+
+        except Exception as e:
+
+            print(
+                f"\nIMU 1 packet error: {e}"
+            )
+
+            self.exp_imu1_seq = None
+
+            self.imu1_buffer.clear()
+
+            return
+
+
+        if self.exp_imu1_seq is None:
+
+            if seq % CHUNKS_PER_WINDOW == 0:
+
+                self.imu1_buffer = list(payload)
+
+                self.exp_imu1_seq = seq + 1
+
+
+        elif seq == self.exp_imu1_seq:
+
+            self.imu1_buffer.extend(payload)
+
+            self.exp_imu1_seq += 1
+
+            if len(self.imu1_buffer) == (
+                IMU_WINDOW_SAMPLES * 9
+            ):
+
+                await self.queue.put(
+                    (
+                        'IMU1',
+                        list(self.imu1_buffer)
+                    )
+                )
+
+                self.exp_imu1_seq = None
+
+                self.imu1_buffer.clear()
+
+
+        else:
+
+            self.exp_imu1_seq = None
+
+            self.imu1_buffer.clear()
+
+
+    async def _handle_imu2(self, data):
+
+        try:
+
+            *payload, seq = struct.unpack(
+                IMU_PACKET_FORMAT,
+                data
+            )
+
+        except Exception as e:
+
+            print(
+                f"\nIMU 2 packet error: {e}"
+            )
+
+            self.exp_imu2_seq = None
+
+            self.imu2_buffer.clear()
+
+            return
+
+
+        if self.exp_imu2_seq is None:
+
+            if seq % CHUNKS_PER_WINDOW == 0:
+
+                self.imu2_buffer = list(payload)
+
+                self.exp_imu2_seq = seq + 1
+
+
+        elif seq == self.exp_imu2_seq:
+
+            self.imu2_buffer.extend(payload)
+
+            self.exp_imu2_seq += 1
+
+            if len(self.imu2_buffer) == (
+                IMU_WINDOW_SAMPLES * 9
+            ):
+
+                await self.queue.put(
+                    (
+                        'IMU2',
+                        list(self.imu2_buffer)
+                    )
+                )
+
+                self.exp_imu2_seq = None
+
+                self.imu2_buffer.clear()
+
+        else:
+
+            self.exp_imu2_seq = None
+
+            self.imu2_buffer.clear()
+
+
+    async def notification_handler(
+        self,
+        sender,
+        data
+    ):
+
+        uuid = str(sender.uuid).lower()
+
+        if uuid == EMG_CHAR_UUID.lower():
+
+            await self._handle_emg(data)
+
+        elif uuid == IMU1_CHAR_UUID.lower():
+
+            await self._handle_imu1(data)
+
+        elif uuid == IMU2_CHAR_UUID.lower():
+
+            await self._handle_imu2(data)
+
+
+    # Mode 1: real time 
+
+    async def run_realtime(self):
+
+        print(
+            "\n--- REAL TIME MODE STARTED "
+            "(Ctrl+C to stop) ---"
+        )
+
+        print(
+            "Waiting for data stream..."
+        )
+
+        while self.running:
+
+            sensor_type, data = await self.queue.get()
+            
+            print(
+                f"\r[RT] Received: "
+                f"{sensor_type} Window "
+                f"(Size: {len(data)})",
+                end=""
+            )
+
+            self.queue.task_done()
+
+
+    # Mode 2: dataset
+
+    async def run_dataset(self):
+
+        print(
+            "\n--- DATASET COLLECTION MODE ---"
+        )
+
+        while self.running:
+
+            print("\n" + "-" * 40)
+
+            label = await asyncio.to_thread(
+                input,
+                "Enter Movement Label "
+                "(1:Holding, 2:rest, q:quit): "
+            )
+
+            if label.lower() in [
+                'q',
+                'exit'
+            ]:
+
+                self.running = False
+
+                break
+
+            if label not in ['1', '2']:
+
+                print(
+                    "Error: wrong label"
+                )
+
+                continue
+
+            # Create filename
+            timestamp_raw = datetime.now().strftime(
+                "%Y%m%d_%H%M%S"
+            )
+
+            raw_file_label = (
+                f"{label}_{timestamp_raw}"
+            )
+
+            target_count = WINDOWS_PER_CAPTURE
+
+            await asyncio.to_thread(
+                input,
+                f">> Get ready. Press ENTER "
+                f"to record {target_count} windows <<"
+            )
+
+            while not self.queue.empty():
+
+                try:
+
+                    self.queue.get_nowait()
+
+                    self.queue.task_done()
+
+                except asyncio.QueueEmpty:
+
+                    break
+
+            print(
+                "--- RECORDING ---"
+            )
+
+            captured_emg = []
+
+            captured_imu1 = []
+
+            captured_imu2 = []
+
+            count_emg = 0
+
+            count_imu1 = 0
+
+            count_imu2 = 0
+
+            while (
+                count_emg < target_count
+                or count_imu1 < target_count
+                or count_imu2 < target_count
+            ):
+
+                try:
+
+                    sensor_type, data = await asyncio.wait_for(
+                        self.queue.get(),
+                        timeout=2.0
+                    )
+
+                    timestamp = datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S.%f"
+                    )
+
+
+                    if (
+                        sensor_type == 'EMG'
+                        and count_emg < target_count
+                    ):
+
+                        captured_emg.append(
+                            [
+                                raw_file_label,
+                                timestamp
+                            ] + data
+                        )
+
+                        count_emg += 1
+
+
+                    elif (
+                        sensor_type == 'IMU1'
+                        and count_imu1 < target_count
+                    ):
+
+                        for i in range(
+                            0,
+                            len(data),
+                            9
+                        ):
+
+                            sample = data[
+                                i:i + 9
+                            ]
+
+                            captured_imu1.append(
+                                [
+                                    raw_file_label,
+                                    timestamp
+                                ] + sample
+                            )
+
+                        count_imu1 += 1
+
+
+                    elif (
+                        sensor_type == 'IMU2'
+                        and count_imu2 < target_count
+                    ):
+
+                        for i in range(
+                            0,
+                            len(data),
+                            9
+                        ):
+
+                            sample = data[
+                                i:i + 9
+                            ]
+
+                            captured_imu2.append(
+                                [
+                                    raw_file_label,
+                                    timestamp
+                                ] + sample
+                            )
+
+                        count_imu2 += 1
+
+
+                    print(
+                        f"\rProgress: "
+                        f"EMG {count_emg}/{target_count} | "
+                        f"IMU1 {count_imu1}/{target_count} | "
+                        f"IMU2 {count_imu2}/{target_count}",
+                        end=""
+                    )
+
+                    self.queue.task_done()
+
+                except asyncio.TimeoutError:
+
+                    print(
+                        "\nWarning: No data received "
+                        "(Timeout). Checking connection..."
+                    )
+
+                    break
+
+            print(
+                f"\nDone capturing '{label}'."
+            )
+
+            if (
+                count_emg == target_count
+                and count_imu1 == target_count
+                and count_imu2 == target_count
+            ):
+
+                print(
+                    "All sensors completed successfully."
+                )
+
+            else:
+
+                print(
+                    "WARNING: Capture ended before "
+                    "all sensors reached the target."
+                )
+
+                print(
+                    f"EMG:  {count_emg}/{target_count}"
+                )
+
+                print(
+                    f"IMU1: {count_imu1}/{target_count}"
+                )
+
+                print(
+                    f"IMU2: {count_imu2}/{target_count}"
+                )
+
+
+            plot_emg_capture(
+                captured_emg,
+                raw_file_label,
+                label
+            )
+
+
+            self._save_raw_to_csv(
+                raw_file_label,
+                captured_emg,
+                captured_imu1,
+                captured_imu2,
+                True
+            )
+
+
+    def _save_raw_to_csv(
+        self,
+        label,
+        emg_data,
+        imu1_data,
+        imu2_data,
+        save
+    ):
+
+        """
+        Save capture in:
+
+        data/raw_data/
+            SUBJECT/
+                EMG/
+                IMU1/
+                IMU2/
+        """
+
+        base_folder = "data/raw_data"
+
+        # 1. save EMG data
+
+        if emg_data:
+
+            folder = os.path.join(
+                base_folder,
+                self.subject_name,
+                "EMG"
+            )
+
+            if save:
+
+                os.makedirs(
+                    folder,
+                    exist_ok=True
+                )
+
+                path = os.path.join(
+                    folder,
+                    f"{label}.csv"
+                )
+
+                with open(
+                    path,
+                    'w',
+                    newline=''
+                ) as f:
+
+                    writer = csv.writer(f)
+
+                    header = (
+                        ["Raw_Label", "Timestamp"]
+                        + [
+                            f"v{i}"
+                            for i in range(
+                                len(emg_data[0]) - 2
+                            )
+                        ]
+                    )
+
+                    writer.writerow(header)
+
+                    writer.writerows(
+                        emg_data
+                    )
+
+                print(
+                    f"RAW EMG saved in "
+                    f"'{self.subject_name}/EMG'."
+                )
+
+            files_count = count_csv(folder)
+
+            print(
+                f"Dir: '{self.subject_name}/EMG' "
+                f"contains {files_count} CSV files."
+            )
+
+        # 2. save IMU1 data
+
+        if imu1_data:
+
+            folder = os.path.join(
+                base_folder,
+                self.subject_name,
+                "IMU1"
+            )
+
+            if save:
+
+                os.makedirs(
+                    folder,
+                    exist_ok=True
+                )
+
+                path = os.path.join(
+                    folder,
+                    f"{label}.csv"
+                )
+
+                with open(
+                    path,
+                    'w',
+                    newline=''
+                ) as f:
+
+                    writer = csv.writer(f)
+
+                    writer.writerow(
+                        [
+                            "Raw_Label",
+                            "Timestamp"
+                        ] + IMU_HEADER
+                    )
+
+                    writer.writerows(
+                        imu1_data
+                    )
+
+                print(
+                    f"RAW IMU1 saved in "
+                    f"'{self.subject_name}/IMU1'."
+                )
+
+            files_count = count_csv(folder)
+
+            print(
+                f"Dir: '{self.subject_name}/IMU1' "
+                f"contains {files_count} CSV files."
+            )
+
+        # 3. save IMU2 data 
+
+        if imu2_data:
+
+            folder = os.path.join(
+                base_folder,
+                self.subject_name,
+                "IMU2"
+            )
+
+            if save:
+
+                os.makedirs(
+                    folder,
+                    exist_ok=True
+                )
+
+                path = os.path.join(
+                    folder,
+                    f"{label}.csv"
+                )
+
+                with open(
+                    path,
+                    'w',
+                    newline=''
+                ) as f:
+
+                    writer = csv.writer(f)
+
+                    writer.writerow(
+                        [
+                            "Raw_Label",
+                            "Timestamp"
+                        ] + IMU_HEADER
+                    )
+
+                    writer.writerows(
+                        imu2_data
+                    )
+
+                print(
+                    f"RAW IMU2 saved in "
+                    f"'{self.subject_name}/IMU2'."
+                )
+
+            files_count = count_csv(folder)
+
+            print(
+                f"Dir: '{self.subject_name}/IMU2' "
+                f"contains {files_count} CSV files."
+            )
+
+
+    # MAIN ENTRY POINT
+
+    async def start(self):
+
+       print("Select Mode:")
+       print("1. Real time pipeline")
+       print("2. Dataset Collection")
+
+       opt = await asyncio.to_thread(input, "Option:")
+       
+       mode = 'realtime' if opt == '1' else 'dataset'
+       # mode = 'dataset'
+
+       self.subject_name = await asyncio.to_thread(
+            input,
+            "Enter Subject Name (e.g., S0, S1): "
+        )
+       if not self.subject_name:
+
+            print(
+                "Error: Subject name cannot be empty."
+            )
+
+            return
+       
+       print(
+            f"Scanning for device '{TARGET_NAME}'..."
+        )
+       
+       device = await BleakScanner.find_device_by_name(
+            TARGET_NAME
+        )
+       if not device:
+
+            print(
+                f"Error: Device '{TARGET_NAME}' not found."
+            )
+
+            return
+       
+       print(
+            f"Connecting to {device.address}..."
+        )
+       
+       async with BleakClient(device) as client:
+            self.client = client
+
+            print(
+                "Connected."
+            )
+            print(
+                "Subscribing to EMG..."
+            )
+
+            await client.start_notify(
+                EMG_CHAR_UUID,
+                self.notification_handler
+            )
+            print(
+                "Subscribing to IMU 1..."
+            )
+            await client.start_notify(
+                IMU1_CHAR_UUID,
+                self.notification_handler
+            )
+            print(
+                "Subscribing to IMU 2..."
+            )
+
+            await client.start_notify(
+                IMU2_CHAR_UUID,
+                self.notification_handler
+            )
+
+            print(
+                "All sensor notifications enabled."
+            )
+
+
+            self.running = True
+            if mode == 'realtime':
+
+                await self.run_realtime()
+
+            else:
+
+                await self.run_dataset()
+
+            await client.stop_notify(
+                EMG_CHAR_UUID
+            )
+            await client.stop_notify(
+                IMU1_CHAR_UUID
+            )
+            await client.stop_notify(
+                IMU2_CHAR_UUID
+            )
+
+
+# PROGRAM ENTRY POINT
+
+if __name__ == "__main__":
+
+    client = LimbSensorClient()
+
+    try:
+
+        asyncio.run(
+            client.start()
+        )
+
+    except KeyboardInterrupt:
+
+        print(
+            "\nProgram stopped by user."
+        )

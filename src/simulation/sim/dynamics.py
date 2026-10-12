@@ -1,3 +1,4 @@
+# Majd
 """Reusable PyBullet kinematics and rigid-body dynamics for a LIMB arm.
 
 The five arm joints are a subset of the full model, which also has articulated
@@ -9,8 +10,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import pybullet as p
@@ -19,8 +20,12 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sim.robot_model import (
-    RIGHT_ARM_JOINTS, RIGHT_GRIP_OFFSET_M, RIGHT_HAND_LINK,
-    inspect_model, link_name_index, load_right_arm,
+    RIGHT_ARM_JOINTS,
+    RIGHT_GRIP_OFFSET_M,
+    RIGHT_HAND_LINK,
+    inspect_model,
+    link_name_index,
+    load_right_arm,
     moving_joint_indices,
 )
 
@@ -45,8 +50,7 @@ class ArmDynamics:
         client.setGravity(*self.gravity)
         self.joints = moving_joint_indices(body_id, client)
         self.names = tuple(
-            client.getJointInfo(body_id, index)[1].decode("utf-8")
-            for index in self.joints
+            client.getJointInfo(body_id, index)[1].decode("utf-8") for index in self.joints
         )
         self.arm_joint_names = tuple(arm_joint_names)
         self.grip_offset = tuple(float(value) for value in grip_offset)
@@ -90,8 +94,12 @@ class ArmDynamics:
         q = self._vector(q, "q")
         zeros = [0.0] * self.dof
         linear, angular = self.client.calculateJacobian(
-            self.body_id, self.hand_link, self._grip_in_jacobian_frame(),
-            q.tolist(), zeros, zeros,
+            self.body_id,
+            self.hand_link,
+            self._grip_in_jacobian_frame(),
+            q.tolist(),
+            zeros,
+            zeros,
         )
         return np.asarray(linear, dtype=float), np.asarray(angular, dtype=float)
 
@@ -114,9 +122,12 @@ class ArmDynamics:
         qd = self._vector(qd, "qd")
         qdd = self._vector(qdd, "qdd")
         self._check_payload(payload_kg)
-        torque = np.asarray(self.client.calculateInverseDynamics(
-            self.body_id, q.tolist(), qd.tolist(), qdd.tolist()
-        ), dtype=float)
+        torque = np.asarray(
+            self.client.calculateInverseDynamics(
+                self.body_id, q.tolist(), qd.tolist(), qdd.tolist()
+            ),
+            dtype=float,
+        )
         if payload_kg:
             linear, _ = self.jacobian(q)
             if np.any(qd):
@@ -147,7 +158,9 @@ class ArmDynamics:
 
     def end_effector_state(self) -> dict[str, list[float]]:
         state = self.client.getLinkState(
-            self.body_id, self.hand_link, computeLinkVelocity=1,
+            self.body_id,
+            self.hand_link,
+            computeLinkVelocity=1,
             computeForwardKinematics=1,
         )
         position, orientation = self.client.multiplyTransforms(
@@ -155,27 +168,40 @@ class ArmDynamics:
         )
         offset = np.asarray(position) - np.asarray(state[0])
         velocity = np.asarray(state[6]) + np.cross(np.asarray(state[7]), offset)
-        return {"position_m": list(position), "orientation_xyzw": list(orientation),
-                "velocity_m_s": velocity.tolist()}
+        return {
+            "position_m": list(position),
+            "orientation_xyzw": list(orientation),
+            "velocity_m_s": velocity.tolist(),
+        }
 
-    def snapshot(self, commanded_positions=None, commanded_torques=None,
-                 payload_kg: float = 0.0, time_s: float = 0.0) -> dict[str, object]:
+    def snapshot(
+        self,
+        commanded_positions=None,
+        commanded_torques=None,
+        payload_kg: float = 0.0,
+        time_s: float = 0.0,
+    ) -> dict[str, object]:
         """Return structured state and diagnostics for a GUI or JSON logger."""
         q, qd, measured_motor_torque = self.joint_state()
         zeros = np.zeros(self.dof)
         terms = self.terms(q, qd, zeros, payload_kg)
         linear, angular = self.jacobian(q)
         return {
-            "time_s": float(time_s), "joint_names": list(self.names),
+            "time_s": float(time_s),
+            "joint_names": list(self.names),
             "arm_joint_names": list(self.arm_joint_names),
-            "q_rad": q.tolist(), "qd_rad_s": qd.tolist(),
-            "commanded_q_rad": None if commanded_positions is None else self._vector(
-                commanded_positions, "commanded_positions").tolist(),
-            "commanded_torque_Nm": None if commanded_torques is None else self._vector(
-                commanded_torques, "commanded_torques").tolist(),
+            "q_rad": q.tolist(),
+            "qd_rad_s": qd.tolist(),
+            "commanded_q_rad": None
+            if commanded_positions is None
+            else self._vector(commanded_positions, "commanded_positions").tolist(),
+            "commanded_torque_Nm": None
+            if commanded_torques is None
+            else self._vector(commanded_torques, "commanded_torques").tolist(),
             "motor_torque_Nm": measured_motor_torque.tolist(),
             "end_effector": self.end_effector_state(),
-            "jacobian_linear": linear.tolist(), "jacobian_angular": angular.tolist(),
+            "jacobian_linear": linear.tolist(),
+            "jacobian_angular": angular.tolist(),
             "mass_matrix_kg_m2": terms["mass_matrix"].tolist(),
             "gravity_torque_Nm": terms["gravity_torque"].tolist(),
             "velocity_torque_Nm": terms["velocity_torque"].tolist(),
@@ -186,9 +212,12 @@ class ArmDynamics:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--inspect", action="store_true", help="Include every joint and link in JSON output")
-    parser.add_argument("--payload-kg", type=float, default=0.0,
-                        help="Point mass carried at the hand grip center")
+    parser.add_argument(
+        "--inspect", action="store_true", help="Include every joint and link in JSON output"
+    )
+    parser.add_argument(
+        "--payload-kg", type=float, default=0.0, help="Point mass carried at the hand grip center"
+    )
     args = parser.parse_args()
     connection = p.connect(p.DIRECT)
     if connection < 0:

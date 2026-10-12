@@ -1,9 +1,9 @@
+# Christian, Majd
 """One/two-IMU orientation and camera correction for live arm control.
 
-This keeps the useful parts of LIMB-HT25's tested two-IMU simulator: the
-mounted sensor's Y/Z gravity tilt drives shoulder elevation, gyro Z drives the
-shoulder base, and elbow flexion is the forearm tilt relative to the upper arm.
-Camera angles provide the absolute-pose correction.
+Following LIMB-HT25, mounted Y/Z gravity tilt drives shoulder elevation and gyro Z
+drives the shoulder base. Elbow flexion is the forearm tilt relative to the upper arm.
+Axial gyros add upper-arm and relative forearm twist; camera corrects upper-arm drift.
 """
 
 from __future__ import annotations
@@ -11,12 +11,17 @@ from __future__ import annotations
 import math
 from typing import Any
 
+if __package__:
+    from .imu_twist import DEFAULT_TWIST_AXIS, ImuTwistEstimator
+else:
+    from imu_twist import DEFAULT_TWIST_AXIS, ImuTwistEstimator
 
 CONTROL_NAMES = (
     "elbow_flexion",
     "shoulder_flexion",
     "shoulder_abduction",
     "shoulder_rotation_proxy",
+    "wrist_rotation",
 )
 FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
 REFERENCE_IMU_PERIOD_S = 0.02
@@ -26,9 +31,7 @@ DEFAULT_GYRO_ABDUCTION_GAIN = 0.45
 # A six-axis IMU has no absolute heading reference.  Its integrated gyro-Z
 # value is useful through short camera gaps, but must not pull a valid absolute
 # camera left/right angle away from the observed pose.
-CAMERA_ABSOLUTE_CHANNELS = frozenset(
-    ("shoulder_abduction", "shoulder_rotation_proxy")
-)
+CAMERA_ABSOLUTE_CHANNELS = frozenset(("shoulder_abduction",))
 
 
 def _vector(value: object) -> tuple[float, float, float] | None:
@@ -46,12 +49,14 @@ class DualImuArmEstimator:
 
     A shoulder sensor supplies elevation and left/right movement. With both
     sensors, their relative mounted tilt also supplies elbow flexion. A lone
-    wrist sensor is deliberately monitor-only: treating a forearm sensor as an
+    wrist sensor is monitor-only: treating a forearm sensor as an
     upper-arm sensor makes every elbow bend look like shoulder motion.
+    Signed mounting axes remap both vectors to a common frame. The default Y
+    axis must run along each limb; twist waits for half a second of rest.
 
     ``alpha`` is the retained fraction at the 50 Hz reference rate. It is
-    converted to a time constant so the filter has the same response with the
-    currently flashed 5 Hz serial firmware and the new 50 Hz firmware.
+    converted to a time constant so the response stays consistent when the
+    sensor sample rate changes.
     ``alpha=0`` keeps deterministic tests and diagnostics unsmoothed.
     """
 
@@ -60,13 +65,17 @@ class DualImuArmEstimator:
         alpha: float = 0.85,
         gyro_deadzone_dps: float = DEFAULT_GYRO_DEADZONE_DPS,
         gyro_abduction_gain: float = DEFAULT_GYRO_ABDUCTION_GAIN,
+        shoulder_twist_axis: str = DEFAULT_TWIST_AXIS,
+        wrist_twist_axis: str = DEFAULT_TWIST_AXIS,
     ) -> None:
         self.alpha = min(0.999, max(0.0, float(alpha)))
         self.accel_time_constant_s = (
-            -REFERENCE_IMU_PERIOD_S / math.log(self.alpha)
-            if self.alpha > 0.0 else 0.0
+            -REFERENCE_IMU_PERIOD_S / math.log(self.alpha) if self.alpha > 0.0 else 0.0
         )
         self.gyro_deadzone_dps = max(0.0, float(gyro_deadzone_dps))
+        self.twist = ImuTwistEstimator(
+            shoulder_twist_axis, wrist_twist_axis, self.gyro_deadzone_dps
+        )
         # The built shoulder has roughly 40 degrees of lateral travel while a
         # human upper arm can move through about 90 degrees.  Scale gyro-only
         # fallback motion into that range instead of hitting the stop after a
@@ -80,6 +89,7 @@ class DualImuArmEstimator:
         self.active_roles: tuple[str, ...] = ()
 
     def reset_calibration(self) -> None:
+        self.twist.reset()
         self.filtered_accel = {}
         self.tilt_offsets = {}
         self.gyro_bias_z = {}
@@ -110,11 +120,12 @@ class DualImuArmEstimator:
         else:
             retained = (
                 math.exp(-dt / self.accel_time_constant_s)
-                if self.accel_time_constant_s > 0.0 else 0.0
+                if self.accel_time_constant_s > 0.0
+                else 0.0
             )
             filtered = tuple(
                 retained * old + (1.0 - retained) * new
-                for old, new in zip(previous, accel)
+                for old, new in zip(previous, accel, strict=False)
             )
         self.filtered_accel[role] = filtered
         return filtered
@@ -128,14 +139,16 @@ class DualImuArmEstimator:
             corrected,
         )
 
-    def update(
-        self, sensors: dict[str, dict[str, Any]], dt: float
-    ) -> dict[str, float] | None:
+    def update(self, sensors: dict[str, dict[str, Any]], dt: float) -> dict[str, float] | None:
+        if not math.isfinite(dt) or dt <= 0 or dt > 0.5:
+            self.reset_calibration()
+            dt = 0.01
         # Use elapsed packet time rather than assuming a sample rate.  The cap
         # rejects reconnection gaps without halving legitimate 5 Hz gyro motion.
         dt = min(MAX_IMU_PERIOD_S, max(0.001, float(dt)))
         tilts: dict[str, float] = {}
         gyro_z: dict[str, float] = {}
+        gyros: dict[str, tuple[float, float, float]] = {}
         for role in ("shoulder", "wrist"):
             sensor = sensors.get(role)
             if not isinstance(sensor, dict) or sensor.get("connected") is not True:
@@ -144,17 +157,17 @@ class DualImuArmEstimator:
             gyro = _vector(sensor.get("gyro_dps"))
             if accel is None or gyro is None:
                 continue
-            tilts[role] = self._mounted_tilt(
-                self._filter_accel(role, accel, dt)
-            )
+            accel = self.twist.remap(role, accel)
+            gyro = self.twist.remap(role, gyro)
+            tilts[role] = self._mounted_tilt(self._filter_accel(role, accel, dt))
             gyro_z[role] = gyro[2]
+            gyros[role] = gyro
 
         if not tilts:
+            self.twist.update({}, dt)
             self.active_roles = ()
             return None
-        active_roles = tuple(
-            role for role in ("shoulder", "wrist") if role in tilts
-        )
+        active_roles = tuple(role for role in ("shoulder", "wrist") if role in tilts)
         new_roles = tuple(role for role in active_roles if role not in self.active_roles)
         for role in new_roles:
             self.tilt_offsets[role] = tilts[role]
@@ -164,9 +177,7 @@ class DualImuArmEstimator:
         for role in active_roles:
             if role not in new_roles:
                 self.yaw_delta[role] = self.yaw_delta.get(role, 0.0) + (
-                    self._yaw_rate(gyro_z[role], role)
-                    * self.gyro_abduction_gain
-                    * dt
+                    self._yaw_rate(gyro_z[role], role) * self.gyro_abduction_gain * dt
                 )
 
         shoulder_tilt = (
@@ -188,6 +199,11 @@ class DualImuArmEstimator:
             self.elbow_zero = wrist_tilt - (shoulder_tilt or 0.0)
 
         self.active_roles = active_roles
+        relative_bend = (
+            (wrist_tilt - shoulder_tilt) - self.elbow_zero
+            if wrist_tilt is not None and shoulder_tilt is not None else 0.0
+        )
+        rotations = self.twist.update(gyros, dt, math.radians(relative_bend))
         if shoulder_tilt is None:
             return {}
 
@@ -198,12 +214,15 @@ class DualImuArmEstimator:
             "shoulder_abduction": self.yaw_delta.get("shoulder", 0.0),
         }
         if wrist_tilt is not None:
-            result["elbow_flexion"] = abs(
-                (wrist_tilt - shoulder_tilt) - self.elbow_zero
-            )
-        # A six-axis IMU cannot provide drift-free humeral axial rotation.
-        # Keep that channel camera-only instead of driving the wrong joint.
+            result["elbow_flexion"] = abs((wrist_tilt - shoulder_tilt) - self.elbow_zero)
+        result.update(rotations)
         return camera_control_angles(result)
+
+    def correct_rotation(self, camera_proxy: float, weight: float) -> float | None:
+        """Anchor axial gyro state to a fresh camera target; preserve relative wrist twist."""
+        if not self.twist.correct_shoulder(camera_proxy, weight):
+            return None
+        return -self.twist.shoulder_angle
 
 
 def camera_control_angles(value: object) -> dict[str, float]:
@@ -230,6 +249,8 @@ def camera_control_angles(value: object) -> dict[str, float]:
             sample = min(40.0, max(0.0, sample))
         elif name == "shoulder_rotation_proxy":
             sample = min(60.0, max(-60.0, sample))
+        elif name == "wrist_rotation":
+            sample = min(140.0, max(0.0, sample))
         result[name] = sample
     return result
 
@@ -249,11 +270,11 @@ def fuse_control_angles(
     for name in CONTROL_NAMES:
         imu_value = imu.get(name)
         camera_value = camera.get(name)
-        if (
-            camera_value is not None
-            and name in CAMERA_ABSOLUTE_CHANNELS
-            and weight > 0.0
-        ):
+        if name == "shoulder_rotation_proxy" and imu_value is not None:
+            # Fresh camera observations already correct the integrated gyro state.
+            # Mixing a held camera angle again would suppress motion between frames.
+            result[name] = imu_value
+        elif camera_value is not None and name in CAMERA_ABSOLUTE_CHANNELS and weight > 0.0:
             result[name] = camera_value
         elif imu_value is not None and camera_value is not None:
             result[name] = (1.0 - weight) * imu_value + weight * camera_value
@@ -328,4 +349,6 @@ def interactive_control_targets(angles: object) -> dict[str, float] | None:
         # Camera axial-positive is a medial/right movement for the tracked
         # left arm.  The mirrored left-arm URDF uses the opposite joint sign.
         result["shoulder_x"] = -fused["shoulder_rotation_proxy"]
+    if "wrist_rotation" in fused:
+        result["wrist_rotation"] = fused["wrist_rotation"]
     return result or None

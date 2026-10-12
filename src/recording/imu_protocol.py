@@ -1,3 +1,4 @@
+# Majd, Christian
 """Normalize the serial IMU packets used by AURORA and LIMB-HT25.
 
 The current firmware names the physical sensor roles explicitly.  The legacy
@@ -13,6 +14,7 @@ import math
 import re
 from typing import Any
 
+from high_rate_serial import parse_sensor_line
 
 STANDARD_GRAVITY = 9.80665
 ROLE_LABELS = {"shoulder": "Shoulder IMU", "wrist": "Wrist IMU"}
@@ -23,9 +25,7 @@ LEGACY_GYRO_DPS_PER_LSB = 1.0 / 65.5
 class ImuStreamDecoder:
     """Decode current JSON or the older line-oriented two-IMU serial stream."""
 
-    _identity = re.compile(
-        r"^IMU\s*(?P<sensor>[12])\s+WHO_AM_I:\s*0x(?P<value>[0-9a-fA-F]+)$"
-    )
+    _identity = re.compile(r"^IMU\s*(?P<sensor>[12])\s+WHO_AM_I:\s*0x(?P<value>[0-9a-fA-F]+)$")
     _sample = re.compile(
         r"^IMU\s*(?P<sensor>[12])\s+(?P<kind>ACC|GYRO):\s*"
         r"(?P<x>-?\d+)\s+(?P<y>-?\d+)\s+(?P<z>-?\d+)$"
@@ -39,10 +39,46 @@ class ImuStreamDecoder:
         self.identities: dict[int, int] = {}
         self.samples: dict[int, dict[str, tuple[int, int, int]]] = {}
         self.sequence = 0
+        self.jonas_imus: dict[str, dict[str, Any]] = {}
+        self.jonas_emg: dict[str, Any] = {}
 
     def feed(self, text: str) -> dict[str, Any] | None:
         """Consume one serial line and return a complete packet when available."""
         line = text.strip()
+        jonas = parse_sensor_line(line)
+        if jonas is not None:
+            sensor, timestamp, values = jonas
+            if sensor == "emg":
+                self.jonas_emg = {
+                    "connected": True,
+                    "gpio": 0,
+                    "adc_channel": 0,
+                    "adc_raw": values[0],
+                }
+            else:
+                role = "shoulder" if sensor == "imu1" else "wrist"
+                self.jonas_imus[role] = {
+                    "connected": True,
+                    "model": "LSM6DSO32",
+                    "address": "0x6B" if sensor == "imu1" else "0x6A",
+                    "accel_g": dict(
+                        zip(("x", "y", "z"), (value / 1000 for value in values[:3]), strict=False)
+                    ),
+                    "gyro_dps": dict(
+                        zip(("x", "y", "z"), (value / 1000 for value in values[3:]), strict=False)
+                    ),
+                }
+            packet = {
+                "schema": "aurora.high_rate_serial.v1",
+                "device": "ESP32-C3",
+                "sample_time_us": timestamp,
+                "sequence": self.sequence,
+                "updated_sensor": sensor,
+                "imus": self.jonas_imus.copy(),
+                "emg": self.jonas_emg.copy(),
+            }
+            self.sequence = (self.sequence + 1) & 0xFFFFFFFF
+            return packet
         if line.startswith("{"):
             try:
                 value = json.loads(line)
@@ -69,9 +105,7 @@ class ImuStreamDecoder:
 
         identity = self._identity.match(line)
         if identity is not None:
-            self.identities[int(identity.group("sensor"))] = int(
-                identity.group("value"), 16
-            )
+            self.identities[int(identity.group("sensor"))] = int(identity.group("value"), 16)
             return None
 
         sample = self._sample.match(line)
@@ -110,11 +144,11 @@ class ImuStreamDecoder:
             if connected and accel is not None and gyro is not None:
                 sensor["accel_g"] = {
                     axis: raw_value * LEGACY_ACCEL_G_PER_LSB
-                    for axis, raw_value in zip(("x", "y", "z"), accel)
+                    for axis, raw_value in zip(("x", "y", "z"), accel, strict=False)
                 }
                 sensor["gyro_dps"] = {
                     axis: raw_value * LEGACY_GYRO_DPS_PER_LSB
-                    for axis, raw_value in zip(("x", "y", "z"), gyro)
+                    for axis, raw_value in zip(("x", "y", "z"), gyro, strict=False)
                 }
             elif identity not in (None, 0x6C):
                 sensor["error"] = f"WHO_AM_I 0x{identity:02X}"
@@ -133,7 +167,7 @@ class ImuStreamDecoder:
 
 def _axes(value: object, scale: float = 1.0) -> dict[str, float] | None:
     if isinstance(value, (list, tuple)) and len(value) >= 3:
-        value = dict(zip(("x", "y", "z"), value[:3]))
+        value = dict(zip(("x", "y", "z"), value[:3], strict=False))
     if not isinstance(value, dict):
         return None
     result: dict[str, float] = {}
@@ -210,10 +244,7 @@ def extract_imus(packet: object) -> dict[str, dict[str, Any]]:
 
     imus = packet.get("imus")
     if isinstance(imus, dict):
-        return {
-            role: normalize_imu(imus.get(role), role)
-            for role in ("shoulder", "wrist")
-        }
+        return {role: normalize_imu(imus.get(role), role) for role in ("shoulder", "wrist")}
 
     if "imu1" in packet or "imu2" in packet:
         return {
@@ -232,8 +263,7 @@ def connected_roles(packet: object) -> tuple[str, ...]:
     """Return the connected physical IMU roles in deterministic order."""
     sensors = extract_imus(packet)
     return tuple(
-        role for role in ("shoulder", "wrist")
-        if sensors.get(role, {}).get("connected") is True
+        role for role in ("shoulder", "wrist") if sensors.get(role, {}).get("connected") is True
     )
 
 

@@ -1,3 +1,4 @@
+# Majd
 [tool.ruff]
 target-version = "py310"
 line-length = 100
@@ -6,6 +7,25 @@ extend-exclude = ["data"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
+
+# These entry points add sibling folders to sys.path before importing them.
+[tool.ruff.lint.per-file-ignores]
+"scripts/check_*.py" = ["E402"]
+"src/gui/recording_tab.py" = ["E402"]
+"src/gui/sensor_window.py" = ["E402"]
+"src/simulation/ai/live_sensor_input.py" = ["E402"]
+"src/simulation/ai/pose_mapping.py" = ["E402"]
+"src/simulation/ai/pose_recording_sim.py" = ["E402"]
+"src/simulation/interactive/limb_simulator.py" = ["E402"]
+"src/simulation/sim/limb_sim.py" = ["E402"]
+"src/simulation/sim/manual_sim.py" = ["E402"]
+"tests/test_gui_support.py" = ["E402"]
+"tests/test_live_ble_input.py" = ["E402"]
+"tests/test_live_emg_calibration.py" = ["E402"]
+"tests/test_interactive_runtime.py" = ["E402"]
+"tests/test_sensor_fusion.py" = ["E402"]
+"tests/test_imu_twist.py" = ["E402"]
+"tests/test_setup_project.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

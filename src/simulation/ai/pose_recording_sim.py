@@ -1,3 +1,4 @@
+# Majd
 """Play a camera pose recording on the limited LIMB arm model."""
 
 from __future__ import annotations
@@ -6,12 +7,11 @@ import argparse
 import json
 import math
 import os
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import pybullet as p
-
 
 AI_DIR = Path(__file__).resolve().parent
 SIMULATION_ROOT = AI_DIR.parent
@@ -28,7 +28,6 @@ from pose_mapping import (
     estimate_finger_curls,
 )
 from sim.limb_sim import JOINT_MAPPING, joint_index
-
 
 FINGER_JOINTS = {
     "thumb": ("thumb_joint_1", "thumb_joint_2", "thumb_joint_3"),

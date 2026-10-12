@@ -1,16 +1,16 @@
+# Majd
 """Build LIMB-style labeled windows from decoded BLE notifications."""
 
 from __future__ import annotations
 
 import csv
+import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-import re
-import time
 
 from common import safe_label, utc_now
-
 
 PACKETS_PER_WINDOW = 10
 WINDOW_COUNT = 80
@@ -18,8 +18,15 @@ REST_WINDOWS = 20
 REST_LABEL = "2"
 SAMPLES_PER_WINDOW = {"emg": 400, "imu": 10, "piezo": 100}
 IMU_COLUMNS = (
-    "accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z",
-    "temperature", "pitch", "roll",
+    "accel_x",
+    "accel_y",
+    "accel_z",
+    "gyro_x",
+    "gyro_y",
+    "gyro_z",
+    "temperature",
+    "pitch",
+    "roll",
 )
 
 
@@ -106,8 +113,13 @@ class LabeledBleCapture:
                 if key[0] == sensor:
                     self.states[key] = WindowState()
         self.last_sequences[sensor] = sequence
+        if sensor == "emg" and any(len(values) > 1 for values in channels):
+            self._add_emg_samples(sequence, channels)
+            return
         packet_index = sequence % PACKETS_PER_WINDOW
         for channel, values in enumerate(channels):
+            if not values:
+                continue
             saved = self.windows[sensor].setdefault(channel, [])
             if len(saved) >= WINDOW_COUNT:
                 continue
@@ -141,6 +153,27 @@ class LabeledBleCapture:
             state.values.clear()
             state.expected_sequence = None
 
+    def _add_emg_samples(self, sequence: int, channels: list[list[object]]) -> None:
+        """Complete 400-sample windows even when ADC blocks split unevenly."""
+        for channel, values in enumerate(channels):
+            if not values:
+                continue
+            saved = self.windows["emg"].setdefault(channel, [])
+            if len(saved) >= WINDOW_COUNT:
+                continue
+            key = ("emg", channel)
+            state = self.states.setdefault(key, WindowState())
+            state.values.extend(values)
+            state.expected_sequence = sequence + 1
+            while len(state.values) >= SAMPLES_PER_WINDOW["emg"] and len(saved) < WINDOW_COUNT:
+                window = state.values[: SAMPLES_PER_WINDOW["emg"]]
+                del state.values[: SAMPLES_PER_WINDOW["emg"]]
+                self.samples_per_window[key] = SAMPLES_PER_WINDOW["emg"]
+                saved.append((utc_now(), window))
+                if channel == 0:
+                    self.last_progress = time.monotonic()
+                    self._report_progress(len(saved))
+
     def _report_progress(self, count: int) -> None:
         if count == REST_WINDOWS:
             print(f"[CAPTURE] MOVEMENT now: label {self.label} (next 40 windows).")
@@ -165,10 +198,11 @@ class LabeledBleCapture:
                     self._write_imu(path, windows)
                 else:
                     self._write_wide(
-                        path, windows, "Raw_Label", self.capture_id,
-                        self.samples_per_window.get(
-                            (sensor, channel), SAMPLES_PER_WINDOW[sensor]
-                        ),
+                        path,
+                        windows,
+                        "Raw_Label",
+                        self.capture_id,
+                        self.samples_per_window.get((sensor, channel), SAMPLES_PER_WINDOW[sensor]),
                     )
                 self.saved_files.append(str(path.relative_to(self.session)))
 
@@ -176,7 +210,9 @@ class LabeledBleCapture:
             for channel, windows in self.windows["emg"].items():
                 self._write_segments(channel, windows)
         elif self.emg_complete:
-            print("[CAPTURE] Some packets or IMU windows are missing; no labeled segments were saved.")
+            print(
+                "[CAPTURE] Some packets or IMU windows are missing; no labeled segments were saved."
+            )
 
     @staticmethod
     def _write_wide(
@@ -199,9 +235,7 @@ class LabeledBleCapture:
             for timestamp, samples in windows:
                 for sample in samples:
                     values = list(sample) if isinstance(sample, (tuple, list)) else [sample]
-                    writer.writerow(
-                        (self.capture_id, timestamp, *(values + [""] * 9)[:9])
-                    )
+                    writer.writerow((self.capture_id, timestamp, *(values + [""] * 9)[:9]))
 
     def _write_segments(self, channel: int, windows: list[tuple[str, list[object]]]) -> None:
         directory = self.session / "labeled_data" / self.subject / "segmented_emg"
@@ -215,8 +249,11 @@ class LabeledBleCapture:
                 windows[REST_WINDOWS : WINDOW_COUNT - REST_WINDOWS],
                 f"{self.label}_{timestamp}{channel_suffix}.csv",
             ),
-            (REST_LABEL, windows[WINDOW_COUNT - REST_WINDOWS : WINDOW_COUNT],
-             f"{REST_LABEL}_{timestamp}_t{channel_suffix}.csv"),
+            (
+                REST_LABEL,
+                windows[WINDOW_COUNT - REST_WINDOWS : WINDOW_COUNT],
+                f"{REST_LABEL}_{timestamp}_t{channel_suffix}.csv",
+            ),
         )
         for label, data, filename in segments:
             path = directory / filename
@@ -225,9 +262,7 @@ class LabeledBleCapture:
                 data,
                 "Label",
                 label,
-                self.samples_per_window.get(
-                    ("emg", channel), SAMPLES_PER_WINDOW["emg"]
-                ),
+                self.samples_per_window.get(("emg", channel), SAMPLES_PER_WINDOW["emg"]),
             )
             self.saved_files.append(str(path.relative_to(self.session)))
 

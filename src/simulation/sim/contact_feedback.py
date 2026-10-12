@@ -1,3 +1,4 @@
+# Christian, Majd
 """Contact values used by the simulated fingertip sensors."""
 
 from __future__ import annotations
@@ -26,8 +27,7 @@ def grasp_is_ready(
     if min_fingertip_contacts < 0 or fingertip_contacts < 0:
         raise ValueError("contact counts cannot be negative")
     return curl >= min_curl and (
-        fingertip_contacts >= min_fingertip_contacts
-        or hand_target_distance_m <= capture_distance_m
+        fingertip_contacts >= min_fingertip_contacts or hand_target_distance_m <= capture_distance_m
     )
 
 

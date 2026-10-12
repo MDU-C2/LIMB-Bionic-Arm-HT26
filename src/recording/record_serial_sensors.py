@@ -1,14 +1,23 @@
+# Majd
 """Record newline-delimited sensor data from a serial device."""
 
 from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import json
 import os
 import time
 
-from common import create_session_directory, env_float, experiment_metadata, utc_now, write_metadata
+from common import (
+    create_session_directory,
+    enable_ctrl_break_as_interrupt,
+    env_float,
+    experiment_metadata,
+    utc_now,
+    write_metadata,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,7 +31,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--subject", default=os.environ.get("AURORA_SUBJECT", "session"))
     parser.add_argument(
-        "--preview", action="store_true",
+        "--preview",
+        action="store_true",
         help="Print live serial messages without creating a recording session.",
     )
     parser.add_argument(
@@ -48,6 +58,7 @@ def available_ports() -> list[str]:
 
 def main() -> int:
     """Read serial lines and keep both decoded JSON and original bytes."""
+    enable_ctrl_break_as_interrupt()
     args = parse_args()
     try:
         import serial
@@ -109,10 +120,8 @@ def main() -> int:
                         "text": text,
                         "raw_base64": base64.b64encode(raw).decode("ascii"),
                     }
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         record["data"] = json.loads(text)
-                    except json.JSONDecodeError:
-                        pass
                     output.write(json.dumps(record, separators=(",", ":")) + "\n")
                     lines_written += 1
                     if lines_written % 100 == 0:

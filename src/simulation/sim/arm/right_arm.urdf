@@ -1,4 +1,5 @@
 <?xml version="1.0" ?>
+<!-- Majd -->
 <robot name="right_arm_final" xmlns:xacro="http://wiki.ros.org/xacro">
   
   <material name="grey">

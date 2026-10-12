@@ -1,3 +1,4 @@
+# Majd, Christian
 """Record pose and hand landmarks from an OAK camera for GRU training."""
 
 from __future__ import annotations
@@ -5,17 +6,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import time
+from pathlib import Path
 
 os.environ.setdefault(
     "MPLCONFIGDIR", str(Path(__file__).resolve().parents[2] / "artifacts" / ".matplotlib")
 )
 
+import contextlib
+
 import cv2
 import depthai as dai
 import mediapipe as mp
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY_ROOT / "data" / "movement" / "training"
@@ -32,10 +34,8 @@ def arguments() -> argparse.Namespace:
 def next_sequence(folder: Path, user_id: int) -> int:
     used = []
     for path in folder.glob(f"ID{user_id}run*.json"):
-        try:
+        with contextlib.suppress(IndexError, ValueError):
             used.append(int(path.stem.split("run", 1)[1]))
-        except (IndexError, ValueError):
-            pass
     return max(used, default=0) + 1
 
 
@@ -53,9 +53,13 @@ def main() -> None:
 
     pose_api = mp.solutions.pose
     hand_api = mp.solutions.hands
-    with pose_api.Pose(model_complexity=1, min_detection_confidence=0.5) as pose, hand_api.Hands(
-        max_num_hands=1, min_detection_confidence=0.5, min_tracking_confidence=0.5
-    ) as hands, dai.Pipeline() as pipeline:
+    with (
+        pose_api.Pose(model_complexity=1, min_detection_confidence=0.5) as pose,
+        hand_api.Hands(
+            max_num_hands=1, min_detection_confidence=0.5, min_tracking_confidence=0.5
+        ) as hands,
+        dai.Pipeline() as pipeline,
+    ):
         camera = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
         queue = camera.requestOutput((640, 480), fps=20).createOutputQueue()
         pipeline.start()
@@ -73,7 +77,13 @@ def main() -> None:
                 hand_points = hand_result.multi_hand_landmarks[0].landmark
                 for index in pose_index:
                     landmark = pose_points[index]
-                    cv2.circle(frame, (int(landmark.x * width), int(landmark.y * height)), 7, (0, 255, 0), -1)
+                    cv2.circle(
+                        frame,
+                        (int(landmark.x * width), int(landmark.y * height)),
+                        7,
+                        (0, 255, 0),
+                        -1,
+                    )
                 mp.solutions.drawing_utils.draw_landmarks(
                     frame, hand_result.multi_hand_landmarks[0], hand_api.HAND_CONNECTIONS
                 )
@@ -94,7 +104,15 @@ def main() -> None:
             color = (0, 0, 255) if recording else (255, 255, 255)
             cv2.putText(frame, status, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
             if not valid:
-                cv2.putText(frame, "Show shoulder, elbow and hand", (15, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
+                cv2.putText(
+                    frame,
+                    "Show shoulder, elbow and hand",
+                    (15, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 165, 255),
+                    2,
+                )
             cv2.imshow("AURORA movement recorder", frame)
             key = cv2.waitKey(1) & 0xFF
             if key == 32:
@@ -109,7 +127,12 @@ def main() -> None:
     cv2.destroyAllWindows()
     if captured:
         path = args.output / f"ID{args.user_id}run{sequence}.json"
-        payload = {"user_id": args.user_id, "sequence": sequence, "captured_at": time.time(), "data": captured}
+        payload = {
+            "user_id": args.user_id,
+            "sequence": sequence,
+            "captured_at": time.time(),
+            "data": captured,
+        }
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"Saved {len(captured)} frames to {path}")
 

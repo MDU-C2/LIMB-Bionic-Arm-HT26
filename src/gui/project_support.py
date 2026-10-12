@@ -1,37 +1,47 @@
+# Majd, Christian
 """Repository configuration and discovery helpers for the AURORA GUI.
 
-This module deliberately has no Tkinter dependency.  Keeping path, environment,
-and tool discovery here makes the launcher easier to test and keeps ``app.py``
-focused on composing the interface.
+Path, environment and tool discovery live here so they can be used without
+opening a Tkinter window.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import importlib.util
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
-
+from dataclasses import dataclass
+from pathlib import Path
 
 GUI_DIR = Path(__file__).resolve().parent
+
+
+def python_runtime_environment(python: Path, environment: dict[str, str]) -> dict[str, str]:
+    """Supply native DLL search paths even when Python was launched without Conda."""
+    result = environment.copy()
+    prefix = python.parent
+    if os.name == "nt" and (prefix / "Library" / "bin").is_dir():
+        paths = [prefix, prefix / "Library" / "bin", prefix / "Scripts"]
+        result["PATH"] = os.pathsep.join(map(str, paths)) + os.pathsep + result.get("PATH", "")
+    result["PYTHONFAULTHANDLER"] = "1"
+    return result
+
+
+os.environ.update(python_runtime_environment(Path(sys.executable), dict(os.environ)))
+
 REPOSITORY_ROOT = GUI_DIR.parents[1]
 INTERACTIVE_SIMULATION_SCRIPT = (
     REPOSITORY_ROOT / "src" / "simulation" / "interactive" / "limb_simulator.py"
 )
-POSE_RECORDING_SCRIPT = (
-    REPOSITORY_ROOT / "src" / "simulation" / "ai" / "pose_recording_sim.py"
-)
+POSE_RECORDING_SCRIPT = REPOSITORY_ROOT / "src" / "simulation" / "ai" / "pose_recording_sim.py"
 MOVEMENT_RECOGNITION_SCRIPT = (
     REPOSITORY_ROOT / "src" / "simulation" / "ai" / "movement_recognition.py"
 )
-MOVEMENT_MODEL = (
-    REPOSITORY_ROOT / "src" / "simulation" / "ai" / "models" / "movement_gru.onnx"
-)
+MOVEMENT_MODEL = REPOSITORY_ROOT / "src" / "simulation" / "ai" / "models" / "movement_gru.onnx"
 DEFAULT_RECORDINGS_DIRECTORY = Path("outputs/recordings")
 DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/references")
 DEFAULT_SIMULATION_OUTPUT_DIRECTORY = Path("outputs/simulation")
@@ -40,14 +50,25 @@ GUI_DOCUMENTATION_FILE = GUI_DIR / "README.md"
 FIRMWARE_WORKSPACE_SCRIPT = GUI_DIR / "firmware_workspace.py"
 
 RECORDING_EXTENSIONS = {
-    ".avi", ".bag", ".csv", ".flac", ".json", ".mcap", ".mkv", ".mov",
-    ".mp3", ".mp4", ".npy", ".npz", ".wav", ".webm",
+    ".avi",
+    ".bag",
+    ".csv",
+    ".flac",
+    ".json",
+    ".mcap",
+    ".mkv",
+    ".mov",
+    ".mp3",
+    ".mp4",
+    ".npy",
+    ".npz",
+    ".wav",
+    ".webm",
 }
 RECORDING_ENTRYPOINT_PREFIXES = ("record", "capture")
 RECORDER_DETAILS = {
-    "record_ble_sensors.py": (
-        "Synchronized AURORA BLE recorder for dual-IMU and EMG data."
-    ),
+    "record_high_rate_serial.py": ("High-rate EMG and dual-IMU USB recorder with aligned CSV."),
+    "record_ble_sensors.py": ("Synchronized AURORA BLE recorder for dual-IMU and EMG data."),
     "record_serial_sensors.py": (
         "Serial recorder for newline-delimited JSON and other sensor messages."
     ),
@@ -180,22 +201,28 @@ def simulation_python_candidates() -> list[Path]:
 
     relative_python = Path("python.exe") if os.name == "nt" else Path("bin/python")
     try:
-        runtime = json.loads((REPOSITORY_ROOT / ".aurora/runtime.json").read_text(encoding="utf-8-sig"))
+        runtime = json.loads(
+            (REPOSITORY_ROOT / ".aurora/runtime.json").read_text(encoding="utf-8-sig")
+        )
         candidates.append(Path(runtime["prefix"]) / relative_python)
     except (OSError, ValueError, KeyError, TypeError):
         pass
     candidates.append(REPOSITORY_ROOT / ".aurora" / "env" / relative_python)
     candidates.append(console_python(Path(sys.executable)))
     if os.name == "nt":
-        candidates.extend([
-            REPOSITORY_ROOT / ".venv" / "Scripts" / "python.exe",
-            REPOSITORY_ROOT / "venv" / "Scripts" / "python.exe",
-        ])
+        candidates.extend(
+            [
+                REPOSITORY_ROOT / ".venv" / "Scripts" / "python.exe",
+                REPOSITORY_ROOT / "venv" / "Scripts" / "python.exe",
+            ]
+        )
     else:
-        candidates.extend([
-            REPOSITORY_ROOT / ".venv" / "bin" / "python",
-            REPOSITORY_ROOT / "venv" / "bin" / "python",
-        ])
+        candidates.extend(
+            [
+                REPOSITORY_ROOT / ".venv" / "bin" / "python",
+                REPOSITORY_ROOT / "venv" / "bin" / "python",
+            ]
+        )
 
     conda_prefix = os.environ.get("CONDA_PREFIX")
     if conda_prefix:
@@ -208,13 +235,15 @@ def simulation_python_candidates() -> list[Path]:
     local_data = os.environ.get("LOCALAPPDATA")
     if local_data:
         environment_roots.append(Path(local_data) / "micromamba")
-    environment_roots.extend([
-        Path.home() / ".local" / "share" / "mamba",
-        Path.home() / "micromamba",
-        Path.home() / "miniconda3",
-        Path.home() / "anaconda3",
-        Path.home() / ".conda",
-    ])
+    environment_roots.extend(
+        [
+            Path.home() / ".local" / "share" / "mamba",
+            Path.home() / "micromamba",
+            Path.home() / "miniconda3",
+            Path.home() / "anaconda3",
+            Path.home() / ".conda",
+        ]
+    )
     for root in environment_roots:
         candidates.append(root / "envs" / "aurora-simulation" / relative_python)
 
@@ -239,11 +268,11 @@ def has_python_dependencies(python: Path, modules: tuple[str, ...]) -> bool:
         result = subprocess.run(
             [str(python), "-c", imports],
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=12,
             check=False,
             creationflags=creation_flags,
+            env=python_runtime_environment(python, dict(os.environ)),
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -251,11 +280,11 @@ def has_python_dependencies(python: Path, modules: tuple[str, ...]) -> bool:
 
 
 def find_simulation_python() -> Path | None:
-    """Find an interpreter that can run simulation and serial monitoring."""
+    """Find an interpreter that can run simulation and BLE/USB monitoring."""
     for candidate in simulation_python_candidates():
         if has_python_dependencies(
             candidate,
-            ("numpy", "scipy", "pybullet", "pygame", "serial", "tkinter"),
+            ("numpy", "scipy", "pybullet", "pygame", "serial", "bleak", "tkinter"),
         ):
             return candidate
     return None
@@ -310,11 +339,6 @@ def discover_firmware_projects() -> dict[str, FirmwareProject]:
     return dict(sorted(projects.items()))
 
 
-def executable_available(name: str) -> bool:
-    """Return whether a command-line tool is available on PATH."""
-    return shutil.which(name) is not None
-
-
 def resolve_firmware_tool(project: FirmwareProject) -> tuple[str, ...] | None:
     """Resolve native IDF first, then a project-pinned ESP-IDF PlatformIO."""
     executable = shutil.which(project.executable)
@@ -355,9 +379,7 @@ def firmware_command(
     if action not in {"build", "flash", "monitor"}:
         raise ValueError(f"Unsupported firmware action: {action}")
 
-    is_platformio = (
-        tool[-1] == "platformio" or Path(tool[0]).stem.lower() == "platformio"
-    )
+    is_platformio = tool[-1] == "platformio" or Path(tool[0]).stem.lower() == "platformio"
     if is_platformio:
         command = [*tool, "run"]
         if action == "build":
@@ -372,7 +394,7 @@ def firmware_command(
             command.extend(["-p", port])
         command.append(action)
 
-    # ESP-IDF 4.4 rejects whitespace anywhere in a project path. Keep the
+    # ESP-IDF/PlatformIO rejects whitespace in this project path. Keep the
     # user's OneDrive checkout in place and build an exact source mirror from
     # a content-addressed temporary path instead.
     if any(character.isspace() for character in str(project.directory.resolve())):

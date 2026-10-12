@@ -1,9 +1,10 @@
+# Majd, Christian
 """Source-backed command and physical limits for the LIMB robot arm."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -54,6 +55,16 @@ FINGER_LIMITS_DEG = {
     "pinky": JointLimit(0.0, 90.0, 120.0, 120.0),
 }
 
+
+def shared_grip_step(direction: float, dt: float, max_curl: float = 1.5) -> float:
+    """Limit a shared grip by the slowest normalized HT25 finger servo travel."""
+    normalized_speed = min(
+        limit.speed(direction) / (limit.upper - limit.lower)
+        for limit in FINGER_LIMITS_DEG.values()
+    )
+    return normalized_speed * max_curl * max(0.0, dt)
+
+
 def finger_joint_angles_rad(curl: float) -> dict[str, float]:
     """Map hand curl to a stable open-to-grip pose for the imported hand."""
     if not math.isfinite(curl):
@@ -96,13 +107,6 @@ def _reverse(limit: JointLimit) -> JointLimit:
 
 
 # Logical names used by the interactive right-arm model.
-RIGHT_ARM_HARDWARE_SIGN = {
-    "shoulder_x": 1.0,
-    "shoulder_y": 1.0,
-    "shoulder_z": -1.0,
-    "elbow_x": -1.0,
-    "wrist_rotation": 1.0,
-}
 RIGHT_ARM_LIMITS_DEG = {
     "shoulder_x": HARDWARE_JOINT_LIMITS_DEG["upper_arm_rotation"],
     "shoulder_y": HARDWARE_JOINT_LIMITS_DEG["shoulder_up_down"],

@@ -43,3 +43,37 @@ so live control applies `CAD shoulder Y = 90 deg - anatomical flexion` before
 the physical limit is enforced. Elbow zero is straight. Wrist zero is the
 neutral/reset command used by HT25; there is no unmeasured 70 deg mounting
 offset.
+
+## Live control and constraints
+
+The rotation mapping follows the trunk-relative geometry in
+[DMP-arm's simple kinematics](https://github.com/oscaragren/DMP-arm/blob/88b0d2ea5df63764ebb56aad8926f92084926fc7/kinematics/simple_kinematics.py).
+Its camera axial estimate requires a bent elbow; with a straight elbow there is
+no camera axial target. IMU twist adapts gyro integration and relative upper-arm/
+forearm orientation from
+[HT25's sensor logic](https://github.com/MDU-C2/LIMB-HT25/blob/cbbe903c66e6b0bf9944b1183f3d3aa2cb8270bc/LIMB%20Simulation/Sensors_Calculations/sensor_logic.py).
+The signed mounting axes map both sensors into a common bend-X, length-Y frame.
+The forearm calculation projects common gyro motion onto its axis at the measured
+elbow bend before subtracting it. Upper-arm camera observations correct the gyro
+state once per new frame, so IMU movement is retained between observations.
+
+The gyros use decoded degrees/s and device sample timing, rather than copying
+HT25's rad/s conversion into the current packet path. Half a second of rest
+establishes gyro bias. Stored commands stay within the ranges above to avoid
+integration beyond a stop delaying reverse motion. Upper-arm drift can be
+corrected by camera; the old camera mapping has no forearm-twist observation.
+Wrist drift therefore needs recalibration. Q/E and Left/Right provide manual
+fallback for unavailable twist targets. See [mounting checks](SIMULATION.md#mounting-and-twist-calibration).
+
+Runtime arm commands and both loaded URDFs use the ranges above. No extra
+constraint fixes the shoulder or wrist in place. The scene's fixed constraints
+anchor the cup to the world and, during a physics grasp, attach it to the hand.
+
+Each HT25 finger has one servo, while the CAD hand has multiple revolute joints.
+The simulation retains a shared open-to-grip pose rather than claiming measured
+independent finger or tendon motion. Its joint poses stay within the URDF limits.
+Live grip progress is limited by the slowest normalized servo travel: 90 degrees
+at 40 degrees/s gives 2.25 seconds for a full close/open. Thumb, index, middle and
+ring use 40 degrees/s; pinky uses 120 degrees/s. These speeds come from the same
+hand firmware as the ranges. Keyboard and assisted cup-grasp animation retain
+their existing rates.

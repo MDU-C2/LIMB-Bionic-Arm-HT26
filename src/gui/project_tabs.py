@@ -1,3 +1,4 @@
+# Majd, Christian
 """Robot tooling and project-status pages for the AURORA GUI."""
 
 from __future__ import annotations
@@ -17,11 +18,13 @@ from project_support import (
     discover_firmware_projects,
     display_path,
     environment_name,
-    firmware_command,
     find_simulation_python,
-    has_python_dependencies as _has_python_dependencies,
+    firmware_command,
     resolve_firmware_tool,
     serial_ports,
+)
+from project_support import (
+    has_python_dependencies as _has_python_dependencies,
 )
 
 
@@ -62,9 +65,7 @@ class ProjectTabsMixin:
             row=0, column=1, padx=(8, 0)
         )
 
-        ttk.Label(card, text="Serial port", style="Card.TLabel").grid(
-            row=4, column=0, sticky="w"
-        )
+        ttk.Label(card, text="Serial port", style="Card.TLabel").grid(row=4, column=0, sticky="w")
         self.port_box = ttk.Combobox(card, textvariable=self.serial_port)
         self.port_box.grid(row=5, column=0, sticky="ew", pady=(4, 12))
 
@@ -225,8 +226,7 @@ class ProjectTabsMixin:
     def _refresh_info(self) -> None:
         """Render current dependency, program, and tool availability."""
         simulation_ready = (
-            INTERACTIVE_SIMULATION_SCRIPT.is_file()
-            and self.simulation_python is not None
+            INTERACTIVE_SIMULATION_SCRIPT.is_file() and self.simulation_python is not None
         )
         motion_ai_ready = (
             MOVEMENT_RECOGNITION_SCRIPT.is_file()
@@ -250,7 +250,9 @@ class ProjectTabsMixin:
             "Firmware tool: "
             + (
                 "Ready"
-                if any(resolve_firmware_tool(project) for project in self.firmware_projects.values())
+                if any(
+                    resolve_firmware_tool(project) for project in self.firmware_projects.values()
+                )
                 else "Not installed"
             ),
             f"Active programs: {active}",

@@ -1,3 +1,4 @@
+# Majd, Christian
 """Simulation and Motion AI pages for the AURORA control center."""
 
 from __future__ import annotations
@@ -63,33 +64,29 @@ class SimulationTabsMixin:
             3,
             "Interactive simulator with live sensors",
             "Open the same table-and-target scene, show the camera monitor, and control "
-            "the arm from the OAK-D plus an automatically detected shoulder IMU, "
-            "optional wrist IMU, and EMG-controlled grip. Copy the simulator's straight-arm "
+            "the arm from the OAK-D plus a shoulder IMU over BLE, "
+            "optional wrist IMU, and camera or EMG grip. Copy the simulator's straight-arm "
             "reference and press L "
             "to start feedback. Press R to pause and align again.",
         )
         fusion_settings = ttk.Frame(fusion, style="Card.TFrame")
         fusion_settings.grid(row=2, column=0, sticky="ew")
         fusion_settings.columnconfigure(0, weight=1)
-        ttk.Label(fusion_settings, text="ESP32 port", style="Card.TLabel").grid(
+        ttk.Label(fusion_settings, text="BLE device name", style="Card.TLabel").grid(
             row=0, column=0, sticky="w"
         )
-        self.fusion_port_box = ttk.Combobox(
-            fusion_settings, textvariable=self.recording_serial_port
+        ttk.Entry(fusion_settings, textvariable=self.recording_ble_device, state="readonly").grid(
+            row=1, column=0, sticky="ew", pady=(4, 0)
         )
-        self.fusion_port_box.grid(row=1, column=0, sticky="ew", pady=(4, 0))
-        ttk.Label(fusion_settings, text="Baud", style="Card.TLabel").grid(
-            row=0, column=1, sticky="w", padx=(12, 0)
+        ttk.Button(fusion_settings, text="Change", command=self._edit_ble_device).grid(
+            row=1, column=1, padx=(8, 0)
         )
-        ttk.Entry(
-            fusion_settings, textvariable=self.recording_serial_baud, width=10
-        ).grid(row=1, column=1, padx=(12, 0), pady=(4, 0))
         ttk.Label(fusion_settings, text="Camera correction", style="Card.TLabel").grid(
             row=0, column=2, sticky="w", padx=(12, 0)
         )
-        ttk.Entry(
-            fusion_settings, textvariable=self.fusion_camera_weight, width=10
-        ).grid(row=1, column=2, padx=(12, 0), pady=(4, 0))
+        ttk.Entry(fusion_settings, textvariable=self.fusion_camera_weight, width=10).grid(
+            row=1, column=2, padx=(12, 0), pady=(4, 0)
+        )
         ttk.Label(fusion_settings, text="Tracked arm", style="Card.TLabel").grid(
             row=0, column=3, sticky="w", padx=(12, 0)
         )
@@ -100,6 +97,41 @@ class SimulationTabsMixin:
             state="readonly",
             width=9,
         ).grid(row=1, column=3, padx=(12, 0), pady=(4, 0))
+        ttk.Label(fusion_settings, text="Grip source", style="Card.TLabel").grid(
+            row=2, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Combobox(
+            fusion_settings,
+            textvariable=self.fusion_grip_source,
+            values=("Camera", "EMG", "Auto"),
+            state="readonly",
+            width=14,
+        ).grid(row=3, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(
+            fusion_settings,
+            text="EMG: use the live graphs to calibrate rest, then a strong grip.",
+            style="Card.TLabel",
+        ).grid(row=3, column=1, columnspan=3, sticky="w", padx=(12, 0))
+
+        for column, label, variable in (
+            (0, "Upper-arm twist axis", self.fusion_shoulder_twist_axis),
+            (2, "Forearm twist axis", self.fusion_wrist_twist_axis),
+        ):
+            ttk.Label(fusion_settings, text=label, style="Card.TLabel").grid(
+                row=4, column=column, sticky="w", pady=(8, 0)
+            )
+            ttk.Combobox(
+                fusion_settings,
+                textvariable=variable,
+                values=("x", "y", "z", "-x", "-y", "-z"),
+                state="readonly",
+                width=14,
+            ).grid(row=5, column=column, sticky="w", pady=(4, 0))
+        ttk.Label(
+            fusion_settings,
+            text="Mount both axes along the limbs; hold still 0.5 s after L.",
+            style="Card.TLabel",
+        ).grid(row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
         fusion_actions = ttk.Frame(fusion, style="Card.TFrame")
         fusion_actions.grid(row=3, column=0, sticky="w", pady=(12, 0))
@@ -112,8 +144,8 @@ class SimulationTabsMixin:
         self.fusion_button.pack(side="left", padx=(0, 8))
         ttk.Button(
             fusion_actions,
-            text="Open sensor monitor",
-            command=self.open_sensor_window,
+            text="Open live BLE graphs",
+            command=lambda: self.start_sensor_preview("record_ble_sensors.py"),
         ).pack(side="left", padx=(0, 8))
         ttk.Button(
             fusion_actions,
@@ -304,9 +336,7 @@ class SimulationTabsMixin:
             "Interactive task simulator",
             "simulation",
             command,
-            parallel=all(
-                process.kind == "preview" for process in self._active_processes()
-            ),
+            parallel=all(process.kind == "preview" for process in self._active_processes()),
         )
 
     def start_live_sensor_fusion(self) -> None:
@@ -317,15 +347,14 @@ class SimulationTabsMixin:
                 "Create aurora-simulation from src/simulation/environment.yml, then refresh Info.",
             )
             return
-        port = self.recording_serial_port.get().strip()
-        if not port:
-            messagebox.showerror("Serial port required", "Choose the ESP32 serial port first.")
+        device = self.recording_ble_device.get().strip()
+        if not device:
+            messagebox.showerror("BLE device required", "Enter the ESP32 BLE device name first.")
             return
         try:
-            baud = int(self.recording_serial_baud.get().strip() or "115200")
             weight = float(self.fusion_camera_weight.get().strip())
-            if baud <= 0 or not 0.0 <= weight <= 1.0:
-                raise ValueError("Baud must be positive and camera correction must be 0 to 1.")
+            if not 0.0 <= weight <= 1.0:
+                raise ValueError("Camera correction must be 0 to 1.")
         except ValueError as error:
             messagebox.showerror("Invalid fusion settings", str(error))
             return
@@ -335,6 +364,14 @@ class SimulationTabsMixin:
                 "Camera already in use",
                 "Close the standalone camera monitor before starting live control. "
                 "The interactive simulator opens its own camera monitor.",
+            )
+            return
+        ble_preview = self.processes.get("preview:record_ble_sensors.py")
+        if ble_preview is not None and ble_preview.process.poll() is None:
+            messagebox.showinfo(
+                "BLE device already in use",
+                "Close the standalone BLE monitor before starting live control. "
+                "The simulator opens its own sensor monitor.",
             )
             return
         self._stop_serial_dashboard()
@@ -349,14 +386,20 @@ class SimulationTabsMixin:
             "dynamic" if self.dynamic_simulation.get() else "kinematic",
             "--control",
             "camera-imu",
-            "--port",
-            port,
-            "--baud",
-            str(baud),
+            "--transport",
+            "ble",
+            "--device",
+            device,
             "--side",
             self.recording_camera_side.get(),
             "--camera-weight",
             str(weight),
+            "--grip-source",
+            self.fusion_grip_source.get().lower(),
+            "--shoulder-twist-axis",
+            self.fusion_shoulder_twist_axis.get(),
+            "--wrist-twist-axis",
+            self.fusion_wrist_twist_axis.get(),
         ]
         if self.fusion_depth.get():
             command.append("--depth")

@@ -1,12 +1,13 @@
+# Majd
 """Small live window for a generic newline-delimited serial stream."""
 
 from __future__ import annotations
 
-from collections import deque
+import contextlib
 import json
 import math
 import tkinter as tk
-
+from collections import deque
 
 COLORS = ("#2563eb", "#d97706", "#159669", "#7c3aed", "#db2777")
 
@@ -60,9 +61,9 @@ class SerialPreview:
         self.root.bind("<Escape>", lambda _event: self.close())
         frame = tk.Frame(self.root, padx=14, pady=12)
         frame.pack(fill="both", expand=True)
-        tk.Label(
-            frame, textvariable=self.status, font=("Segoe UI", 11, "bold"), anchor="w"
-        ).pack(fill="x")
+        tk.Label(frame, textvariable=self.status, font=("Segoe UI", 11, "bold"), anchor="w").pack(
+            fill="x"
+        )
         tk.Label(
             frame,
             text="Live preview only. No files are saved.",
@@ -78,9 +79,9 @@ class SerialPreview:
             highlightthickness=1,
         )
         self.canvas.pack(fill="both", expand=True, pady=(4, 4))
-        tk.Label(
-            frame, textvariable=self.legend, anchor="w", font=("Consolas", 9)
-        ).pack(fill="x", pady=(0, 10))
+        tk.Label(frame, textvariable=self.legend, anchor="w", font=("Consolas", 9)).pack(
+            fill="x", pady=(0, 10)
+        )
         tk.Label(frame, text="Recent serial lines", anchor="w").pack(fill="x")
         self.log = tk.Text(frame, height=10, wrap="none", font=("Consolas", 9))
         self.log.pack(fill="both", expand=True, pady=(4, 0))
@@ -134,11 +135,7 @@ class SerialPreview:
                 )
             self.canvas.create_line(*points, fill=COLORS[index], width=2)
         self.legend.set(
-            "  |  ".join(
-                f"{name}: {history[-1]:.3g}"
-                for name, history in shown
-                if history
-            )
+            "  |  ".join(f"{name}: {history[-1]:.3g}" for name, history in shown if history)
         )
 
     def refresh(self) -> bool:
@@ -156,7 +153,5 @@ class SerialPreview:
         if self.closed:
             return
         self.closed = True
-        try:
+        with contextlib.suppress(tk.TclError):
             self.root.destroy()
-        except tk.TclError:
-            pass

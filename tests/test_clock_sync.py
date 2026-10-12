@@ -1,18 +1,18 @@
+# Christian
 """Verify BLE device clocks and camera samples share one monotonic timeline."""
 
 from __future__ import annotations
 
 import csv
-from pathlib import Path
 import struct
 import sys
 import tempfile
 import unittest
-
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
 
-from clock_sync import ClockSynchronizer, SYNC_RESPONSE
+from clock_sync import SYNC_RESPONSE, ClockSynchronizer
 from record_ble_sensors import BleRecorder
 
 
@@ -31,9 +31,7 @@ class ClockSynchronizerTests(unittest.TestCase):
             host_tx_ns = host_time(device_rx_us * 1000) - 1_000_000
             host_rx_ns = host_time(device_tx_us * 1000) + 1_000_000
             exchange_id, _ = synchronizer.make_request(host_tx_ns)
-            response = SYNC_RESPONSE.pack(
-                1, 0, exchange_id, host_tx_ns, device_rx_us, device_tx_us
-            )
+            response = SYNC_RESPONSE.pack(1, 0, exchange_id, host_tx_ns, device_rx_us, device_tx_us)
             self.assertIsNotNone(synchronizer.handle_response(response, host_rx_ns))
 
         target_us = 18_000_000
@@ -54,9 +52,7 @@ class ClockSynchronizerTests(unittest.TestCase):
         self.assertIsNone(synchronizer.handle_response(wrong_echo, 1_001_000_000))
 
         exchange_id, _ = synchronizer.make_request(2_000_000_000)
-        too_slow = SYNC_RESPONSE.pack(
-            1, 0, exchange_id, 2_000_000_000, 200, 201
-        )
+        too_slow = SYNC_RESPONSE.pack(1, 0, exchange_id, 2_000_000_000, 200, 201)
         self.assertIsNone(synchronizer.handle_response(too_slow, 2_020_000_000))
         self.assertFalse(synchronizer.ready)
 
@@ -71,14 +67,10 @@ class ClockSynchronizerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             recorder = BleRecorder(Path(temporary), clock_sync=synchronizer)
-            packet = struct.pack(
-                "<HIQ12h", 0x0103, 7, 1_000_000, *range(12)
-            )
+            packet = struct.pack("<HIQ12h", 0x0103, 7, 1_000_000, *range(12))
             recorder.handle("imu", bytearray(packet))
             recorder.close()
-            with (Path(temporary) / "imu.csv").open(
-                newline="", encoding="utf-8"
-            ) as source:
+            with (Path(temporary) / "imu.csv").open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
 
         self.assertEqual(len(rows), 2)
@@ -91,9 +83,7 @@ class ClockSynchronizerTests(unittest.TestCase):
         samples = []
         recorder = BleRecorder(
             None,
-            lambda sensor, sequence, channels: samples.append(
-                (sensor, sequence, channels)
-            ),
+            lambda sensor, sequence, channels: samples.append((sensor, sequence, channels)),
         )
         recorder.handle(
             "imu",

@@ -1,22 +1,24 @@
-import os
+# Majd, Christian
 import json
+import os
 import random
+
 import numpy as np
 
 # Keep Matplotlib's cache inside the repository on restricted/shared machines.
 os.environ.setdefault(
     "MPLCONFIGDIR",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "artifacts", ".matplotlib"),
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "artifacts", ".matplotlib"
+    ),
 )
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset
-
-# Importera matplotlib för att kunna rita graferna
-import matplotlib.pyplot as plt
 
 SEED = 42
 random.seed(SEED)
@@ -24,10 +26,7 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
-
-# =========================
-# CONFIG
-# =========================
+# Model and training settings.
 INPUT_SIZE = 69
 HIDDEN_SIZE = 128
 EMBED_SIZE = 128
@@ -48,10 +47,8 @@ ONNX_PATH = os.path.join(OUTPUT_DIR, "movement_gru.onnx")
 MODEL_PATH = os.path.join(OUTPUT_DIR, "movement_gru_best.pth")
 
 
-# =========================
-# FRAME -> VECTOR
-# =========================
 def frame_to_vector(frame):
+    """Keep shoulder, elbow and hand points in the original feature order."""
     vec = []
     for joint in ["shoulder", "elbow"]:
         vec.extend(frame.get(joint, [0.0, 0.0, 0.0]))
@@ -69,27 +66,26 @@ def frame_to_vector(frame):
     return np.array(vec, dtype=np.float32)
 
 
-# =========================
-# LOAD JSON
-# =========================
 def load_sequence(path):
-    with open(path, "r") as f:
+    """Load the frames and user label from one movement recording."""
+    with open(path) as f:
         raw = json.load(f)
 
     user_id = raw["user_id"]
-    sequence_num = raw["sequence"]
     data = raw["data"]
+
+    if not data:
+        raise ValueError(f"No movement frames in {path}")
 
     seq = [frame_to_vector(frame) for frame in data]
     seq = np.stack(seq)
 
-    return seq, user_id, sequence_num
+    return seq, user_id
 
 
-# =========================
-# DATASET
-# =========================
 class MovementDataset(Dataset):
+    """Resample movements and center their points on the shoulder."""
+
     def __init__(self, folder, files):
         self.samples = []
 
@@ -98,34 +94,26 @@ class MovementDataset(Dataset):
                 continue
 
             path = os.path.join(folder, file)
-            seq, user_id, sequence_num = load_sequence(path)
-            
-            # Tids-interpolation till exakt MAX_SEQ_LEN
+            seq, user_id = load_sequence(path)
+
+            # Resample each recording to the length used by the GRU.
             num_frames = seq.shape[0]
             num_features = seq.shape[1]
-            
+
             if num_frames > 1:
                 current_indices = np.linspace(0, num_frames - 1, num_frames)
                 target_indices = np.linspace(0, num_frames - 1, MAX_SEQ_LEN)
-                
+
                 resampled_chunk = np.zeros((MAX_SEQ_LEN, num_features))
                 for f in range(num_features):
                     resampled_chunk[:, f] = np.interp(target_indices, current_indices, seq[:, f])
             else:
                 resampled_chunk = np.repeat(seq, MAX_SEQ_LEN, axis=0)
 
-            # Rums-centrering utifrån axeln (index 0, 1, 2)
-            centered_chunk = resampled_chunk.copy()
-            for t in range(len(centered_chunk)):
-                if np.all(centered_chunk[t] == 0): 
-                    continue
-                base_x, base_y, base_z = centered_chunk[t, 0], centered_chunk[t, 1], centered_chunk[t, 2]
-                for p in range(0, 69, 3):
-                    centered_chunk[t, p] -= base_x
-                    centered_chunk[t, p+1] -= base_y
-                    centered_chunk[t, p+2] -= base_z
-
-            self.samples.append((centered_chunk, user_id))
+            # Center every point on the shoulder, as in the original training code.
+            points = resampled_chunk.reshape(MAX_SEQ_LEN, INPUT_SIZE // 3, 3)
+            centered = points - points[:, :1, :]
+            self.samples.append((centered.reshape(MAX_SEQ_LEN, INPUT_SIZE), user_id))
 
     def __len__(self):
         return len(self.samples)
@@ -134,10 +122,9 @@ class MovementDataset(Dataset):
         return self.samples[idx]
 
 
-# =========================
-# TRIPLET DATASET
-# =========================
 class TripletDataset(Dataset):
+    """Pick matching and different users for triplet training."""
+
     def __init__(self, base_dataset, is_val=False):
         self.base_dataset = base_dataset
         self.data = base_dataset.samples
@@ -148,14 +135,14 @@ class TripletDataset(Dataset):
 
     def __getitem__(self, idx):
         anchor, user = self.data[idx]
-        
+
         positives = [x for x in self.data if x[1] == user and not np.array_equal(x[0], anchor)]
         negatives = [x for x in self.data if x[1] != user]
-        
+
         # Säkerhetsspärr om en användare bara har en sekvens
         if len(positives) == 0:
             positives = [x for x in self.data if x[1] == user]
-            
+
         if self.is_val:
             pos_sample = positives[idx % len(positives)]
             neg_sample = negatives[idx % len(negatives)]
@@ -166,24 +153,17 @@ class TripletDataset(Dataset):
         return (
             torch.tensor(anchor, dtype=torch.float32),
             torch.tensor(pos_sample[0], dtype=torch.float32),
-            torch.tensor(neg_sample[0], dtype=torch.float32)
+            torch.tensor(neg_sample[0], dtype=torch.float32),
         )
 
 
-# =========================
-# MODEL
-# =========================
 class MovementGRU(nn.Module):
+    """The original GRU with mean pooling and normalized embeddings."""
+
     def __init__(self):
         super().__init__()
 
-        self.gru = nn.GRU(
-            INPUT_SIZE,
-            HIDDEN_SIZE,
-            batch_first=True,
-            num_layers=2,
-            dropout=0.3
-        )
+        self.gru = nn.GRU(INPUT_SIZE, HIDDEN_SIZE, batch_first=True, num_layers=2, dropout=0.3)
         self.dropout = nn.Dropout(0.4)
         self.fc = nn.Linear(HIDDEN_SIZE, EMBED_SIZE)
 
@@ -191,18 +171,15 @@ class MovementGRU(nn.Module):
         out, _ = self.gru(x)
         out = out.mean(dim=1)  # Mean pooling över tidsaxeln
         out = self.dropout(out)
-        
+
         emb = self.fc(out)
         return F.normalize(emb, dim=1)
 
 
-# =========================
-# EXPORT ONNX
-# =========================
 def export_to_onnx(model, save_path="movement_gru.onnx"):
     model.eval()
     dummy_input = torch.randn(1, MAX_SEQ_LEN, 69).to(next(model.parameters()).device)
-    
+
     torch.onnx.export(
         model,
         dummy_input,
@@ -210,19 +187,13 @@ def export_to_onnx(model, save_path="movement_gru.onnx"):
         export_params=True,
         opset_version=12,
         do_constant_folding=True,
-        input_names=['input'],
-        output_names=['output'],
-        dynamic_axes={
-            'input': {0: 'batch_size'},
-            'output': {0: 'batch_size'}
-        }
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
     )
     print(f" Successfully exported best model to ONNX: {save_path}")
 
 
-# =========================
-# RUN EPOCH
-# =========================
 def run_epoch(model, dataset, optimizer, criterion, device, training=True):
     if training:
         model.train()
@@ -265,51 +236,39 @@ def run_epoch(model, dataset, optimizer, criterion, device, training=True):
     return total_loss / num_batches, total_pos / num_batches, total_neg / num_batches
 
 
-# =========================
-# COMPUTE ACCURACY (1-NN)
-# =========================
 def compute_top1_accuracy(model, dataset, device):
+    """Compare recordings after calculating each embedding once."""
     model.eval()
     correct = 0
     total = 0
     all_samples = dataset.data
+    if not all_samples:
+        return 0.0
 
     with torch.no_grad():
-        for i in range(len(all_samples)):
-            anchor, true_user = all_samples[i]
+        batches = []
+        for start in range(0, len(all_samples), BATCH_SIZE):
+            batch = np.stack([sample for sample, _user in all_samples[start : start + BATCH_SIZE]])
+            inputs = torch.as_tensor(batch, dtype=torch.float32, device=device)
+            batches.append(model(inputs).cpu().numpy())
+        embeddings = np.concatenate(batches)
 
-            anchor_tensor = torch.tensor(anchor, dtype=torch.float32).unsqueeze(0).to(device)
-            anchor_emb = model(anchor_tensor).cpu().numpy()[0]
-
-            best_user = None
-            best_dist = float("inf")
-
-            for j in range(len(all_samples)):
-                ref, ref_user = all_samples[j]
-                
-                if i == j or np.array_equal(anchor, ref):
-                    continue
-
-                ref_tensor = torch.tensor(ref, dtype=torch.float32).unsqueeze(0).to(device)
-                ref_emb = model(ref_tensor).cpu().numpy()[0]
-
-                dist = np.linalg.norm(anchor_emb - ref_emb)
-
-                if dist < best_dist:
-                    best_dist = dist
-                    best_user = ref_user
-
-            if best_user is not None:
-                total += 1
-                if best_user == true_user:
-                    correct += 1
+    for index, (anchor, true_user) in enumerate(all_samples):
+        candidates = [
+            other
+            for other, (reference, _user) in enumerate(all_samples)
+            if other != index and not np.array_equal(anchor, reference)
+        ]
+        if not candidates:
+            continue
+        distances = np.linalg.norm(embeddings[candidates] - embeddings[index], axis=1)
+        nearest = candidates[int(np.argmin(distances))]
+        total += 1
+        correct += all_samples[nearest][1] == true_user
 
     return correct / total if total > 0 else 0.0
 
 
-# =========================
-# MAIN TRAINING LOOP
-# =========================
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
@@ -324,7 +283,7 @@ def main():
     user_files = {}
     for file in files:
         path = os.path.join(folder, file)
-        with open(path, "r") as f:
+        with open(path) as f:
             raw = json.load(f)
         user_id = raw["user_id"]
         if user_id not in user_files:
@@ -334,7 +293,7 @@ def main():
     train_files = []
     val_files = []
 
-    for user_id, user_list in user_files.items():
+    for user_list in user_files.values():
         random.shuffle(user_list)
         val_count = max(MIN_VAL_FILES, int(len(user_list) * VAL_SPLIT))
         val = user_list[:val_count]
@@ -353,39 +312,34 @@ def main():
     model = MovementGRU().to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=5e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=15)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=15)
     criterion = nn.TripletMarginLoss(margin=0.3, swap=True)
 
     best_val_loss = float("inf")
     patience_counter = 0
     best_pos, best_neg, best_acc = 0.0, 0.0, 0.0
 
-    # -------------------------------------------------------------
-    # NYTT: Listor för att lagra historiken till plotten
-    # -------------------------------------------------------------
+    # Keep validation history for the saved training plot.
     history_val_loss = []
     history_val_acc = []
 
     print("Starting training...")
 
     for epoch in range(EPOCHS):
-        train_loss, train_pos, train_neg = run_epoch(
-            model, train_dataset, optimizer, criterion, device, training=True
-        )
+        run_epoch(model, train_dataset, optimizer, criterion, device, training=True)
 
         val_loss, val_pos, val_neg = run_epoch(
             model, val_dataset, optimizer, criterion, device, training=False
         )
-        
+
         scheduler.step(val_loss)
         val_acc = compute_top1_accuracy(model, val_dataset, device)
-        
-        # Spara undan värden för denna epok till historiken
+
         history_val_loss.append(val_loss)
         history_val_acc.append(val_acc)
-        
+
         print(
-            f"Epoch {epoch+1}/{EPOCHS} | "
+            f"Epoch {epoch + 1}/{EPOCHS} | "
             f"Val Loss: {val_loss:.4f} | "
             f"Val Acc: {val_acc:.4f} | "
             f"Val Pos Dist: {val_pos:.4f} | "
@@ -423,40 +377,34 @@ def main():
     except Exception as e:
         print(f"Error loading best model or exporting to ONNX: {e}")
 
-    # =============================================================
-    # NYTT: RITA UT OCH SPARA HISTORIKEN
-    # =============================================================
+    # Save the validation curves next to the model.
     epochs_range = range(1, len(history_val_loss) + 1)
 
     plt.figure(figsize=(12, 5))
 
-    # Graf 1: Validation Loss
     plt.subplot(1, 2, 1)
-    plt.plot(epochs_range, history_val_loss, color='red', label='Val Loss', linewidth=2)
-    plt.title('Validation Loss over Epochs')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.plot(epochs_range, history_val_loss, color="red", label="Val Loss", linewidth=2)
+    plt.title("Validation Loss over Epochs")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.grid(True, linestyle="--", alpha=0.6)
     plt.legend()
 
-    # Graf 2: Validation Accuracy
     plt.subplot(1, 2, 2)
-    plt.plot(epochs_range, history_val_acc, color='blue', label='Val Accuracy', linewidth=2)
-    plt.title('Validation Accuracy over Epochs')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy (0.0 - 1.0)')
+    plt.plot(epochs_range, history_val_acc, color="blue", label="Val Accuracy", linewidth=2)
+    plt.title("Validation Accuracy over Epochs")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy (0.0 - 1.0)")
     plt.ylim(0, 1.05)
-    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.grid(True, linestyle="--", alpha=0.6)
     plt.legend()
 
     plt.tight_layout()
-    
-    # Sparar ner diagrammet som en PNG-fil i samma mapp
+
     plot_path = os.path.join(OUTPUT_DIR, "training_metrics.png")
     plt.savefig(plot_path)
     print(f"\n Metrics plot saved to: {plot_path}")
-    
-    # Öppnar upp fönstret på skärmen
+
     plt.close()
 
 

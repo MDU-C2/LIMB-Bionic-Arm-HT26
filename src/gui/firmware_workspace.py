@@ -1,15 +1,15 @@
+# Majd
 """Run a firmware command from a no-space mirror of an ESP-IDF project."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
-
+from pathlib import Path
 
 PROJECT_FILES = (
     "CMakeLists.txt",
@@ -21,14 +21,15 @@ PROJECT_FILES = (
 def source_files(project: Path) -> list[Path]:
     """Return the checked-in inputs that determine a firmware build."""
     files = [project / name for name in PROJECT_FILES if (project / name).is_file()]
-    main = project / "main"
-    if main.is_dir():
-        files.extend(path for path in main.rglob("*") if path.is_file())
+    for folder in ("main", "src", "include"):
+        source_dir = project / folder
+        if source_dir.is_dir():
+            files.extend(path for path in source_dir.rglob("*") if path.is_file())
     return sorted(files, key=lambda path: path.relative_to(project).as_posix())
 
 
 def staged_project(project: Path) -> Path:
-    """Copy source inputs into a stable no-space directory for old ESP-IDF."""
+    """Copy source inputs into a stable no-space directory for ESP-IDF."""
     project = project.resolve()
     files = source_files(project)
     if not files:
@@ -63,7 +64,7 @@ def parse_args(argv: list[str]) -> tuple[Path, list[str]]:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, required=True)
     args = parser.parse_args(argv[:separator])
-    command = argv[separator + 1:]
+    command = argv[separator + 1 :]
     if not command:
         raise ValueError("No firmware command was supplied")
     return args.project, command

@@ -69,7 +69,7 @@ The GUI can:
 - monitor shoulder/wrist IMUs and EMG in a dedicated window;
 - monitor the OAK-D camera and pose tracking without recording;
 - record clock-synchronized dual-IMU, EMG, and OAK-D camera data together;
-- fuse live camera and IMU angles while EMG controls the simulated grip;
+- fuse live camera and IMU angles with camera or EMG control of simulated grip;
 - run the interactive PyBullet arm simulation;
 - play saved camera poses; and
 - run the experimental movement-recognition tools.
@@ -90,6 +90,18 @@ The GUI can:
 Generated recordings are written below `outputs/recordings/` and should not be
 committed to Git.
 
+The [firmware target](firmware/high_rate_emg_imu/README.md) provides 4 kHz
+continuous EMG capture, one- or two-IMU fallback, BLE recording, plotting,
+and camera clock alignment. The GUI selects the OAK-D camera and Bluetooth
+sensors together by default. The firmware defaults to BLE sensor streaming.
+Contributors are named at the top of each code file.
+
+![EMG and both IMU signals from the connected ESP32-C3](docs/assets/signal_preview.png)
+
+The plot above was generated from an eight-second USB recording on the connected
+ESP32-C3. It contains 3,193 EMG, 799 IMU1, and 798 IMU2 samples. The plot command
+is in the [recording guide](docs/RECORDING_GUIDE.md).
+
 More details are in the [GUI guide](src/gui/README.md),
-[recording guide](src/recording/README.md), and
+[recording guide](docs/RECORDING_GUIDE.md), and
 [simulation guide](src/simulation/README.md).

@@ -1,15 +1,14 @@
+# Majd, Christian
 """Reusable OAK-D and one/two-IMU input for the interactive LIMB simulator."""
 
 from __future__ import annotations
 
+import contextlib
+import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
-import queue
-import sys
-import threading
-import time
 from typing import Any
-
 
 AI_DIR = Path(__file__).resolve().parent
 SRC_DIR = AI_DIR.parents[1]
@@ -18,18 +17,20 @@ for module_dir in (AI_DIR, RECORDING_DIR):
     if str(module_dir) not in sys.path:
         sys.path.insert(0, str(module_dir))
 
+from ble_sensor_input import BleSensorReader
 from emg_protocol import (
     EmgActivationEstimator,
     extract_emg,
     select_grip_source,
 )
-from imu_protocol import extract_imus, ImuStreamDecoder, imu_configuration
-from record_oak_pose import (
+from imu_protocol import extract_imus, imu_configuration
+from imu_twist import DEFAULT_TWIST_AXIS
+from oak_camera import (
     FRAME_SIZE,
-    analyze_frame,
     build_pipeline,
     configure_depthai_runtime,
 )
+from oak_tracking import analyze_frame
 from sensor_fusion import (
     ControlAngleSmoother,
     DualImuArmEstimator,
@@ -37,7 +38,7 @@ from sensor_fusion import (
     camera_hand_curl,
     fuse_control_angles,
 )
-
+from serial_sensor_input import SerialPacketReader
 
 WINDOW = "LIMB | Live camera monitor"
 
@@ -50,12 +51,7 @@ def installed_pose_model_complexity(mp) -> int:
     the environment instead of triggering a network request at startup.
     """
     package_directory = Path(mp.__file__).resolve().parent
-    heavy_model = (
-        package_directory
-        / "modules"
-        / "pose_landmark"
-        / "pose_landmark_heavy.tflite"
-    )
+    heavy_model = package_directory / "modules" / "pose_landmark" / "pose_landmark_heavy.tflite"
     return 2 if heavy_model.is_file() else 1
 
 
@@ -73,68 +69,7 @@ class LiveFusionSnapshot:
     emg_raw: int | None = None
     emg_activation: float | None = None
     stop_requested: bool = False
-
-
-class SerialPacketReader:
-    """Keep only the newest ESP32 packet, following LIMB-HT25's reader."""
-
-    def __init__(self, serial_module, port: str, baud: int) -> None:
-        self.serial_module = serial_module
-        self.port = port
-        self.baud = baud
-        self.running = False
-        self.packets: queue.Queue[dict[str, object]] = queue.Queue(maxsize=1)
-        self.thread: threading.Thread | None = None
-        self.error = ""
-        self.decoder = ImuStreamDecoder()
-
-    def start(self) -> None:
-        self.decoder.reset()
-        self.running = True
-        self.thread = threading.Thread(target=self._read_loop, daemon=True)
-        self.thread.start()
-
-    def stop(self) -> None:
-        self.running = False
-        if self.thread is not None:
-            self.thread.join(timeout=1.0)
-
-    def latest(self) -> dict[str, object] | None:
-        try:
-            return self.packets.get_nowait()
-        except queue.Empty:
-            return None
-
-    def _read_loop(self) -> None:
-        while self.running:
-            try:
-                with self.serial_module.Serial(
-                    self.port, self.baud, timeout=0.25
-                ) as device:
-                    self.error = ""
-                    while self.running:
-                        raw = device.readline()
-                        if not raw:
-                            continue
-                        packet = self.decoder.feed(
-                            raw.decode("utf-8", errors="ignore")
-                        )
-                        if not isinstance(packet, dict):
-                            continue
-                        if not extract_imus(packet) and not extract_emg(packet).get(
-                            "connected"
-                        ):
-                            continue
-                        if self.packets.full():
-                            try:
-                                self.packets.get_nowait()
-                            except queue.Empty:
-                                pass
-                        self.packets.put_nowait(packet)
-            except (self.serial_module.SerialException, OSError) as error:
-                self.error = str(error)
-                if self.running:
-                    time.sleep(1.0)
+    rotation_source: str = "--"
 
 
 def _draw_overlay(
@@ -159,14 +94,11 @@ def _draw_overlay(
         cv2.LINE_AA,
     )
     if fused:
+
         def angle(name: str) -> str:
             return f"{fused[name]:.1f}" if name in fused else "--"
 
-        grip = (
-            f"{hand_curl * 100:.0f}% ({grip_source})"
-            if hand_curl is not None
-            else "--"
-        )
+        grip = f"{hand_curl * 100:.0f}% ({grip_source})" if hand_curl is not None else "--"
         values = (
             f"Flex {angle('shoulder_flexion')}  "
             f"L/R {angle('shoulder_abduction')}  "
@@ -199,21 +131,35 @@ def _draw_overlay(
 
 
 class LiveSensorInput:
-    """Own the live camera window and one ESP32 IMU serial connection."""
+    """Own the live camera window and an ESP32 BLE or serial connection."""
 
     def __init__(
         self,
-        port: str,
-        baud: int,
-        side: str,
-        camera_weight: float,
-        depth: bool,
+        port: str | None = None,
+        baud: int = 115200,
+        side: str = "left",
+        camera_weight: float = 0.25,
+        depth: bool = False,
+        transport: str | None = None,
+        device: str = "LIMBServer",
+        address: str = "",
+        grip_source: str = "auto",
+        shoulder_twist_axis: str = DEFAULT_TWIST_AXIS,
+        wrist_twist_axis: str = DEFAULT_TWIST_AXIS,
     ) -> None:
         self.port = port
         self.baud = baud
         self.side = side
         self.camera_weight = camera_weight
         self.depth = depth
+        self.transport = transport or ("serial" if port else "ble")
+        self.device = device
+        self.address = address
+        if grip_source not in ("auto", "camera", "emg"):
+            raise ValueError("Grip source must be auto, camera, or emg")
+        self.grip_source = grip_source
+        self.shoulder_twist_axis = shoulder_twist_axis
+        self.wrist_twist_axis = wrist_twist_axis
         self.reader = None
         self.pipeline = None
         self.pose = None
@@ -239,7 +185,9 @@ class LiveSensorInput:
         self.sensors: dict[str, dict[str, Any]] = {}
         self.imu_mode = "none"
         self.imu_roles: tuple[str, ...] = ()
-        self.estimator = DualImuArmEstimator()
+        self.estimator = DualImuArmEstimator(
+            shoulder_twist_axis=shoulder_twist_axis, wrist_twist_axis=wrist_twist_axis
+        )
         self.emg_estimator = EmgActivationEstimator()
         self.camera_smoother = ControlAngleSmoother()
         self._closed = False
@@ -252,19 +200,23 @@ class LiveSensorInput:
             import depthai as dai
             import mediapipe as mp
             import numpy as np
-            import serial
         except ImportError as error:
             raise RuntimeError(f"Live control dependency missing: {error.name}") from error
 
         self.cv2 = cv2
         self.mp = mp
         self.np = np
-        self.reader = SerialPacketReader(serial, self.port, self.baud)
+        if self.transport == "ble":
+            self.reader = BleSensorReader(
+                self.device, self.address, self.shoulder_twist_axis, self.wrist_twist_axis
+            )
+        else:
+            import serial
+
+            self.reader = SerialPacketReader(serial, self.port, self.baud)
         self.reader.start()
         try:
-            self.pipeline, self.video_queue, self.depth_queue = build_pipeline(
-                dai, self.depth
-            )
+            self.pipeline, self.video_queue, self.depth_queue = build_pipeline(dai, self.depth)
             self.pipeline.start()
             if self.depth:
                 calibration = self.pipeline.getDefaultDevice().readCalibration()
@@ -295,16 +247,39 @@ class LiveSensorInput:
 
     def calibrate(self) -> None:
         self.estimator.reset_calibration()
-        self.emg_estimator.reset()
+        if self.transport == "ble" and self.reader is not None:
+            self.reader.calibrate(reset_emg=False)
         self.camera_smoother.reset()
         self.imu_angles = None
         self.imu_time = 0.0
+        self.camera_angles = {}
+        self.camera_time = 0.0
+
+    def calibrate_emg(self) -> None:
+        self.emg_estimator.reset()
+        self.emg_activation = None
+        if self.transport == "ble" and self.reader is not None:
+            self.reader.calibrate_emg()
+
+    def calibrate_emg_strength(self) -> bool:
+        if self.transport == "ble" and self.reader is not None:
+            return self.reader.calibrate_emg_strength()
+        return self.emg_estimator.calibrate_strength()
 
     def poll(self) -> LiveFusionSnapshot:
         """Advance both sources once and refresh the camera monitor."""
         now = time.monotonic()
         packet = self.reader.latest() if self.reader is not None else None
-        if packet is not None:
+        if packet is not None and self.transport == "ble":
+            self.sensors = extract_imus(packet)
+            self.imu_mode, self.imu_roles = imu_configuration(packet)
+            self.imu_angles = packet["imu_angles"]
+            self.imu_packet_time = packet["imu_time"]
+            self.imu_time = packet["imu_time"]
+            self.emg_raw = packet["emg_raw"]
+            self.emg_activation = packet["emg_activation"]
+            self.emg_time = packet["emg_time"]
+        elif packet is not None:
             self.sensors = extract_imus(packet)
             self.imu_mode, self.imu_roles = imu_configuration(packet)
             if self.imu_mode != "none":
@@ -340,9 +315,7 @@ class LiveSensorInput:
                     self.hands,
                 )
                 raw_camera_angles = camera_control_angles(
-                    observation.get("angles_deg")
-                    if isinstance(observation, dict)
-                    else None
+                    observation.get("angles_deg") if isinstance(observation, dict) else None
                 )
                 camera_dt = now - self.previous_camera_time
                 self.previous_camera_time = now
@@ -353,10 +326,26 @@ class LiveSensorInput:
                 if measured:
                     self.camera_angles = measured
                     self.camera_time = now
+                    camera_rotation = measured.get("shoulder_rotation_proxy")
+                    if camera_rotation is not None and self.camera_weight > 0:
+                        # Correct once per new observation, not once per rendered loop.
+                        correction_weight = 1.0 - (1.0 - self.camera_weight) ** (
+                            min(0.25, max(0.001, camera_dt)) / (1.0 / 30.0)
+                        )
+                        if self.transport == "ble" and self.reader is not None:
+                            corrected = self.reader.correct_rotation(
+                                camera_rotation, correction_weight
+                            )
+                            if corrected is not None:
+                                self.imu_angles = corrected
+                        elif now - self.imu_time <= 0.5 and self.imu_angles is not None:
+                            corrected = self.estimator.correct_rotation(
+                                camera_rotation, correction_weight
+                            )
+                            if corrected is not None:
+                                self.imu_angles["shoulder_rotation_proxy"] = corrected
                 measured_curl = camera_hand_curl(
-                    observation.get("finger_curl_deg")
-                    if isinstance(observation, dict)
-                    else None
+                    observation.get("finger_curl_deg") if isinstance(observation, dict) else None
                 )
                 if measured_curl is not None:
                     self.hand_curl = measured_curl
@@ -365,16 +354,18 @@ class LiveSensorInput:
         recent_imu = self.imu_angles if now - self.imu_time <= 0.5 else None
         recent_camera = self.camera_angles if now - self.camera_time <= 0.5 else None
         recent_hand_curl = self.hand_curl if now - self.hand_time <= 0.5 else None
-        recent_emg = (
-            self.emg_activation
-            if now - self.emg_time <= 0.5
-            else None
-        )
-        grip, grip_source = select_grip_source(recent_emg, recent_hand_curl)
-        imu_connected = (
-            self.imu_mode != "none" and now - self.imu_packet_time <= 0.5
-        )
+        recent_emg = self.emg_activation if now - self.emg_time <= 0.5 else None
+        grip, grip_source = select_grip_source(recent_emg, recent_hand_curl, self.grip_source)
+        imu_connected = self.imu_mode != "none" and now - self.imu_packet_time <= 0.5
         fused = fuse_control_angles(recent_imu, recent_camera, self.camera_weight)
+        imu_rotation = (recent_imu or {}).get("shoulder_rotation_proxy")
+        camera_rotation = (recent_camera or {}).get("shoulder_rotation_proxy")
+        if imu_rotation is not None:
+            rotation_source = (
+                "IMU + camera" if camera_rotation is not None and self.camera_weight > 0 else "IMU"
+            )
+        else:
+            rotation_source = "camera" if camera_rotation is not None else "--"
         if imu_connected and self.imu_mode == "dual":
             imu_status = "IMUs 2/2"
         elif imu_connected and self.imu_mode == "single":
@@ -389,10 +380,13 @@ class LiveSensorInput:
             else "EMG --"
         )
         source_status = (
-            f"Camera {'OK' if recent_camera else '--'} | {imu_status} | {emg_status}"
+            f"Camera {'OK' if recent_camera else '--'} | {imu_status} | {emg_status} | "
+            f"Grip {grip_source if grip is not None else 'waiting for ' + self.grip_source}"
         )
         if self.reader is not None and self.reader.error:
-            source_status += f" | Serial: {self.reader.error}"
+            source_status += f" | {self.transport.upper()}: {self.reader.error}"
+        elif self.transport == "ble" and self.reader is not None:
+            source_status += f" | BLE {self.reader.status}"
 
         stop_requested = False
         if self.pipeline is not None and not self.pipeline.isRunning():
@@ -414,7 +408,8 @@ class LiveSensorInput:
         elif key == ord("q"):
             stop_requested = True
         if (
-            hasattr(self.cv2, "getWindowProperty")
+            self.latest_frame is not None
+            and hasattr(self.cv2, "getWindowProperty")
             and self.cv2.getWindowProperty(WINDOW, self.cv2.WND_PROP_VISIBLE) < 1
         ):
             stop_requested = True
@@ -430,6 +425,7 @@ class LiveSensorInput:
             emg_raw=self.emg_raw if now - self.emg_time <= 0.5 else None,
             emg_activation=recent_emg,
             stop_requested=stop_requested,
+            rotation_source=rotation_source,
         )
 
     def close(self) -> None:
@@ -443,10 +439,8 @@ class LiveSensorInput:
         if self.hands is not None:
             self.hands.close()
         if hasattr(self, "cv2"):
-            try:
+            with contextlib.suppress(self.cv2.error):
                 self.cv2.destroyWindow(WINDOW)
-            except self.cv2.error:
-                pass
         if self.pipeline is not None:
             stop = getattr(self.pipeline, "stop", None)
             if callable(stop):

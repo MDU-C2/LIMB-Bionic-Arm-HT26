@@ -1,16 +1,27 @@
+# Majd
 """Shared paths and metadata for sensor recording programs."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import re
-
+import signal
+from datetime import datetime, timezone
+from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY_ROOT / "outputs" / "recordings"
+
+
+def enable_ctrl_break_as_interrupt() -> None:
+    """Let the GUI's Windows stop request reach recorder cleanup blocks."""
+    if hasattr(signal, "SIGBREAK"):
+
+        def interrupt(_number: int, _frame: object) -> None:
+            raise KeyboardInterrupt
+
+        signal.signal(signal.SIGBREAK, interrupt)
 
 
 def env_float(name: str, default: float) -> float:
@@ -32,9 +43,7 @@ def create_session_directory(source: str, subject: str) -> Path:
     output = Path(os.environ.get("AURORA_OUTPUT_DIR", DEFAULT_OUTPUT)).expanduser()
     batch_value = os.environ.get("AURORA_SESSION_ID", "").strip()
     timestamp = (
-        safe_label(batch_value)
-        if batch_value
-        else datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        safe_label(batch_value) if batch_value else datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     )
     session = output / f"{timestamp}_{safe_label(subject)}_{safe_label(source)}"
     session.mkdir(parents=True, exist_ok=False)

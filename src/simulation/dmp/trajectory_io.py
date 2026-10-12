@@ -1,15 +1,15 @@
+# Majd
 """Load Oscar Ågren's four-joint DMP trajectories or fit one from angles."""
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Literal
-import warnings
 
 import numpy as np
 
 from .dmp import fit, rollout_simple
-
 
 # --- LIMB25 filename compatibility -----------------------------------------
 

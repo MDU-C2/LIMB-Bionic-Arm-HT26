@@ -1,3 +1,4 @@
+# Oscar Ågren, Majd
 """Open the LIMB PyBullet model with arm and wrist joint sliders.
 
 Adapted from ``sim/sandbox_limb_sim.py`` in Oscar Agren's DMP-arm project at
@@ -10,22 +11,22 @@ from __future__ import annotations
 import argparse
 import math
 import os
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import pybullet as p
-
 
 SIM_DIR = Path(__file__).resolve().parent
 SIMULATION_ROOT = SIM_DIR.parent
 if str(SIMULATION_ROOT) not in sys.path:
     sys.path.insert(0, str(SIMULATION_ROOT))
 
+import contextlib
+
 from sim.joint_limits import HARDWARE_JOINT_LIMITS_DEG, JOINT_LIMITS_RAD
 from sim.limb_sim import JOINT_MAPPING, joint_index
-
 
 DEFAULT_ANGLES_DEG = (36.0, 37.47, 13.26, -18.95)
 SLIDER_ORDER = (1, 2, 3, 0)  # Shoulder controls first, matching Oscar's UI.
@@ -83,9 +84,7 @@ def main() -> None:
             lower, upper = limits_deg[column]
             default = float(np.clip(DEFAULT_ANGLES_DEG[column], lower, upper))
             label = f"{logical_name} ({urdf_name}) [deg]"
-            sliders[column] = p.addUserDebugParameter(
-                label, float(lower), float(upper), default
-            )
+            sliders[column] = p.addUserDebugParameter(label, float(lower), float(upper), default)
         wrist_limit = HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"]
         wrist_slider = p.addUserDebugParameter(
             "wrist_rotation (jLeftWrist_rotation) [deg]",
@@ -123,7 +122,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         main()
-    except KeyboardInterrupt:
-        pass

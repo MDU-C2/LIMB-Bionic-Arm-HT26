@@ -1,18 +1,20 @@
+# Majd, Christian
 """Dedicated live window for the shoulder/wrist IMUs and EMG channel."""
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 import time
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
-
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 for module_dir in (SRC_DIR / "recording", SRC_DIR / "simulation" / "ai"):
     if str(module_dir) not in sys.path:
         sys.path.insert(0, str(module_dir))
+
+import contextlib
 
 from emg_protocol import EmgActivationEstimator, extract_emg
 from imu_protocol import ROLE_LABELS, extract_imus, i2c_wiring_hint
@@ -68,14 +70,14 @@ class ImuMonitorWindow:
             foreground="#667085",
             wraplength=850,
             justify="left",
-        ).grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(5, 14)
-        )
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(5, 14))
 
         for column, role in enumerate(("shoulder", "wrist")):
             frame = ttk.LabelFrame(root, text=ROLE_LABELS[role], padding=14)
             frame.grid(
-                row=4, column=column, sticky="nsew",
+                row=4,
+                column=column,
+                sticky="nsew",
                 padx=((0, 7) if column == 0 else (7, 0)),
             )
             frame.columnconfigure(0, weight=1)
@@ -151,8 +153,7 @@ class ImuMonitorWindow:
             return "X  -        Y  -        Z  -"
         try:
             return "   ".join(
-                f"{axis.upper()} {float(value[axis]): .{decimals}f}"
-                for axis in ("x", "y", "z")
+                f"{axis.upper()} {float(value[axis]): .{decimals}f}" for axis in ("x", "y", "z")
             )
         except (KeyError, TypeError, ValueError):
             return "X  -        Y  -        Z  -"
@@ -166,8 +167,7 @@ class ImuMonitorWindow:
         device = str(packet.get("device", "ESP32"))
         sensors = extract_imus(packet)
         roles = tuple(
-            role for role in ("shoulder", "wrist")
-            if sensors.get(role, {}).get("connected") is True
+            role for role in ("shoulder", "wrist") if sensors.get(role, {}).get("connected") is True
         )
         mode_text = (
             "Dual IMU (2/2)"
@@ -200,16 +200,12 @@ class ImuMonitorWindow:
                 pullup_text = f" · {pullup_text}"
             else:
                 pullup_text = ""
-            i2c_text = (
-                f" · I2C {profile} SDA{sda_pin}/SCL{scl_pin}{pullup_text}"
-            )
+            i2c_text = f" · I2C {profile} SDA{sda_pin}/SCL{scl_pin}{pullup_text}"
             if len(roles) == 0:
                 hint = i2c_wiring_hint(i2c)
                 if hint and not (sda_pullup and scl_pullup):
                     i2c_text = f"{i2c_text} · {hint}"
-        self.device.set(
-            f"ESP32: {device} · {mode_text}{uptime_text}{i2c_text}"
-        )
+        self.device.set(f"ESP32: {device} · {mode_text}{uptime_text}{i2c_text}")
         connected = 0
         for role in ("shoulder", "wrist"):
             sensor = sensors.get(role, {})
@@ -243,13 +239,10 @@ class ImuMonitorWindow:
                 self.emg_value.set(f"Raw {raw:4d} ADC   Calibrating rest {percent:3d}%")
                 self.emg_progress.set(percent)
             else:
-                self.emg_value.set(
-                    f"Raw {raw:4d} ADC   Activation {activation * 100:5.1f}%"
-                )
+                self.emg_value.set(f"Raw {raw:4d} ADC   Activation {activation * 100:5.1f}%")
                 self.emg_progress.set(activation * 100.0)
             self.emg_meta.set(
-                f"ADC channel: {emg.get('adc_channel', '?')}    "
-                f"GPIO: {emg.get('gpio', '?')}"
+                f"ADC channel: {emg.get('adc_channel', '?')}    GPIO: {emg.get('gpio', '?')}"
             )
         else:
             self.emg_value.set(f"Disconnected · {emg.get('error', 'no data')}")
@@ -261,9 +254,7 @@ class ImuMonitorWindow:
             self.joints.set(f"Waiting for an IMU ({connected}/2 connected)")
             return
         if not estimate:
-            self.joints.set(
-                "Wrist IMU connected · camera or shoulder IMU needed for arm control"
-            )
+            self.joints.set("Wrist IMU connected · camera or shoulder IMU needed for arm control")
             return
         elbow = (
             f"{estimate['elbow_flexion']:6.1f}°"
@@ -296,7 +287,5 @@ class ImuMonitorWindow:
         if self.closed:
             return
         self.closed = True
-        try:
+        with contextlib.suppress(tk.TclError):
             self.window.destroy()
-        except tk.TclError:
-            pass

@@ -1,3 +1,4 @@
+# Majd, Christian
 """Background serial reader and packet parsing for the GUI sensor dashboard."""
 
 from __future__ import annotations
@@ -6,7 +7,6 @@ import json
 import queue
 import threading
 from typing import Any
-
 
 SerialEvent = tuple[str, object]
 
@@ -76,9 +76,7 @@ class SerialSensorReader:
                     while not self._stop.is_set():
                         raw = device.readline()
                         if raw:
-                            self.events.put(
-                                ("line", raw.decode("utf-8", errors="replace").strip())
-                            )
+                            self.events.put(("line", raw.decode("utf-8", errors="replace").strip()))
             except (serial.SerialException, OSError) as error:
                 if not self._stop.is_set():
                     self.events.put(("error", str(error)))

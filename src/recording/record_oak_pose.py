@@ -1,565 +1,79 @@
+# Christian, Majd
 """Record selected arm, hand, and finger motion from an OAK-D camera."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
-from pathlib import Path
-import tempfile
 import time
 
-from common import create_session_directory, env_float, experiment_metadata, utc_now, write_metadata
-
-
-FRAME_SIZE = (640, 480)
-DEPTH_SIZE = (640, 400)
-VIDEO_FPS = 25.0
-WINDOW = "AURORA OAK-D | arm and mug task"
-ANGLE_LABELS = (
-    ("elbow_flexion", "Elbow flex"),
-    ("shoulder_flexion", "Shoulder flex"),
-    ("shoulder_abduction", "Shoulder abd"),
-    ("shoulder_rotation_proxy", "Rotation proxy"),
+from common import (
+    enable_ctrl_break_as_interrupt,
+    env_float,
 )
-HAND_LANDMARK_NAMES = (
-    "wrist",
-    "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb_tip",
-    "index_mcp", "index_pip", "index_dip", "index_tip",
-    "middle_mcp", "middle_pip", "middle_dip", "middle_tip",
-    "ring_mcp", "ring_pip", "ring_dip", "ring_tip",
-    "pinky_mcp", "pinky_pip", "pinky_dip", "pinky_tip",
-)
-FINGER_CHAINS = {
-    "thumb": (0, 1, 2, 3, 4),
-    "index": (0, 5, 6, 7, 8),
-    "middle": (0, 9, 10, 11, 12),
-    "ring": (0, 13, 14, 15, 16),
-    "pinky": (0, 17, 18, 19, 20),
-}
-PALM_CONNECTIONS = ((0, 5), (5, 9), (9, 13), (13, 17), (17, 0))
-TIP_LABELS = {4: "T", 8: "I", 12: "M", 16: "R", 20: "P"}
-
-
-def configure_depthai_runtime() -> None:
-    """Use stable, local DepthAI diagnostics on Windows lab machines."""
-    os.environ.setdefault("DEPTHAI_CRASHDUMP", "0")
-    os.environ.setdefault("DEPTHAI_TELEMETRY", "0")
-    os.environ.setdefault(
-        "DEPTHAI_CACHE_DIR",
-        str(Path(tempfile.gettempdir()) / "aurora_depthai_cache"),
-    )
+from oak_camera import DEPTH_SIZE as DEPTH_SIZE
+from oak_camera import FRAME_SIZE as FRAME_SIZE
+from oak_camera import VIDEO_FPS as VIDEO_FPS
+from oak_camera import WINDOW as WINDOW
+from oak_camera import build_pipeline as build_pipeline
+from oak_camera import configure_depthai_runtime as configure_depthai_runtime
+from oak_geometry import ANGLE_LABELS as ANGLE_LABELS
+from oak_geometry import FINGER_CHAINS as FINGER_CHAINS
+from oak_geometry import HAND_LANDMARK_NAMES as HAND_LANDMARK_NAMES
+from oak_geometry import PALM_CONNECTIONS as PALM_CONNECTIONS
+from oak_geometry import TIP_LABELS as TIP_LABELS
+from oak_geometry import arm_angles_deg as arm_angles_deg
+from oak_geometry import camera_point as camera_point
+from oak_geometry import camera_xyz as camera_xyz
+from oak_geometry import depth_at as depth_at
+from oak_geometry import display_pixel as display_pixel
+from oak_geometry import finger_angles_deg as finger_angles_deg
+from oak_geometry import landmark_ids as landmark_ids
+from oak_geometry import select_hand_near_wrist as select_hand_near_wrist
+from oak_session import CameraSession as CameraSession
+from oak_tracking import add_hand_tracking as add_hand_tracking
+from oak_tracking import analyze_frame as analyze_frame
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subject", default=os.environ.get("AURORA_SUBJECT", "session"))
-    parser.add_argument("--side", choices=("left", "right"),
-                        default=os.environ.get("AURORA_CAMERA_SIDE", "left"),
-                        help="Subject's arm to highlight and save (default: left).")
-    parser.add_argument("--preview", action="store_true",
-                        help="Compatibility option; live preview is always shown first.")
+    parser.add_argument(
+        "--side",
+        choices=("left", "right"),
+        default=os.environ.get("AURORA_CAMERA_SIDE", "left"),
+        help="Subject's arm to highlight and save (default: left).",
+    )
+    parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="Compatibility option; live preview is always shown first.",
+    )
     parser.add_argument(
         "--auto-start",
         action="store_true",
         default=os.environ.get("AURORA_AUTO_START", "").strip() == "1",
         help="Start saving immediately after the camera and tracking models are ready.",
     )
-    parser.add_argument("--depth", action="store_true",
-                        help="Enable stereo depth for 3D playback points (experimental on this OAK-D).")
-    parser.add_argument("--pose-model", type=int, choices=(0, 1, 2), default=1,
-                        help="MediaPipe pose complexity; 2 is closest to Oscar's heavy model.")
-    parser.add_argument("--duration", type=float,
-                        default=env_float("AURORA_DURATION_SECONDS", 0.0),
-                        help="Maximum seconds per recording; 0 means until stopped.")
+    parser.add_argument(
+        "--depth",
+        action="store_true",
+        help="Enable stereo depth for 3D playback points (experimental on this OAK-D).",
+    )
+    parser.add_argument(
+        "--pose-model",
+        type=int,
+        choices=(0, 1, 2),
+        default=1,
+        help="MediaPipe pose complexity; 2 is closest to Oscar's heavy model.",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=env_float("AURORA_DURATION_SECONDS", 0.0),
+        help="Maximum seconds per recording; 0 means until stopped.",
+    )
     return parser.parse_args()
-
-
-def depth_at(depth_frame, x: int, y: int, width: int, height: int, np) -> float | None:
-    """Median RGB-aligned stereo depth in metres at one image point."""
-    depth_height, depth_width = depth_frame.shape
-    depth_x = int(x * depth_width / width)
-    depth_y = int(y * depth_height / height)
-    # Oscar sampled the median of a 3-by-3 patch at each pose point.
-    radius = 1
-    region = depth_frame[
-        max(0, depth_y - radius):min(depth_height, depth_y + radius + 1),
-        max(0, depth_x - radius):min(depth_width, depth_x + radius + 1),
-    ]
-    valid = region[(region > 0) & (region < 3000)]
-    return None if valid.size == 0 else float(np.median(valid)) / 1000.0
-
-
-def camera_point(landmark, depth_frame, width: int, height: int, np) -> list[float] | None:
-    if depth_frame is None or not (0 <= landmark.x <= 1 and 0 <= landmark.y <= 1):
-        return None
-    x = min(width - 1, int(landmark.x * width))
-    y = min(height - 1, int(landmark.y * height))
-    depth = depth_at(depth_frame, x, y, width, height, np)
-    return None if depth is None else [float(x), float(y), depth]
-
-
-def landmark_ids(mp_pose, side: str) -> dict[str, int]:
-    """Select Oscar's arm and trunk points, keeping anatomical side labels."""
-    other = "right" if side == "left" else "left"
-    return {
-        f"{side}_shoulder": getattr(mp_pose.PoseLandmark, f"{side.upper()}_SHOULDER"),
-        f"{side}_elbow": getattr(mp_pose.PoseLandmark, f"{side.upper()}_ELBOW"),
-        f"{side}_wrist": getattr(mp_pose.PoseLandmark, f"{side.upper()}_WRIST"),
-        f"{other}_shoulder": getattr(mp_pose.PoseLandmark, f"{other.upper()}_SHOULDER"),
-        "left_hip": mp_pose.PoseLandmark.LEFT_HIP,
-        "right_hip": mp_pose.PoseLandmark.RIGHT_HIP,
-    }
-
-
-def arm_angles_deg(points: dict[str, object], side: str, np) -> dict[str, float | None] | None:
-    """Oscar's trunk-relative elbow/shoulder geometry from six 3D points.
-
-    Shoulder axial rotation is only a forearm-based proxy. It is undefined
-    when the elbow is nearly straight or its transverse projection vanishes.
-    """
-    other = "right" if side == "left" else "left"
-    try:
-        shoulder = np.asarray(points[f"{side}_shoulder"], dtype=float)
-        elbow = np.asarray(points[f"{side}_elbow"], dtype=float)
-        wrist = np.asarray(points[f"{side}_wrist"], dtype=float)
-        opposite = np.asarray(points[f"{other}_shoulder"], dtype=float)
-        left_hip = np.asarray(points["left_hip"], dtype=float)
-        right_hip = np.asarray(points["right_hip"], dtype=float)
-    except (KeyError, TypeError, ValueError):
-        return None
-    if not all(np.all(np.isfinite(p)) and p.shape == (3,) for p in
-               (shoulder, elbow, wrist, opposite, left_hip, right_hip)):
-        return None
-
-    def unit(vector):
-        length = float(np.linalg.norm(vector))
-        return None if length < 1e-6 else vector / length
-
-    upper = elbow - shoulder
-    forearm = wrist - elbow
-    upper_unit, forearm_unit = unit(upper), unit(forearm)
-    # Keep one trunk frame for both selectable arms. Building lateral from the
-    # selected shoulder reverses camera forward whenever ``side == right`` and
-    # makes the same forward reach report opposite flexion.
-    try:
-        left_shoulder = np.asarray(points["left_shoulder"], dtype=float)
-        right_shoulder = np.asarray(points["right_shoulder"], dtype=float)
-    except (KeyError, TypeError, ValueError):
-        return None
-    lateral = unit(left_shoulder - right_shoulder)
-    vertical = unit((shoulder + opposite - left_hip - right_hip) / 2.0)
-    if any(vector is None for vector in (upper_unit, forearm_unit, lateral, vertical)):
-        return None
-    forward = unit(np.cross(lateral, vertical))
-    if forward is None:
-        return None
-    lateral = unit(np.cross(vertical, forward))
-    vertical = unit(np.cross(forward, lateral))
-    trunk = np.column_stack((lateral, vertical, forward))
-    upper_t = trunk.T @ upper_unit
-    forearm_t = trunk.T @ forearm_unit
-    # Express lateral motion as outward-positive for whichever anatomical arm
-    # is selected while leaving trunk forward/up identical.
-    side_sign = 1.0 if side == "left" else -1.0
-    upper_t[0] *= side_sign
-    forearm_t[0] *= side_sign
-    elbow_angle = float(np.arccos(np.clip(np.dot(upper_unit, forearm_unit), -1.0, 1.0)))
-    # OSCARR's original independent ``atan2(component, down)`` equations are
-    # exact in their individual anatomical planes, but both become singular
-    # when the arm is horizontal.  At a forward reach, for example, a few
-    # millimetres of lateral pose noise made abduction jump towards 90 deg.
-    # Include the orthogonal component in each denominator so a channel only
-    # reports the portion of elevation that belongs to its own plane.
-    flexion = float(np.arctan2(
-        upper_t[2], np.hypot(upper_t[0], upper_t[1])
-    ))
-    abduction = float(np.arctan2(
-        upper_t[0], np.hypot(upper_t[1], upper_t[2])
-    ))
-
-    # Undo shoulder abduction and flexion before projecting the forearm onto
-    # the transverse plane, following the report's lateral/medial proxy.
-    ca, sa = np.cos(abduction), np.sin(abduction)
-    cf, sf = np.cos(flexion), np.sin(flexion)
-    undo_abduction = np.array([[ca, sa, 0], [-sa, ca, 0], [0, 0, 1]])
-    undo_flexion = np.array([[1, 0, 0], [0, cf, -sf], [0, sf, cf]])
-    compensated = undo_flexion @ undo_abduction @ forearm_t
-    transverse = unit(np.array([compensated[0], 0.0, compensated[2]]))
-    rotation = None if transverse is None or elbow_angle < np.radians(12) else float(
-        np.degrees(np.arctan2(-transverse[0], transverse[2]))
-    )
-    return {
-        "elbow_flexion": round(float(np.degrees(elbow_angle)), 1),
-        "shoulder_flexion": round(float(np.degrees(flexion)), 1),
-        "shoulder_abduction": round(float(np.degrees(abduction)), 1),
-        "shoulder_rotation_proxy": None if rotation is None else round(rotation, 1),
-    }
-
-
-def select_hand_near_wrist(hand_results, pose_wrist, max_distance: float = 0.25):
-    """Select the detected hand that belongs to the highlighted pose wrist."""
-    detected = getattr(hand_results, "multi_hand_landmarks", None) or []
-    if not detected:
-        return None
-    distances = [
-        ((hand.landmark[0].x - pose_wrist.x) ** 2
-         + (hand.landmark[0].y - pose_wrist.y) ** 2) ** 0.5
-        for hand in detected
-    ]
-    index = min(range(len(distances)), key=distances.__getitem__)
-    if distances[index] > max_distance:
-        return None
-    world_hands = getattr(hand_results, "multi_hand_world_landmarks", None) or []
-    world = world_hands[index] if index < len(world_hands) else None
-    return index, detected[index], world, distances[index]
-
-
-def finger_angles_deg(landmarks, np) -> tuple[dict[str, float], dict[str, float]]:
-    """Return joint flexion proxies and a mean curl value for each finger."""
-    points = np.asarray([[point.x, point.y, point.z] for point in landmarks], dtype=float)
-
-    def flexion(first: int, joint: int, last: int) -> float:
-        incoming = points[first] - points[joint]
-        outgoing = points[last] - points[joint]
-        lengths = float(np.linalg.norm(incoming) * np.linalg.norm(outgoing))
-        if lengths < 1e-9:
-            return 0.0
-        interior = np.degrees(np.arccos(np.clip(np.dot(incoming, outgoing) / lengths, -1.0, 1.0)))
-        return round(float(180.0 - interior), 1)
-
-    names = ("mcp", "pip", "dip")
-    angles: dict[str, float] = {}
-    curls: dict[str, float] = {}
-    for finger, chain in FINGER_CHAINS.items():
-        values = [flexion(chain[i - 1], chain[i], chain[i + 1]) for i in range(1, 4)]
-        joint_names = ("cmc", "mcp", "ip") if finger == "thumb" else names
-        angles.update({f"{finger}_{name}": value for name, value in zip(joint_names, values)})
-        curls[finger] = round(sum(values) / len(values), 1)
-    return angles, curls
-
-
-def display_pixel(x: int, y: int, width: int) -> tuple[int, int]:
-    """Mirror one raw-camera point for display without changing saved data."""
-    return width - 1 - x, y
-
-
-def add_hand_tracking(output, observation, sample, hand_results, pose_wrist,
-                      depth, width: int, height: int, cv2, np) -> bool:
-    """Draw and save only the hand connected to the selected arm."""
-    selected = select_hand_near_wrist(hand_results, pose_wrist)
-    if selected is None:
-        return False
-    _, hand, world, distance = selected
-    landmarks = hand.landmark
-    raw_pixels = [
-        (min(width - 1, max(0, int(point.x * width))),
-         min(height - 1, max(0, int(point.y * height))))
-        for point in landmarks
-    ]
-    pixels = [display_pixel(x, y, width) for x, y in raw_pixels]
-    for chain in FINGER_CHAINS.values():
-        for first, second in zip(chain, chain[1:]):
-            cv2.line(output, pixels[first], pixels[second], (80, 235, 105), 2)
-    for first, second in PALM_CONNECTIONS:
-        cv2.line(output, pixels[first], pixels[second], (80, 235, 105), 2)
-    for index, xy in enumerate(pixels):
-        cv2.circle(output, xy, 3 if index not in TIP_LABELS else 5, (60, 220, 90), -1)
-        if index in TIP_LABELS:
-            cv2.putText(output, TIP_LABELS[index], (xy[0] + 5, xy[1] - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, (60, 220, 90), 1)
-
-    angle_points = world.landmark if world is not None else landmarks
-    angles, curls = finger_angles_deg(angle_points, np)
-    observation["hand_visible"] = True
-    observation["hand_selection"] = "nearest_selected_arm_wrist"
-    observation["hand_wrist_distance_normalized"] = round(float(distance), 5)
-    observation["hand_keypoints_2d"] = {
-        name: [round(float(point.x), 5), round(float(point.y), 5), round(float(point.z), 5)]
-        for name, point in zip(HAND_LANDMARK_NAMES, landmarks)
-    }
-    observation["finger_angles_deg"] = angles
-    observation["finger_curl_deg"] = curls
-    observation["finger_angle_source"] = (
-        "mediapipe_hand_world_estimate" if world is not None else "mediapipe_normalized_hand_estimate"
-    )
-
-    if sample is not None:
-        depth_points = []
-        for index, (name, point) in enumerate(zip(HAND_LANDMARK_NAMES, landmarks)):
-            measured = camera_point(point, depth, width, height, np)
-            if measured is not None:
-                depth_points.append({
-                    "id": index, "name": name, "x": measured[0],
-                    "y": measured[1], "depth_m": measured[2],
-                })
-        if depth_points:
-            sample["hand"] = depth_points
-            sample["finger_angles_deg"] = angles
-    return True
-
-
-def camera_xyz(point: list[float], intrinsics) -> list[float]:
-    """Deproject depth into the same trunk frame as MediaPipe world points.
-
-    OAK-D depth increases away from the camera, while the normalized world
-    points above use positive Z towards the camera.  Keeping that sign
-    consistent prevents enabling stereo depth from reversing shoulder
-    flexion.
-    """
-    x, y, depth_m = point
-    return [
-        (x - intrinsics[0][2]) * depth_m / intrinsics[0][0],
-        -(y - intrinsics[1][2]) * depth_m / intrinsics[1][1],
-        -depth_m,
-    ]
-
-
-def build_pipeline(dai, use_depth: bool = False):
-    """Run RGB tracking; add stereo only when explicitly requested."""
-    pipeline = dai.Pipeline()
-    color = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
-    color_output = color.requestOutput(
-        FRAME_SIZE,
-        type=dai.ImgFrame.Type.BGR888p,
-        fps=VIDEO_FPS,
-        enableUndistortion=use_depth,
-    )
-    video_queue = color_output.createOutputQueue(maxSize=2, blocking=False)
-    if not use_depth:
-        return pipeline, video_queue, None
-    mono_left = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
-    mono_right = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
-    left_output = mono_left.requestOutput(DEPTH_SIZE, type=dai.ImgFrame.Type.GRAY8,
-                                          fps=VIDEO_FPS)
-    right_output = mono_right.requestOutput(DEPTH_SIZE, type=dai.ImgFrame.Type.GRAY8,
-                                          fps=VIDEO_FPS)
-    stereo = pipeline.create(dai.node.StereoDepth)
-    left_output.link(stereo.left)
-    right_output.link(stereo.right)
-    # DepthAI v3 aligns RVC2 stereo depth by linking the exact RGB stream used
-    # for tracking.  The former v2-style setDepthAlign(socket) configuration
-    # could drop both queues with X_LINK_ERROR on the project's OAK-D 2.1.
-    color_output.link(stereo.inputAlignTo)
-    return (
-        pipeline,
-        video_queue,
-        stereo.depth.createOutputQueue(maxSize=2, blocking=False),
-    )
-
-
-def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, hands=None):
-    """Track on the raw frame and render a mirrored, readable operator view."""
-    height, width = frame.shape[:2]
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = pose.process(rgb)
-    # Tracking, depth, and saved coordinates stay in the camera's raw frame.
-    # Mirror only the pixels, then draw annotations so their text is readable.
-    output = frame[:, ::-1].copy()
-    observation = {
-        "person_visible": False, "arm_visible": False,
-        "hand_visible": False, "reference_visible": False, "depth_valid": False,
-    }
-    if not results.pose_landmarks:
-        return output, f"No person visible - frame subject, {side} arm and hips", None, observation
-
-    ids = landmark_ids(mp.solutions.pose, side)
-    landmarks = results.pose_landmarks.landmark
-    selected = {name: landmarks[index] for name, index in ids.items()}
-    observation["person_visible"] = True
-    observation["keypoints_2d"] = {
-        name: [round(float(point.x), 5), round(float(point.y), 5),
-               round(float(point.visibility), 3)]
-        for name, point in selected.items()
-    }
-    arm_names = (f"{side}_shoulder", f"{side}_elbow", f"{side}_wrist")
-    if min(selected[name].visibility for name in arm_names) < 0.5:
-        return output, f"{side.title()} arm obscured or outside frame", None, observation
-
-    observation["arm_visible"] = True
-    observation["reference_visible"] = all(point.visibility >= 0.5 for point in selected.values())
-    observation["arm_2d"] = {
-        name.rsplit("_", 1)[-1]: observation["keypoints_2d"][name]
-        for name in arm_names
-    }
-    raw_arm_pixels = [
-        (min(width - 1, max(0, int(selected[name].x * width))),
-         min(height - 1, max(0, int(selected[name].y * height))))
-        for name in arm_names
-    ]
-    arm_pixels = [display_pixel(x, y, width) for x, y in raw_arm_pixels]
-    for first, second in zip(arm_pixels, arm_pixels[1:]):
-        cv2.line(output, first, second, (0, 220, 255), 3)
-    for label, xy in zip(("S", "E", "W"), arm_pixels):
-        cv2.circle(output, xy, 6, (0, 220, 255), -1)
-        cv2.putText(output, label, (xy[0] + 8, xy[1] - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 220, 255), 2)
-
-    sample = None
-    arm_depth = [camera_point(selected[name], depth, width, height, np) for name in arm_names]
-    if all(point is not None for point in arm_depth):
-        shoulder, elbow, wrist = arm_depth
-        sample = {
-            "shoulder": shoulder, "elbow": elbow,
-            "hand": [{"id": 0, "x": wrist[0], "y": wrist[1], "depth_m": wrist[2]}],
-        }
-        observation["depth_valid"] = True
-
-    if observation["reference_visible"]:
-        world = getattr(results, "pose_world_landmarks", None)
-        if world is not None:
-            # MediaPipe world Y increases downward and Z increases away from
-            # the camera; use Y up and Z toward the camera for the trunk frame.
-            world_points = {
-                name: [world.landmark[index].x, -world.landmark[index].y,
-                       -world.landmark[index].z]
-                for name, index in ids.items()
-            }
-            angles = arm_angles_deg(world_points, side, np)
-            if angles is not None:
-                observation["angles_deg"] = angles
-                observation["angle_source"] = "mediapipe_world_estimate"
-
-        if sample is not None and intrinsics is not None:
-            six_depth = {
-                name: camera_point(point, depth, width, height, np)
-                for name, point in selected.items()
-            }
-            if all(point is not None for point in six_depth.values()):
-                camera_points = {
-                    name: camera_xyz(point, intrinsics)
-                    for name, point in six_depth.items()
-                }
-                stereo_angles = arm_angles_deg(camera_points, side, np)
-                sample["keypoints_camera_m"] = camera_points
-                if stereo_angles is not None:
-                    sample["angles_deg"] = stereo_angles
-                    observation["angles_deg"] = stereo_angles
-                    observation["angle_source"] = "stereo"
-
-    if hands is not None:
-        hand_results = hands.process(rgb)
-        add_hand_tracking(
-            output, observation, sample, hand_results, selected[f"{side}_wrist"],
-            depth, width, height, cv2, np,
-        )
-
-    if not observation["reference_visible"]:
-        status = f"{side.title()} arm tracked | frame both shoulders and hips for angles"
-    elif "angles_deg" not in observation:
-        status = f"{side.title()} arm tracked | 3D pose unavailable"
-    else:
-        source = "stereo" if observation["angle_source"] == "stereo" else "estimated 3D"
-        status = f"{side.title()} arm tracked | angles from {source}"
-    status += " | hand/fingers tracked" if observation["hand_visible"] else " | show selected hand"
-    return output, status, sample, observation
-
-
-class CameraSession:
-    """Start and stop files without interrupting the live camera."""
-
-    def __init__(self, cv2, subject: str, side: str, depth_enabled: bool = False):
-        self.cv2 = cv2
-        self.subject = subject
-        self.side = side
-        self.depth_enabled = depth_enabled
-        self.writer = None
-        self.session = None
-        self.started = 0.0
-        self.started_host_monotonic_ns = 0
-        self.started_utc = ""
-        self.video_frames = 0
-        self.pose_frames: list[dict[str, object]] = []
-        self.observations: list[dict[str, object]] = []
-
-    @property
-    def recording(self) -> bool:
-        return self.writer is not None
-
-    def start(self) -> None:
-        self.session = create_session_directory("oak_pose", self.subject)
-        writer = self.cv2.VideoWriter(
-            str(self.session / "video.mp4"), self.cv2.VideoWriter_fourcc(*"mp4v"),
-            VIDEO_FPS, FRAME_SIZE
-        )
-        if not writer.isOpened():
-            writer.release()
-            self.session.rmdir()
-            self.session = None
-            raise RuntimeError("Could not open video.mp4 in the selected output folder")
-        self.writer = writer
-        self.started_host_monotonic_ns = time.monotonic_ns()
-        self.started = self.started_host_monotonic_ns / 1e9
-        self.started_utc = utc_now()
-        self.video_frames = 0
-        self.pose_frames = []
-        self.observations = []
-        print(f"REC started: {self.session}")
-
-    def add_frame(self, frame, sample, observation) -> None:
-        if not self.recording:
-            return
-        host_monotonic_ns = time.monotonic_ns()
-        elapsed = (host_monotonic_ns - self.started_host_monotonic_ns) / 1e9
-        self.observations.append({
-            **observation,
-            "time_s": round(elapsed, 4),
-            "host_monotonic_ns": host_monotonic_ns,
-        })
-        if sample is not None:
-            self.pose_frames.append({
-                **sample,
-                "time_s": round(elapsed, 4),
-                "host_monotonic_ns": host_monotonic_ns,
-            })
-        # VideoWriter uses fixed FPS; duplicate when tracking is slower so
-        # playback duration stays close to wall-clock recording time.
-        expected = min(max(self.video_frames + 1, round(elapsed * VIDEO_FPS)),
-                       self.video_frames + int(VIDEO_FPS))
-        while self.video_frames < expected:
-            self.writer.write(frame)
-            self.video_frames += 1
-
-    def stop(self) -> None:
-        if not self.recording:
-            return
-        elapsed = time.monotonic() - self.started
-        self.writer.release()
-        self.writer = None
-        pose_path = self.session / "pose.json"
-        pose_path.write_text(json.dumps({
-            "user_id": self.subject, "sequence": len(self.pose_frames),
-            "side": self.side, "data": self.pose_frames,
-            "observations": self.observations,
-            "coordinate_note": (
-                "keypoints_2d are normalized raw-camera x/y; data x/y are raw "
-                "camera pixels. video.mp4 is mirrored for the operator; depth_m "
-                "is RGB-aligned stereo depth"
-            ),
-            "angle_note": (
-                "Elbow flexion, shoulder flexion, abduction and a forearm-based "
-                "rotation proxy follow Oscar's "
-                "six-point trunk frame; mediapipe_world_estimate is monocular"
-            ),
-            "hand_note": (
-                "The hand nearest the selected pose wrist supplies 21 MediaPipe "
-                "landmarks and finger flexion proxies; these are model estimates"
-            ),
-        }, indent=2), encoding="utf-8")
-        write_metadata(self.session, {
-            "source": "oak_pose", "subject": self.subject, "side": self.side,
-            "started_utc": self.started_utc, "duration_seconds": round(elapsed, 3),
-            "started_host_monotonic_ns": self.started_host_monotonic_ns,
-            "clock_domain": "host_monotonic_ns",
-            "pose_frames": len(self.pose_frames),
-            "observation_frames": len(self.observations),
-            "video_frames": self.video_frames, "video_fps": VIDEO_FPS,
-            "stereo_depth_enabled": self.depth_enabled,
-            "video_mirrored": True,
-            "hand_tracking": "selected_arm_nearest_wrist_21_landmarks",
-            "cup_detector": "unavailable_no_model", **experiment_metadata(),
-        })
-        print(f"REC saved: {self.session} ({len(self.pose_frames)} depth-backed pose frames)")
 
 
 def draw_window(frame, status: str, session: CameraSession, cv2, np, observation=None):
@@ -570,13 +84,25 @@ def draw_window(frame, status: str, session: CameraSession, cv2, np, observation
     canvas[height:] = (26, 31, 37)
     active = session.recording
     button = (width - 168, height + 116, width - 16, height + 156)
-    cv2.rectangle(canvas, (button[0], button[1]), (button[2], button[3]),
-                  (40, 40, 210) if active else (35, 55, 205), -1)
-    cv2.putText(canvas, "STOP REC" if active else "START REC",
-                (button[0] + 15, button[1] + 27),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2)
-    cv2.putText(canvas, status[:78], (12, height + 24),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.52, (235, 235, 235), 1)
+    cv2.rectangle(
+        canvas,
+        (button[0], button[1]),
+        (button[2], button[3]),
+        (40, 40, 210) if active else (35, 55, 205),
+        -1,
+    )
+    cv2.putText(
+        canvas,
+        "STOP REC" if active else "START REC",
+        (button[0] + 15, button[1] + 27),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.62,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        canvas, status[:78], (12, height + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (235, 235, 235), 1
+    )
     angles = (observation or {}).get("angles_deg")
     if angles:
         parts = [
@@ -588,10 +114,12 @@ def draw_window(frame, status: str, session: CameraSession, cv2, np, observation
         angle_lines = ("    |    ".join(parts[:2]), "    |    ".join(parts[2:]))
     else:
         angle_lines = ("Arm angles: frame both shoulders and hips", "")
-    cv2.putText(canvas, angle_lines[0], (12, height + 50),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.47, (90, 200, 255), 1)
-    cv2.putText(canvas, angle_lines[1], (12, height + 73),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.47, (90, 200, 255), 1)
+    cv2.putText(
+        canvas, angle_lines[0], (12, height + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.47, (90, 200, 255), 1
+    )
+    cv2.putText(
+        canvas, angle_lines[1], (12, height + 73), cv2.FONT_HERSHEY_SIMPLEX, 0.47, (90, 200, 255), 1
+    )
     curls = (observation or {}).get("finger_curl_deg")
     if curls:
         finger_line = "Finger curl T/I/M/R/P: " + "/".join(
@@ -599,20 +127,43 @@ def draw_window(frame, status: str, session: CameraSession, cv2, np, observation
         )
     else:
         finger_line = "Finger curl: show the selected hand"
-    cv2.putText(canvas, finger_line, (12, height + 97),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.47, (80, 220, 110), 1)
-    cv2.putText(canvas, "Cup detector: model unavailable", (12, height + 121),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.47, (160, 180, 200), 1)
-    cv2.putText(canvas, "R: record / stop    Q: close", (12, height + 149),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.48, (190, 190, 190), 1)
+    cv2.putText(
+        canvas, finger_line, (12, height + 97), cv2.FONT_HERSHEY_SIMPLEX, 0.47, (80, 220, 110), 1
+    )
+    cv2.putText(
+        canvas,
+        "Cup detector: model unavailable",
+        (12, height + 121),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.47,
+        (160, 180, 200),
+        1,
+    )
+    cv2.putText(
+        canvas,
+        "R: record / stop    Q: close",
+        (12, height + 149),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (190, 190, 190),
+        1,
+    )
     if active:
         cv2.circle(canvas, (width - 108, 26), 8, (25, 25, 240), -1)
-        cv2.putText(canvas, f"REC {time.monotonic() - session.started:.1f}s",
-                    (width - 94, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (25, 25, 240), 2)
+        cv2.putText(
+            canvas,
+            f"REC {time.monotonic() - session.started:.1f}s",
+            (width - 94, 32),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (25, 25, 240),
+            2,
+        )
     return canvas, button
 
 
 def main() -> int:
+    enable_ctrl_break_as_interrupt()
     args = parse_args()
     if args.duration < 0:
         print("Duration cannot be negative.")
@@ -638,9 +189,7 @@ def main() -> int:
     if args.depth:
         try:
             calibration = pipeline.getDefaultDevice().readCalibration()
-            intrinsics = calibration.getCameraIntrinsics(
-                dai.CameraBoardSocket.CAM_A, *FRAME_SIZE
-            )
+            intrinsics = calibration.getCameraIntrinsics(dai.CameraBoardSocket.CAM_A, *FRAME_SIZE)
         except Exception as error:
             print(f"Camera calibration unavailable; stereo angles disabled: {error}")
 
@@ -649,8 +198,12 @@ def main() -> int:
 
     def on_mouse(event, x, y, _flags, _userdata):
         rect = controls["button"]
-        if (event == cv2.EVENT_LBUTTONUP and rect
-                and rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]):
+        if (
+            event == cv2.EVENT_LBUTTONUP
+            and rect
+            and rect[0] <= x <= rect[2]
+            and rect[1] <= y <= rect[3]
+        ):
             controls["toggle"] = True
 
     latest_depth = None
@@ -658,12 +211,17 @@ def main() -> int:
     hands = None
     try:
         pose = mp.solutions.pose.Pose(
-            static_image_mode=False, model_complexity=args.pose_model,
-            min_detection_confidence=0.5, min_tracking_confidence=0.5
+            static_image_mode=False,
+            model_complexity=args.pose_model,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
         )
         hands = mp.solutions.hands.Hands(
-            static_image_mode=False, max_num_hands=2, model_complexity=0,
-            min_detection_confidence=0.5, min_tracking_confidence=0.5,
+            static_image_mode=False,
+            max_num_hands=2,
+            model_complexity=0,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
         )
         cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(WINDOW, on_mouse)
@@ -687,8 +245,15 @@ def main() -> int:
                 frame = frame_message.getCvFrame()
                 if frame is not None:
                     image, status, sample, observation = analyze_frame(
-                        frame, latest_depth, pose, mp, cv2, np, args.side,
-                        intrinsics, hands,
+                        frame,
+                        latest_depth,
+                        pose,
+                        mp,
+                        cv2,
+                        np,
+                        args.side,
+                        intrinsics,
+                        hands,
                     )
                     session.add_frame(image, sample, observation)
                     canvas, controls["button"] = draw_window(
@@ -698,8 +263,10 @@ def main() -> int:
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
-            if (hasattr(cv2, "getWindowProperty")
-                    and cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1):
+            if (
+                hasattr(cv2, "getWindowProperty")
+                and cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1
+            ):
                 break
             if key == ord("r") or controls["toggle"]:
                 controls["toggle"] = False
@@ -707,8 +274,11 @@ def main() -> int:
                     session.stop() if session.recording else session.start()
                 except (OSError, RuntimeError) as error:
                     print(f"Recording error: {error}")
-            if (session.recording and args.duration
-                    and time.monotonic() - session.started >= args.duration):
+            if (
+                session.recording
+                and args.duration
+                and time.monotonic() - session.started >= args.duration
+            ):
                 session.stop()
     except KeyboardInterrupt:
         pass

@@ -1,4 +1,5 @@
 #!/bin/bash
+# Majd
 set -euo pipefail
 
 repository="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"

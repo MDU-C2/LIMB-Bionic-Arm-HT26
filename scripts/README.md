@@ -2,6 +2,16 @@
 
 This folder contains small standalone checks.
 
+To inspect BLE advertising before recording:
+
+```powershell
+python scripts/check_ble.py --name LIMBServer
+```
+
+Omit `--name` to list all nearby devices, including signal strength and advertised
+services. Discovery confirms advertising; use the BLE recorder to check connection
+and sample delivery.
+
 `setup.ps1` and `setup_project.py` power the root-level `Setup.bat`/`Start.bat`
 and `Setup.command`/`Start.command` launchers. Setup downloads its own Python,
 installs all desktop and ML dependencies, checks native imports and a headless

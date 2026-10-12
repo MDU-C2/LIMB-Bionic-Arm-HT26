@@ -1,3 +1,4 @@
+# Christian
 """Map independent BLE device clocks onto one host monotonic timeline.
 
 The exchange follows the same four timestamps used by NTP: host transmit ``t0``,
@@ -10,13 +11,13 @@ sensor node gets its own mapper, while all mapped values share the host's
 from __future__ import annotations
 
 import asyncio
-from collections import deque
-from dataclasses import asdict, dataclass
+import contextlib
 import statistics
 import struct
 import time
+from collections import deque
+from dataclasses import asdict, dataclass
 from typing import Any
-
 
 TIME_SYNC_UUID = "27011525-1212-efde-1523-785feabcd122"
 SYNC_PROTOCOL_VERSION = 1
@@ -59,9 +60,7 @@ class ClockSynchronizer:
         self._pending[exchange_id] = host_tx_ns
         if len(self._pending) > 128:
             self._pending.pop(next(iter(self._pending)))
-        return exchange_id, SYNC_REQUEST.pack(
-            SYNC_PROTOCOL_VERSION, 0, exchange_id, host_tx_ns
-        )
+        return exchange_id, SYNC_REQUEST.pack(SYNC_PROTOCOL_VERSION, 0, exchange_id, host_tx_ns)
 
     def cancel_request(self, exchange_id: int) -> None:
         self._pending.pop(exchange_id, None)
@@ -72,8 +71,8 @@ class ClockSynchronizer:
         """Validate a response, add its measurement, and update the fit."""
         if len(payload) != SYNC_RESPONSE.size:
             return None
-        version, _flags, exchange_id, echoed_tx, device_rx_us, device_tx_us = (
-            SYNC_RESPONSE.unpack(payload)
+        version, _flags, exchange_id, echoed_tx, device_rx_us, device_tx_us = SYNC_RESPONSE.unpack(
+            payload
         )
         host_tx_ns = self._pending.pop(exchange_id, None)
         if (
@@ -88,11 +87,7 @@ class ClockSynchronizer:
         host_elapsed_ns = host_rx_ns - host_tx_ns
         device_elapsed_ns = (device_tx_us - device_rx_us) * 1000
         round_trip_ns = host_elapsed_ns - device_elapsed_ns
-        if (
-            host_elapsed_ns < 0
-            or round_trip_ns < 0
-            or round_trip_ns > self.max_round_trip_ns
-        ):
+        if host_elapsed_ns < 0 or round_trip_ns < 0 or round_trip_ns > self.max_round_trip_ns:
             return None
 
         exchange = ClockExchange(
@@ -113,7 +108,7 @@ class ClockSynchronizer:
         ]
         device_points = [sample.device_midpoint_ns for sample in selected]
         host_points = [sample.host_midpoint_ns for sample in selected]
-        offsets = [host - device for host, device in zip(host_points, device_points)]
+        offsets = [host - device for host, device in zip(host_points, device_points, strict=False)]
         self._rate = 1.0
         reference_device = statistics.fmean(device_points)
         reference_host = reference_device + statistics.median(offsets)
@@ -122,12 +117,10 @@ class ClockSynchronizer:
         if len(selected) >= 4 and device_span >= 1_000_000_000:
             mean_device = reference_device
             mean_host = statistics.fmean(host_points)
-            variance = sum(
-                (device - mean_device) ** 2 for device in device_points
-            )
+            variance = sum((device - mean_device) ** 2 for device in device_points)
             covariance = sum(
                 (device - mean_device) * (host - mean_host)
-                for device, host in zip(device_points, host_points)
+                for device, host in zip(device_points, host_points, strict=False)
             )
             rate = covariance / variance if variance else 1.0
             # A larger result is almost certainly delay asymmetry rather than
@@ -144,10 +137,7 @@ class ClockSynchronizer:
         if not self.ready or not isinstance(device_time_us, int):
             return None
         device_ns = device_time_us * 1000
-        return round(
-            self._reference_host_ns
-            + (device_ns - self._reference_device_ns) * self._rate
-        )
+        return round(self._reference_host_ns + (device_ns - self._reference_device_ns) * self._rate)
 
     def summary(self) -> dict[str, Any]:
         """Return serializable diagnostics for the recording metadata."""
@@ -159,12 +149,9 @@ class ClockSynchronizer:
             }
         latest_device_ns = self.samples[-1].device_midpoint_ns
         mapped_latest = round(
-            self._reference_host_ns
-            + (latest_device_ns - self._reference_device_ns) * self._rate
+            self._reference_host_ns + (latest_device_ns - self._reference_device_ns) * self._rate
         )
-        minimum_round_trip_ns = min(
-            sample.round_trip_ns for sample in self.samples
-        )
+        minimum_round_trip_ns = min(sample.round_trip_ns for sample in self.samples)
         return {
             "available": True,
             "clock_domain": "host_monotonic_ns",
@@ -200,9 +187,7 @@ class BleClockSyncClient:
         self._subscribed = False
 
     def _notification(self, _sender: Any, data: bytearray) -> None:
-        exchange = self.synchronizer.handle_response(
-            data, host_rx_ns=time.monotonic_ns()
-        )
+        exchange = self.synchronizer.handle_response(data, host_rx_ns=time.monotonic_ns())
         if exchange is None:
             return
         waiter = self._waiters.get(exchange.exchange_id)
@@ -211,14 +196,10 @@ class BleClockSyncClient:
 
     async def _probe(self) -> bool:
         exchange_id, request = self.synchronizer.make_request()
-        waiter: asyncio.Future[ClockExchange] = (
-            asyncio.get_running_loop().create_future()
-        )
+        waiter: asyncio.Future[ClockExchange] = asyncio.get_running_loop().create_future()
         self._waiters[exchange_id] = waiter
         try:
-            await self.client.write_gatt_char(
-                TIME_SYNC_UUID, request, response=True
-            )
+            await self.client.write_gatt_char(TIME_SYNC_UUID, request, response=True)
             await asyncio.wait_for(waiter, timeout=self.response_timeout)
             return True
         except asyncio.TimeoutError:
@@ -261,16 +242,10 @@ class BleClockSyncClient:
     async def close(self) -> None:
         if self._maintenance is not None:
             self._maintenance.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._maintenance
-            except asyncio.CancelledError:
-                pass
             self._maintenance = None
-        if self._subscribed and callable(
-            getattr(self.client, "stop_notify", None)
-        ):
-            try:
+        if self._subscribed and callable(getattr(self.client, "stop_notify", None)):
+            with contextlib.suppress(Exception):
                 await self.client.stop_notify(TIME_SYNC_UUID)
-            except Exception:
-                pass
         self._subscribed = False

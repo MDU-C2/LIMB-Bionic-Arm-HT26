@@ -1,29 +1,42 @@
+# Majd, Christian
 """Check labeled BLE CSVs against the old LIMB capture layout."""
 
 from __future__ import annotations
 
-from contextlib import redirect_stdout
 import argparse
 import asyncio
 import csv
 import io
 import json
 import os
-from pathlib import Path
 import struct
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
-
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
 
 from ble_dataset import LabeledBleCapture
-from record_ble_sensors import BleRecorder, CURRENT_EMG_PACKET, record, SENSOR_UUIDS
+from record_ble_sensors import CURRENT_EMG_PACKET, SENSOR_UUIDS, BleRecorder, record
 
 
 class LabeledBleCaptureTests(unittest.TestCase):
+    def test_packet_health_tracks_loss_wraparound_and_decode_failure(self) -> None:
+        recorder = BleRecorder(None, sensors=("emg", "imu"))
+        for sequence in (0xFFFFFFFF, 0, 3, 3, 2):
+            recorder.handle("emg", bytearray(CURRENT_EMG_PACKET.pack(0x0101, sequence, 1000, 7)))
+        with redirect_stdout(io.StringIO()):
+            recorder.handle("imu", bytearray(b"invalid"))
+        health = recorder.packet_health()
+        self.assertEqual(health["emg"]["received_packets"], 5)
+        self.assertEqual(health["emg"]["missing_packets"], 2)
+        self.assertEqual(health["emg"]["sequence_gaps"], 3)
+        self.assertEqual(health["emg"]["decode_errors"], 0)
+        self.assertEqual(health["imu"]["decode_errors"], 1)
+
     def test_sensor_selection_only_creates_requested_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             session = Path(temporary)
@@ -36,9 +49,9 @@ class LabeledBleCaptureTests(unittest.TestCase):
 
     def test_live_preview_decoder_needs_no_session_files(self) -> None:
         samples = []
-        recorder = BleRecorder(None, lambda sensor, sequence, channels: samples.append(
-            (sensor, sequence, channels)
-        ))
+        recorder = BleRecorder(
+            None, lambda sensor, sequence, channels: samples.append((sensor, sequence, channels))
+        )
         recorder.handle("emg", bytearray(struct.pack("<HIQ80H", 1, 7, 123, *range(80))))
         recorder.handle("imu", bytearray(struct.pack("<HIQ12h", 1, 8, 124, *range(12))))
         recorder.close()
@@ -51,9 +64,7 @@ class LabeledBleCaptureTests(unittest.TestCase):
         samples = []
         recorder = BleRecorder(
             None,
-            lambda sensor, sequence, channels: samples.append(
-                (sensor, sequence, channels)
-            ),
+            lambda sensor, sequence, channels: samples.append((sensor, sequence, channels)),
             sensors=("emg",),
         )
         recorder.handle(
@@ -161,6 +172,8 @@ class LabeledBleCaptureTests(unittest.TestCase):
 class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_requested_sensor_does_not_stop_available_stream(self) -> None:
         class FakeClient:
+            is_connected = True
+
             def __init__(self, _device):
                 pass
 
@@ -183,15 +196,22 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
             return None
 
         args = argparse.Namespace(
-            device="LIMBServer", address="", scan_timeout=1.0,
-            subject="S01", duration=0.001, dataset_label="",
-            sensors=("imu", "emg"), preview=False,
+            device="LIMBServer",
+            address="",
+            scan_timeout=1.0,
+            subject="S01",
+            duration=0.001,
+            dataset_label="",
+            sensors=("imu", "emg"),
+            preview=False,
         )
         with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
-            with patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}), \
-                 patch("bleak.BleakClient", FakeClient), \
-                 patch("bleak.BleakScanner", FakeScanner), \
-                 patch("record_ble_sensors.asyncio.sleep", no_wait):
+            with (
+                patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}),
+                patch("bleak.BleakClient", FakeClient),
+                patch("bleak.BleakScanner", FakeScanner),
+                patch("record_ble_sensors.asyncio.sleep", no_wait),
+            ):
                 result = await record(args)
             self.assertEqual(result, 0)
             session = next(Path(temporary).iterdir())
@@ -203,6 +223,7 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_mock_ble_session_stops_and_writes_metadata(self) -> None:
         class FakeClient:
             callbacks = {}
+            is_connected = True
 
             def __init__(self, _device):
                 self.callbacks = {}
@@ -245,21 +266,29 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
             return client
 
         args = argparse.Namespace(
-            device="LIMBServer", address="", scan_timeout=1.0,
-            subject="S01", duration=0.0, dataset_label="1",
+            device="LIMBServer",
+            address="",
+            scan_timeout=1.0,
+            subject="S01",
+            duration=0.0,
+            dataset_label="1",
         )
         with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
-            with patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}), \
-                 patch("bleak.BleakClient", create_client), \
-                 patch("bleak.BleakScanner", FakeScanner), \
-                 patch("record_ble_sensors.asyncio.sleep", fake_sleep):
+            with (
+                patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}),
+                patch("bleak.BleakClient", create_client),
+                patch("bleak.BleakScanner", FakeScanner),
+                patch("record_ble_sensors.asyncio.sleep", fake_sleep),
+            ):
                 result = await record(args)
             self.assertEqual(result, 0)
             session = next(Path(temporary).iterdir())
             meta = json.loads((session / "meta.json").read_text(encoding="utf-8"))
             self.assertTrue(meta["labeled_capture"]["complete"])
             self.assertEqual(meta["labeled_capture"]["windows_by_sensor"]["emg"]["0"], 80)
-            self.assertEqual(len(list((session / "labeled_data" / "S01" / "segmented_emg").glob("*.csv"))), 3)
+            self.assertEqual(
+                len(list((session / "labeled_data" / "S01" / "segmented_emg").glob("*.csv"))), 3
+            )
 
 
 if __name__ == "__main__":

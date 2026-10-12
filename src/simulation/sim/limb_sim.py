@@ -1,3 +1,4 @@
+# Majd
 """Play a four-joint DMP trajectory on Oscar Ågren's LIMB PyBullet model."""
 
 from __future__ import annotations
@@ -5,13 +6,12 @@ from __future__ import annotations
 import argparse
 import math
 import os
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import pybullet as p
-
 
 SIM_DIR = Path(__file__).resolve().parent
 SIMULATION_ROOT = SIM_DIR.parent
@@ -19,9 +19,10 @@ REPOSITORY_ROOT = SIM_DIR.parents[2]
 if str(SIMULATION_ROOT) not in sys.path:
     sys.path.insert(0, str(SIMULATION_ROOT))
 
+import contextlib
+
 from dmp.trajectory_io import load_dmp_trajectory, resolve_saved_dmp_rollout_path
 from sim.joint_limits import DMP_JOINT_NAMES, HARDWARE_JOINT_LIMITS_DEG, clamp_dmp_vector
-
 
 EXAMPLE_PATH = REPOSITORY_ROOT / "examples" / "simulation" / "demo"
 JOINT_MAPPING = (
@@ -165,16 +166,21 @@ def main() -> None:
         # The four-column trajectory has no wrist channel. Hold the forearm at
         # zero so the hand remains aligned throughout playback.
         p.setJointMotorControl2(
-            robot, wrist_joint, p.POSITION_CONTROL,
-            targetPosition=0.0, force=10.0,
-            maxVelocity=math.radians(HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"].speed_positive),
+            robot,
+            wrist_joint,
+            p.POSITION_CONTROL,
+            targetPosition=0.0,
+            force=10.0,
+            maxVelocity=math.radians(
+                HARDWARE_JOINT_LIMITS_DEG["lower_arm_rotation"].speed_positive
+            ),
         )
 
         print("Playing:")
         for logical, urdf_name, sign in JOINT_MAPPING:
             print(f"  {logical} -> {urdf_name} (sign {sign:+.0f})")
         while True:
-            for sample, step_time in zip(trajectory, step_times):
+            for sample, step_time in zip(trajectory, step_times, strict=False):
                 if not p.isConnected():
                     return
                 p.setTimeStep(float(step_time))
@@ -193,7 +199,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         main()
-    except KeyboardInterrupt:
-        pass

@@ -1,3 +1,4 @@
+# Majd, Christian
 """Portable Tkinter control center for the AURORA project.
 
 The launcher owns shared discovery, process supervision, and activity logging.
@@ -10,48 +11,47 @@ from __future__ import annotations
 
 import importlib.util
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, ttk
 
+from app_layout import AppLayoutMixin
+from ble_dashboard import BleDashboardMixin
 from process_manager import ProcessManagerMixin
-from project_tabs import ProjectTabsMixin
 from project_support import (
     ACCENT,
-    ACCENT_ACTIVE,
-    BACKGROUND,
-    CARD,
     CONSOLE,
     DEFAULT_REFERENCE_DIRECTORY,
     ERROR,
-    FirmwareProject,
-    INK,
     INTERACTIVE_SIMULATION_SCRIPT,
     MOVEMENT_MODEL,
     MOVEMENT_RECOGNITION_SCRIPT,
-    MUTED,
     POSE_RECORDING_SCRIPT,
     RECORDER_DETAILS,
     REPOSITORY_ROOT,
     SUCCESS,
-    TAB_DEFINITIONS,
     WARNING,
+    FirmwareProject,
     display_path,
     find_simulation_python,
-    resolve_firmware_tool,
-    has_python_dependencies as _has_python_dependencies,
     open_path,
-    project_path,
+    resolve_firmware_tool,
 )
+from project_support import (
+    has_python_dependencies as _has_python_dependencies,
+)
+from project_tabs import ProjectTabsMixin
 from recording_tab import RecordingTabMixin
 from simulation_tabs import SimulationTabsMixin
 
-
 # Application
 
+
 class ProjectGui(
+    AppLayoutMixin,
+    BleDashboardMixin,
     RecordingTabMixin,
     SimulationTabsMixin,
     ProjectTabsMixin,
@@ -78,11 +78,15 @@ class ProjectGui(
         self.save_simulation_torque = tk.BooleanVar(value=True)
         self.fusion_camera_weight = tk.StringVar(value="0.25")
         self.fusion_depth = tk.BooleanVar(value=False)
+        self.fusion_grip_source = tk.StringVar(value="Camera")
+        self.fusion_shoulder_twist_axis = tk.StringVar(value="y")
+        self.fusion_wrist_twist_axis = tk.StringVar(value="y")
         self.motion_recording = tk.StringVar()
         self.motion_references = tk.StringVar(value=str(DEFAULT_REFERENCE_DIRECTORY))
         self.loop_pose_playback = tk.BooleanVar(value=False)
         self.motion_ai_status = tk.StringVar()
         self._initialize_recording_state()
+        self._initialize_ble_dashboard()
         self.firmware_project = tk.StringVar()
         self.serial_port = tk.StringVar()
         self.status = tk.StringVar(value="Ready")
@@ -116,175 +120,11 @@ class ProjectGui(
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.after(100, self._drain_log_queue)
         self.after(100, self._drain_serial_sensor_events)
-        self.after(500, self._start_serial_dashboard_if_available)
+        self.after(500, self._start_ble_dashboard_if_available)
+        self.after(100, self._poll_ble_dashboard)
         self.after(1000, self._poll_serial_ports)
 
     # Window and tabs
-
-    def _configure_styles(self) -> None:
-        """Configure the common color, typography, and widget styles."""
-        try:
-            self.style.theme_use("clam")
-        except tk.TclError:
-            pass
-        self.window.configure(background=BACKGROUND)
-        self.style.configure("App.TFrame", background=BACKGROUND)
-        self.style.configure("Page.TFrame", background=BACKGROUND)
-        self.style.configure("Card.TFrame", background=CARD, relief="solid", borderwidth=1)
-        self.style.configure(
-            "Header.TLabel", background=BACKGROUND, foreground=INK, font=("Segoe UI", 17, "bold")
-        )
-        self.style.configure(
-            "HeaderSub.TLabel", background=BACKGROUND, foreground=MUTED, font=("Segoe UI", 10)
-        )
-        self.style.configure(
-            "PageTitle.TLabel",
-            background=BACKGROUND,
-            foreground=INK,
-            font=("Segoe UI", 13, "bold"),
-        )
-        self.style.configure(
-            "PageSub.TLabel", background=BACKGROUND, foreground=MUTED, font=("Segoe UI", 10)
-        )
-        self.style.configure(
-            "CardTitle.TLabel", background=CARD, foreground=INK, font=("Segoe UI", 11, "bold")
-        )
-        self.style.configure(
-            "CardText.TLabel", background=CARD, foreground=MUTED, font=("Segoe UI", 9)
-        )
-        self.style.configure("Card.TLabel", background=CARD, foreground=INK)
-        self.style.configure("Card.TCheckbutton", background=CARD, foreground=INK)
-        self.style.map("Card.TCheckbutton", background=[("active", CARD)])
-        self.style.configure(
-            "Accent.TButton", foreground="white", background=ACCENT, padding=(12, 6)
-        )
-        self.style.map(
-            "Accent.TButton",
-            background=[("active", ACCENT_ACTIVE), ("disabled", "#a8b5df")],
-        )
-        self.style.configure("Secondary.TButton", padding=(10, 5))
-        self.style.configure("Danger.TButton", foreground=ERROR, padding=(10, 5))
-        self.style.configure("TNotebook", background=BACKGROUND, borderwidth=0)
-        self.style.configure("TNotebook.Tab", padding=(16, 7), font=("Segoe UI", 10))
-        self.style.map(
-            "TNotebook.Tab",
-            background=[("selected", CARD), ("!selected", "#e5e9f2")],
-            foreground=[("selected", INK), ("!selected", MUTED)],
-        )
-        self.style.configure("Treeview", rowheight=27, font=("Segoe UI", 9))
-        self.style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
-
-    def _build_header(self) -> None:
-        """Build the application title and global status indicator."""
-        header = ttk.Frame(self, style="App.TFrame")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        header.columnconfigure(0, weight=1)
-        ttk.Label(header, text="AURORA Control Center", style="Header.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(
-            header,
-            text="Simulation, dual-IMU capture, camera fusion, and firmware",
-            style="HeaderSub.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
-        self.status_label = tk.Label(
-            header,
-            textvariable=self.status,
-            bg="#e8f5ee",
-            fg=SUCCESS,
-            font=("Segoe UI", 9, "bold"),
-            padx=12,
-            pady=6,
-        )
-        ttk.Button(
-            header,
-            text="Open sensor monitor",
-            command=self.open_sensor_window,
-        ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(0, 10))
-        self.camera_monitor_button = ttk.Button(
-            header,
-            text="Open camera monitor",
-            command=self.open_camera_monitor,
-        )
-        self.camera_monitor_button.grid(
-            row=0, column=2, rowspan=2, sticky="e", padx=(0, 10)
-        )
-        self.status_label.grid(row=0, column=3, rowspan=2, sticky="e")
-
-    def _build_notebook(self) -> None:
-        """Create registered tabs in their declared order."""
-        self.notebook = ttk.Notebook(self)
-        self.notebook.grid(row=1, column=0, sticky="nsew")
-        self.tabs: dict[str, ttk.Frame] = {}
-        for definition in TAB_DEFINITIONS:
-            if definition.key in self.tabs:
-                raise ValueError(f"Duplicate GUI tab key: {definition.key}")
-            builder = getattr(self, definition.builder_name, None)
-            if not callable(builder):
-                raise ValueError(
-                    f"GUI tab {definition.key!r} has no builder "
-                    f"{definition.builder_name!r}"
-                )
-            container, page = self._new_tab(definition.title)
-            self.tabs[definition.key] = container
-            builder(page)
-
-    def _new_tab(self, title: str) -> tuple[ttk.Frame, ttk.Frame]:
-        """Create a scrollable notebook page for normal and high-DPI screens."""
-        container = ttk.Frame(self.notebook, style="Page.TFrame")
-        container.columnconfigure(0, weight=1)
-        container.rowconfigure(0, weight=1)
-        canvas = tk.Canvas(container, bg=BACKGROUND, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-
-        page = ttk.Frame(canvas, style="Page.TFrame", padding=(14, 11))
-        page_window = canvas.create_window((0, 0), window=page, anchor="nw")
-        page.bind(
-            "<Configure>",
-            lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
-        )
-        canvas.bind(
-            "<Configure>",
-            lambda event: canvas.itemconfigure(page_window, width=event.width),
-        )
-
-        def scroll_page(event) -> None:
-            direction = -1 if event.delta > 0 else 1
-            canvas.yview_scroll(direction, "units")
-
-        container.bind("<Enter>", lambda _event: canvas.bind_all("<MouseWheel>", scroll_page))
-        container.bind("<Leave>", lambda _event: canvas.unbind_all("<MouseWheel>"))
-        self.notebook.add(container, text=title)
-        return container, page
-
-    def _heading(self, tab: ttk.Frame, title: str, description: str) -> None:
-        """Add a standard title and explanatory subtitle to a tab."""
-        ttk.Label(tab, text=title, style="PageTitle.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            tab,
-            text=description,
-            style="PageSub.TLabel",
-            wraplength=850,
-            justify="left",
-        ).grid(row=1, column=0, sticky="ew", pady=(2, 10))
-
-    def _card(self, parent: ttk.Frame, row: int, title: str, description: str) -> ttk.Frame:
-        """Create a standard bordered content card inside a tab."""
-        card = ttk.Frame(parent, style="Card.TFrame", padding=12)
-        card.grid(row=row, column=0, sticky="ew", pady=(0, 9))
-        card.columnconfigure(0, weight=1)
-        ttk.Label(card, text=title, style="CardTitle.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            card,
-            text=description,
-            style="CardText.TLabel",
-            wraplength=820,
-            justify="left",
-        ).grid(row=1, column=0, sticky="ew", pady=(3, 12))
-        return card
 
     def _build_activity_panel(self) -> None:
         """Build the shared process log and stop controls."""
@@ -336,8 +176,8 @@ class ProjectGui(
         if not hasattr(self, "interactive_button"):
             return
         active_processes = self._active_processes()
-        running = bool(active_processes)
-        non_preview_running = any(
+        running = bool(active_processes) or self._ble_handoff_pending
+        non_preview_running = self._ble_handoff_pending or any(
             process.kind != "preview" for process in active_processes
         )
         interactive_ready = (
@@ -347,9 +187,7 @@ class ProjectGui(
         self.interactive_button.configure(
             state="disabled" if non_preview_running or not interactive_ready else "normal"
         )
-        self.fusion_button.configure(
-            state="disabled" if running or not fusion_ready else "normal"
-        )
+        self.fusion_button.configure(state="disabled" if running or not fusion_ready else "normal")
         camera_preview_running = any(
             process.key == "preview:record_oak_pose.py"
             for process in self._active_processes("preview")
@@ -368,7 +206,9 @@ class ProjectGui(
             and self.movement_ai_ready
         )
         self.analyze_motion_button.configure(
-            state="disabled" if running or not recording_selected or not motion_ai_ready else "normal"
+            state="disabled"
+            if running or not recording_selected or not motion_ai_ready
+            else "normal"
         )
         pose_playback_ready = POSE_RECORDING_SCRIPT.is_file() and self.simulation_python is not None
         self.pose_playback_button.configure(
@@ -390,13 +230,12 @@ class ProjectGui(
             state="normal" if self._active_processes("recording") else "disabled"
         )
         selected_program = self.recording_programs.get(self.recording_program.get())
-        selected_preview = selected_program is not None and selected_program.name in RECORDER_DETAILS
-        active_preview_keys = {
-            process.key for process in self._active_processes("preview")
-        }
+        selected_preview = (
+            selected_program is not None and selected_program.name in RECORDER_DETAILS
+        )
+        active_preview_keys = {process.key for process in self._active_processes("preview")}
         selected_preview_running = bool(
-            selected_program
-            and f"preview:{selected_program.name}" in active_preview_keys
+            selected_program and f"preview:{selected_program.name}" in active_preview_keys
         )
         self.recording_preview_button.configure(
             state="disabled"
@@ -409,16 +248,15 @@ class ProjectGui(
         firmware = self.firmware_projects.get(self.firmware_project.get())
         firmware_ready = firmware is not None and resolve_firmware_tool(firmware) is not None
         port_ready = bool(self.serial_port.get().strip())
-        self.build_button.configure(
-            state="disabled" if running or not firmware_ready else "normal"
-        )
+        self.build_button.configure(state="disabled" if running or not firmware_ready else "normal")
         self.flash_button.configure(
             state="disabled" if running or not firmware_ready or not port_ready else "normal"
         )
         self.monitor_button.configure(
             state="disabled" if running or not firmware_ready or not port_ready else "normal"
         )
-        self.stop_button.configure(state="normal" if running else "disabled")
+        ble_monitor_running = self.ble_reader is not None and self.ble_reader.thread.is_alive()
+        self.stop_button.configure(state="normal" if running or ble_monitor_running else "disabled")
 
     # UI helpers
 
@@ -471,14 +309,6 @@ class ProjectGui(
         self.log.delete("1.0", "end")
         self.log.configure(state="disabled")
 
-    def _open_user_path(self, value: str) -> None:
-        """Validate and open a path entered by the user."""
-        value = value.strip()
-        if not value:
-            messagebox.showerror("Path required", "Choose a folder first.")
-            return
-        self._open_existing(project_path(value))
-
     def _open_existing(self, path: Path) -> None:
         """Open an existing local file or directory with error reporting."""
         if not path.exists():
@@ -493,6 +323,9 @@ class ProjectGui(
         """Stop active work when allowed, then close the application."""
         if not self._close_processes():
             return
+        if self.ble_reader is not None:
+            self.ble_reader.stop()
+        self._stop_ble_dashboard()
         self._stop_serial_dashboard()
         if self.imu_monitor is not None and self.imu_monitor.exists:
             self.imu_monitor.close()
@@ -501,13 +334,14 @@ class ProjectGui(
 
 # Entry point
 
+
 def main() -> None:
     """Create the top-level window and run the Tk event loop."""
     # IDEs and double-clicks can start this file with a system Python even when
     # the project environment exists. Switch before Tk is created so the
-    # in-process IMU reader always has the installed pyserial package.
+    # in-process sensor readers have the installed USB and BLE dependencies.
     if (
-        importlib.util.find_spec("serial") is None
+        any(importlib.util.find_spec(module) is None for module in ("serial", "bleak"))
         and os.environ.get("AURORA_GUI_RELAUNCHED") != "1"
     ):
         simulation_python = find_simulation_python()

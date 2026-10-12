@@ -1,21 +1,20 @@
+# Majd
 """Verify live shoulder/wrist IMUs and optional EMG from the ESP32 stream."""
 
 from __future__ import annotations
 
 import argparse
 import math
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "recording"))
 
 from emg_protocol import extract_emg
 from imu_protocol import ImuStreamDecoder, extract_imus, i2c_wiring_hint
-
 
 ROLE_ORDER = ("shoulder", "wrist")
 ESPRESSIF_VID = 0x303A
@@ -112,13 +111,13 @@ def verify_stream(
             packet_count += 1
             latest_packet = packet
             i2c = packet.get("i2c")
-            if isinstance(i2c, dict) and (
-                i2c.get("sda_pin"), i2c.get("scl_pin")
-            ) == (2, 1):
+            if isinstance(i2c, dict) and (i2c.get("sda_pin"), i2c.get("scl_pin")) == (2, 1):
                 current_bus = i2c
+            updated = packet.get("updated_sensor")
             for role, sensor in extract_imus(packet).items():
                 if (
                     role in counts
+                    and (updated is None or updated == ("imu1" if role == "shoulder" else "imu2"))
                     and sensor.get("connected") is True
                     and _valid_axes(sensor.get("accel_g"))
                     and _valid_axes(sensor.get("gyro_dps"))
@@ -126,12 +125,15 @@ def verify_stream(
                     counts[role] += 1
                     latest[role] = sensor
             emg = extract_emg(packet)
-            if emg.get("connected") is True and "adc_raw" in emg:
+            if (
+                (updated is None or updated == "emg")
+                and emg.get("connected") is True
+                and "adc_raw" in emg
+            ):
                 emg_count += 1
                 latest_emg = emg
-            if (
-                all(counts[role] >= min_samples for role in ROLE_ORDER)
-                and (not require_emg or emg_count >= min_samples)
+            if all(counts[role] >= min_samples for role in ROLE_ORDER) and (
+                not require_emg or emg_count >= min_samples
             ):
                 break
 

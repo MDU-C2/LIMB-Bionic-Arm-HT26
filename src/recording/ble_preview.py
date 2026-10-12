@@ -1,141 +1,26 @@
+# Christian, Majd
 """Live, file-free windows for decoded LIMB BLE notifications."""
 
 from __future__ import annotations
 
-from collections import deque
 import asyncio
+import contextlib
 import math
 import queue
 import sys
 import threading
 import time
 import tkinter as tk
+from collections import deque
 
+from ble_preview_draw import AXIS_COLORS as AXIS_COLORS
+from ble_preview_draw import SENSOR_COLORS as SENSOR_COLORS
+from ble_preview_draw import _draw_orientation as _draw_orientation
+from ble_preview_draw import _draw_traces as _draw_traces
+from ble_preview_draw import imu_tilt_degrees as imu_tilt_degrees
+from ble_preview_draw import relative_angle as relative_angle
 
-AXIS_COLORS = ("#2563eb", "#d97706", "#159669")
-SENSOR_COLORS = ("#7c3aed", "#db2777")
 PREVIEW_SENSORS = ("emg", "imu", "piezo")
-
-
-def imu_tilt_degrees(values: list[float]) -> tuple[float, float] | None:
-    """Estimate gravity-referenced pitch and roll from one accelerometer sample."""
-    if len(values) < 3 or not all(math.isfinite(value) for value in values[:3]):
-        return None
-    accel_x, accel_y, accel_z = values[:3]
-    if math.sqrt(accel_x**2 + accel_y**2 + accel_z**2) < 1e-9:
-        return None
-    pitch = math.degrees(math.atan2(-accel_x, math.sqrt(accel_y**2 + accel_z**2)))
-    roll = math.degrees(math.atan2(accel_y, accel_z))
-    return pitch, roll
-
-
-def relative_angle(value: float, zero: float) -> float:
-    """Return the shortest signed angular difference in degrees."""
-    return (value - zero + 180.0) % 360.0 - 180.0
-
-
-def _draw_traces(canvas: tk.Canvas, traces: list[list[float]]) -> None:
-    """Draw recent samples with a common auto-scaled vertical axis."""
-    canvas.delete("all")
-    width = max(canvas.winfo_width(), 2)
-    height = max(canvas.winfo_height(), 2)
-    canvas.create_line(0, height / 2, width, height / 2, fill="#d6dce5")
-    values = [value for trace in traces for value in trace if math.isfinite(value)]
-    if not values:
-        canvas.create_text(
-            12, height / 2, text="Waiting for samples...", anchor="w", fill="#667085"
-        )
-        return
-    low, high = min(values), max(values)
-    if high - low < 1e-9:
-        low -= 1.0
-        high += 1.0
-    span = high - low
-    for index, trace in enumerate(traces):
-        if len(trace) < 2:
-            continue
-        points: list[float] = []
-        for sample, value in enumerate(trace):
-            points.extend(
-                (
-                    10 + sample * (width - 20) / (len(trace) - 1),
-                    8 + (high - value) * (height - 16) / span,
-                )
-            )
-        canvas.create_line(
-            *points,
-            fill=AXIS_COLORS[index % len(AXIS_COLORS)],
-            width=2,
-        )
-
-
-def _draw_orientation(
-    canvas: tk.Canvas,
-    tilts: dict[int, tuple[float, float]],
-) -> None:
-    """Draw gravity-referenced arm indicators for available IMUs."""
-    canvas.delete("all")
-    width = max(canvas.winfo_width(), 2)
-    height = max(canvas.winfo_height(), 2)
-    center_x = width * 0.44
-    center_y = height * 0.46
-    radius = max(min(width, height) * 0.27, 25)
-    canvas.create_oval(
-        center_x - radius,
-        center_y - radius,
-        center_x + radius,
-        center_y + radius,
-        outline="#d6dce5",
-    )
-    canvas.create_line(
-        center_x - radius, center_y, center_x + radius, center_y, fill="#e5e7eb"
-    )
-    canvas.create_line(
-        center_x, center_y - radius, center_x, center_y + radius, fill="#e5e7eb"
-    )
-    if not tilts:
-        canvas.create_text(
-            center_x, center_y, text="Waiting for IMU...", fill="#667085"
-        )
-        return
-
-    for index, (sensor, (pitch, roll)) in enumerate(sorted(tilts.items())):
-        color = SENSOR_COLORS[index % len(SENSOR_COLORS)]
-        roll_rad = math.radians(roll)
-        delta_x = radius * math.sin(roll_rad)
-        delta_y = -radius * math.cos(roll_rad)
-        canvas.create_line(
-            center_x - delta_x * 0.65,
-            center_y - delta_y * 0.65,
-            center_x + delta_x,
-            center_y + delta_y,
-            fill=color,
-            width=7,
-            arrow="last",
-        )
-        pitch_y = 18 + (90.0 - max(-90.0, min(90.0, pitch))) / 180.0 * (
-            height - 52
-        )
-        pitch_x = width - 34 - index * 16
-        canvas.create_line(
-            pitch_x, 18, pitch_x, height - 34, fill="#d6dce5", width=2
-        )
-        canvas.create_oval(
-            pitch_x - 5,
-            pitch_y - 5,
-            pitch_x + 5,
-            pitch_y + 5,
-            fill=color,
-            outline="",
-        )
-        canvas.create_text(
-            8,
-            height - 22 - index * 17,
-            text=f"IMU {sensor + 1}: pitch {pitch:+.1f}°  roll {roll:+.1f}°",
-            anchor="w",
-            fill=color,
-            font=("Consolas", 9, "bold"),
-        )
 
 
 async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> int:
@@ -182,10 +67,8 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
         window = windows.pop(sensor, None)
         views.pop(sensor, None)
         if window is not None:
-            try:
+            with contextlib.suppress(tk.TclError):
                 window.destroy()
-            except tk.TclError:
-                pass
         if not windows:
             closing = True
 
@@ -248,9 +131,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
         )
         canvas.pack(fill="both", expand=True, pady=(4, 6))
         value = tk.StringVar(master=root, value="EMG: waiting for packets")
-        tk.Label(
-            frame, textvariable=value, anchor="w", font=("Consolas", 10)
-        ).pack(fill="x")
+        tk.Label(frame, textvariable=value, anchor="w", font=("Consolas", 10)).pack(fill="x")
         views["emg"] = {"canvas": canvas, "value": value}
 
     def create_imu_window() -> None:
@@ -313,9 +194,9 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             master=root,
             value="Pitch/roll use gravity. Twist/yaw appears in the gyro graph; no magnetometer is fitted.",
         )
-        tk.Label(
-            controls, textvariable=note, anchor="w", fg="#667085"
-        ).pack(side="left", fill="x", expand=True)
+        tk.Label(controls, textvariable=note, anchor="w", fg="#667085").pack(
+            side="left", fill="x", expand=True
+        )
         tk.Button(controls, text="Zero tilt", command=zero_orientation).pack(side="right")
         views["imu"] = {
             "accel": accel_canvas,
@@ -326,9 +207,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
         }
 
     def create_piezo_window() -> None:
-        _window, frame = base_window(
-            "piezo", "piezo contact and vibration", "900x470"
-        )
+        _window, frame = base_window("piezo", "piezo contact and vibration", "900x470")
         tk.Label(
             frame,
             text="Raw piezoelectric sensor response (recent ADC samples)",
@@ -343,9 +222,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
         )
         canvas.pack(fill="both", expand=True, pady=(4, 6))
         value = tk.StringVar(master=root, value="Piezo: waiting for packets")
-        tk.Label(
-            frame, textvariable=value, anchor="w", font=("Consolas", 10)
-        ).pack(fill="x")
+        tk.Label(frame, textvariable=value, anchor="w", font=("Consolas", 10)).pack(fill="x")
         tk.Label(
             frame,
             text=(
@@ -454,24 +331,16 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
                     sum((value - mean) ** 2 for value in channel) / len(channel)
                 )
                 rms.append(f"ch{index + 1} centered RMS {centered_rms:.1f} ADC")
-            emg_view["value"].set(
-                "  |  ".join(rms) if rms else "EMG: waiting for packets"
-            )
+            emg_view["value"].set("  |  ".join(rms) if rms else "EMG: waiting for packets")
 
         imu_view = views.get("imu")
         if imu_view:
             primary_sensor = min(latest_imu, default=0)
-            _draw_traces(
-                imu_view["accel"], [list(axis) for axis in accel[primary_sensor]]
-            )
-            _draw_traces(
-                imu_view["gyro"], [list(axis) for axis in gyro[primary_sensor]]
-            )
+            _draw_traces(imu_view["accel"], [list(axis) for axis in accel[primary_sensor]])
+            _draw_traces(imu_view["gyro"], [list(axis) for axis in gyro[primary_sensor]])
             readings = []
             displayed_tilts: dict[int, tuple[float, float]] = {}
-            accel_unit, gyro_unit = getattr(
-                recorder, "imu_units", ("device units", "device units")
-            )
+            accel_unit, gyro_unit = getattr(recorder, "imu_units", ("device units", "device units"))
             for index, values in sorted(latest_imu.items()):
                 if len(values) < 6:
                     continue
@@ -488,9 +357,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
                     f"{gyro_unit}"
                 )
             _draw_orientation(imu_view["orientation"], displayed_tilts)
-            imu_view["value"].set(
-                "\n".join(readings) if readings else "IMU: waiting for packets"
-            )
+            imu_view["value"].set("\n".join(readings) if readings else "IMU: waiting for packets")
 
         piezo_view = views.get("piezo")
         if piezo_view:
@@ -505,11 +372,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             f"{key} {count} ({rates[key]:.0f}/s, gaps {sequence_gaps[key]})"
             for key, count in recorder.counts.items()
         )
-        stale = (
-            " (no recent packets)"
-            if last_packet and time.monotonic() - last_packet > 2
-            else ""
-        )
+        stale = " (no recent packets)" if last_packet and time.monotonic() - last_packet > 2 else ""
         status.set(f"Connected: {summary}{stale}")
 
     try:
@@ -517,9 +380,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             None
             if args.address
             else asyncio.create_task(
-                BleakScanner.find_device_by_name(
-                    args.device, timeout=args.scan_timeout
-                )
+                BleakScanner.find_device_by_name(args.device, timeout=args.scan_timeout)
             )
         )
         while scan is not None and not scan.done() and not closing:
@@ -549,9 +410,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             if not subscribed:
                 print("No known LIMB sensor characteristics were found.")
                 return 1
-            print(
-                "BLE preview connected. Sensor windows share one connection; no files are saved."
-            )
+            print("BLE preview connected. Sensor windows share one connection; no files are saved.")
             next_draw = 0.0
             while not closing and client.is_connected:
                 refresh()
@@ -567,7 +426,5 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
         return 1
     finally:
         recorder.close()
-        try:
+        with contextlib.suppress(tk.TclError):
             root.destroy()
-        except tk.TclError:
-            pass

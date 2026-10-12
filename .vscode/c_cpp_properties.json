@@ -2,14 +2,16 @@
     "configurations": [
         {
             "name": "AURORA ESP32-C3 (ESP-IDF)",
-            "compileCommands": "${workspaceFolder}/firmware/dual_imu_serial/build/compile_commands.json",
+            "compileCommands": "${workspaceFolder}/firmware/high_rate_emg_imu/build/compile_commands.json",
             "includePath": [
-                "${workspaceFolder}/firmware/dual_imu_serial/main",
+                "${workspaceFolder}/firmware/high_rate_emg_imu/main",
+                "${workspaceFolder}/firmware/high_rate_emg_imu/include",
                 "${env:IDF_PATH}/components/**"
             ],
             "browse": {
                 "path": [
-                    "${workspaceFolder}/firmware/dual_imu_serial/main",
+                    "${workspaceFolder}/firmware/high_rate_emg_imu/main",
+                    "${workspaceFolder}/firmware/high_rate_emg_imu/include",
                     "${env:IDF_PATH}/components"
                 ],
                 "limitSymbolsToIncludedHeaders": true

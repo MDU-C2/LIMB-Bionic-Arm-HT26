@@ -1,13 +1,13 @@
+# Majd
 """Reachability and two-link inverse kinematics for the LIMB task scene."""
 
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 from sim.joint_limits import LEFT_ARM_LIMITS_DEG
 from sim.robot_model import FOREARM_LENGTH_M, LEFT_GRIP_OFFSET_M, UPPER_ARM_LENGTH_M
-
 
 SHOULDER_ORIGIN = (0.0, 0.0, 0.0)
 HAND_GRIP_LENGTH_M = abs(LEFT_GRIP_OFFSET_M[0])
@@ -96,12 +96,12 @@ def calculate_ik_angles(
     target_distance = math.hypot(horizontal_distance, height_difference)
     safe_distance = max(MIN_REACH_M, min(target_distance, MAX_REACH_M))
 
-    alpha_cosine = (
-        UPPER_ARM_LENGTH_M**2 + safe_distance**2 - LOWER_CHAIN_LENGTH_M**2
-    ) / (2.0 * UPPER_ARM_LENGTH_M * safe_distance)
-    gamma_cosine = (
-        UPPER_ARM_LENGTH_M**2 + LOWER_CHAIN_LENGTH_M**2 - safe_distance**2
-    ) / (2.0 * UPPER_ARM_LENGTH_M * LOWER_CHAIN_LENGTH_M)
+    alpha_cosine = (UPPER_ARM_LENGTH_M**2 + safe_distance**2 - LOWER_CHAIN_LENGTH_M**2) / (
+        2.0 * UPPER_ARM_LENGTH_M * safe_distance
+    )
+    gamma_cosine = (UPPER_ARM_LENGTH_M**2 + LOWER_CHAIN_LENGTH_M**2 - safe_distance**2) / (
+        2.0 * UPPER_ARM_LENGTH_M * LOWER_CHAIN_LENGTH_M
+    )
     alpha = math.degrees(math.acos(max(-1.0, min(1.0, alpha_cosine))))
     gamma = math.degrees(math.acos(max(-1.0, min(1.0, gamma_cosine))))
     target_slope = math.degrees(math.atan2(height_difference, horizontal_distance))
@@ -119,8 +119,6 @@ def _planar_position(shoulder_deg: float, elbow_deg: float) -> tuple[float, floa
     shoulder = math.radians(shoulder_deg)
     lower = shoulder - math.radians(elbow_deg)
     return (
-        UPPER_ARM_LENGTH_M * math.cos(shoulder)
-        + LOWER_CHAIN_LENGTH_M * math.cos(lower),
-        -UPPER_ARM_LENGTH_M * math.sin(shoulder)
-        - LOWER_CHAIN_LENGTH_M * math.sin(lower),
+        UPPER_ARM_LENGTH_M * math.cos(shoulder) + LOWER_CHAIN_LENGTH_M * math.cos(lower),
+        -UPPER_ARM_LENGTH_M * math.sin(shoulder) - LOWER_CHAIN_LENGTH_M * math.sin(lower),
     )

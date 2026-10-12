@@ -1,18 +1,17 @@
 # Firmware
 
-`dual_imu_serial/` is the only maintained ESP-IDF target for the ESP32-C3-Zero.
-It reads the shoulder LSM6DSO32 at `0x6B`, wrist LSM6DSO32 at `0x6A`, and the
-EMG analogue output on ADC1 channel 0 / GPIO0. It publishes all three on one
-acquisition clock over ESP-IDF NimBLE and keeps role-named USB JSON for setup,
-live simulation, and diagnostics.
+[`high_rate_emg_imu/`](high_rate_emg_imu/README.md) is the maintained ESP32-C3
+target. It acquires continuous EMG and up to two LSM6DSO32 IMUs, streams USB
+and BLE data, and exposes BLE clock synchronization for OAK-D recordings.
 
 The source uses ESP-IDF drivers, FreeRTOS, NVS, and NimBLE directly. It contains
 no Arduino framework or Arduino BLE dependency. Build it with native `idf.py`
-or the checked-in PlatformIO environment, which is pinned to ESP-IDF 4.4.7.
+or the checked-in ESP-IDF 5.x PlatformIO environment.
 
-The implementation follows the verified ESP-IDF IMU register setup in
-LIMB-HT25. Generated build and editor files are intentionally not part of this
+It is based on the Jonas-AURORA source snapshot and incorporates the earlier
+AURORA single-IMU wiring fallback. The IMU component credits Cornelia and
+Jonas. Generated build and editor files are intentionally not part of this
 repository.
 
 See [the sensor guide](../docs/SENSOR_DATA.md) and the
-[firmware README](dual_imu_serial/README.md).
+[firmware README](high_rate_emg_imu/README.md).

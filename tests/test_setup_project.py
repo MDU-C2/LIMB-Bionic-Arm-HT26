@@ -1,16 +1,16 @@
+# Majd
 """Check installer recovery and launch behavior without downloads or hardware."""
 
 from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
+import subprocess
 import sys
 import tempfile
-import subprocess
 import unittest
+from pathlib import Path
 from unittest.mock import call, patch
-
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -23,10 +23,15 @@ from project_support import simulation_python_candidates
 class SetupTests(unittest.TestCase):
     def test_dependency_conflicts_fail_verification_before_native_checks(self) -> None:
         with (
-            patch.object(setup_project.subprocess, "run", return_value=subprocess.CompletedProcess(
-                ["python", "-m", "pip", "check"], 1,
-                "mediapipe requires protobuf<5\ndepthai 3.10.0 is not supported on this platform\n",
-            )),
+            patch.object(
+                setup_project.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess(
+                    ["python", "-m", "pip", "check"],
+                    1,
+                    "mediapipe requires protobuf<5\ndepthai 3.10.0 is not supported on this platform\n",
+                ),
+            ),
             patch.object(setup_project, "run_python") as checks,
         ):
             with self.assertRaises(subprocess.CalledProcessError):
@@ -35,10 +40,15 @@ class SetupTests(unittest.TestCase):
 
     def test_camera_metadata_warning_still_requires_native_camera_import(self) -> None:
         with (
-            patch.object(setup_project.subprocess, "run", return_value=subprocess.CompletedProcess(
-                ["python", "-m", "pip", "check"], 1,
-                "depthai 3.10.0 is not supported on this platform\n",
-            )),
+            patch.object(
+                setup_project.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess(
+                    ["python", "-m", "pip", "check"],
+                    1,
+                    "depthai 3.10.0 is not supported on this platform\n",
+                ),
+            ),
             patch.object(setup_project, "run_python") as checks,
         ):
             setup_project.verify()
@@ -88,7 +98,8 @@ class SetupTests(unittest.TestCase):
         ):
             self.assertEqual(setup_project.main(["--launch"]), 7)
             launch.assert_called_once_with(
-                [sys.executable, str(root / "src/gui/app.py")], cwd=root,
+                [sys.executable, str(root / "src/gui/app.py")],
+                cwd=root,
             )
             self.assertEqual(os.environ["AURORA_SIMULATION_PYTHON"], sys.executable)
 
@@ -103,6 +114,7 @@ class SetupTests(unittest.TestCase):
                 patch.object(setup_project, "verify"),
                 patch.object(setup_project, "run_python") as run,
             ):
+
                 def fail_build(*arguments, **kwargs):
                     if arguments[0] == "src/gui/firmware_workspace.py":
                         raise OSError("Toolchain download interrupted")
@@ -119,7 +131,8 @@ class SetupTests(unittest.TestCase):
             state.mkdir()
             prefix = root / "cache"
             (state / "runtime.json").write_text(
-                json.dumps({"prefix": str(prefix)}), encoding="utf-8-sig",
+                json.dumps({"prefix": str(prefix)}),
+                encoding="utf-8-sig",
             )
             with (
                 patch("project_support.REPOSITORY_ROOT", root),

@@ -1,12 +1,12 @@
+# Majd
 """Map camera pose recordings to safe LIMB simulation commands."""
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
-
 
 SIMULATION_ROOT = Path(__file__).resolve().parents[1]
 if str(SIMULATION_ROOT) not in sys.path:
@@ -146,9 +146,7 @@ class MotionSmoother:
                 lower = np.radians(limit.lower)
                 upper = np.radians(limit.upper)
                 boundary_distance = (
-                    upper - self.command[index]
-                    if delta >= 0
-                    else self.command[index] - lower
+                    upper - self.command[index] if delta >= 0 else self.command[index] - lower
                 )
                 stopping_distance = max(0.0, min(abs(delta), boundary_distance))
                 acceleration_step = acceleration * dt
@@ -203,14 +201,12 @@ def estimate_finger_curls(hand: object) -> dict[str, float] | None:
     curls: dict[str, float] = {}
     for name, ids in FINGER_LANDMARKS.items():
         joint_angles = []
-        for first, middle, last in zip(ids, ids[1:], ids[2:]):
+        for first, middle, last in zip(ids, ids[1:], ids[2:], strict=False):
             left = points[first] - points[middle]
             right = points[last] - points[middle]
             length = np.linalg.norm(left) * np.linalg.norm(right)
             if length > 1e-6:
-                joint_angles.append(
-                    np.arccos(np.clip(np.dot(left, right) / length, -1.0, 1.0))
-                )
+                joint_angles.append(np.arccos(np.clip(np.dot(left, right) / length, -1.0, 1.0)))
         if not joint_angles:
             return None
         mean_angle = float(np.mean(joint_angles))
@@ -231,7 +227,9 @@ class FingerMotionLimiter:
         for name, limit in FINGER_LIMITS_DEG.items():
             requested = float(np.clip(target.get(name, self.command[name]), 0.0, 1.0))
             range_degrees = limit.upper - limit.lower
-            speed = limit.speed_positive if requested >= self.command[name] else limit.speed_negative
+            speed = (
+                limit.speed_positive if requested >= self.command[name] else limit.speed_negative
+            )
             maximum_step = speed * dt / range_degrees
             self.command[name] += float(
                 np.clip(requested - self.command[name], -maximum_step, maximum_step)

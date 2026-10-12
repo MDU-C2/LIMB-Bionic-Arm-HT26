@@ -1,17 +1,19 @@
+# Majd
 """Concurrent child-process supervision for the AURORA desktop GUI."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import contextlib
 import os
-from pathlib import Path
 import queue
 import signal
 import subprocess
 import threading
+from dataclasses import dataclass
+from pathlib import Path
 from tkinter import messagebox
 
-from project_support import REPOSITORY_ROOT
+from project_support import REPOSITORY_ROOT, python_runtime_environment
 
 
 @dataclass
@@ -34,7 +36,8 @@ class ProcessManagerMixin:
 
     def _active_processes(self, kind: str | None = None) -> list[ManagedProcess]:
         active = [
-            managed for managed in self.processes.values()
+            managed
+            for managed in self.processes.values()
             if managed.process.poll() is None and (kind is None or managed.kind == kind)
         ]
         return sorted(active, key=lambda managed: managed.name)
@@ -63,18 +66,33 @@ class ProcessManagerMixin:
             messagebox.showinfo("Program running", f"{existing.name} is already running.")
             return False
 
+        stop_ble = getattr(self, "_stop_ble_dashboard", None) if kind != "preview" else None
+        if stop_ble is not None and not stop_ble():
+            release_ble = getattr(self, "_release_ble_for", None)
+            if release_ble is None:
+                self._append_log("[BLE monitor] Waiting for the connection to close. Try again shortly.\n")
+                return False
+            if release_ble(
+                lambda: self._start_program(
+                    name, kind, command, working_directory=working_directory,
+                    environment=environment, parallel=parallel, process_key=process_key,
+                )
+            ):
+                return True
+        if stop_ble is not None and hasattr(self, "ble_sensor_connection"):
+            self.ble_sensor_connection.set(f"BLE live view paused while {name} runs")
+
         merged_environment = os.environ.copy()
         if environment:
             merged_environment.update(environment)
         merged_environment["PYTHONUTF8"] = "1"
         merged_environment["PYTHONIOENCODING"] = "utf-8"
+        merged_environment = python_runtime_environment(Path(command[0]), merged_environment)
         try:
             creation_flags = 0
             start_new_session = os.name != "nt"
             if os.name == "nt":
-                creation_flags = (
-                    subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
-                )
+                creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
             process = subprocess.Popen(
                 command,
                 cwd=working_directory,
@@ -111,11 +129,7 @@ class ProcessManagerMixin:
     def _send_process_input(self, key: str, value: str) -> bool:
         """Write a short command to a running child process."""
         managed = self.processes.get(key)
-        if (
-            managed is None
-            or managed.process.poll() is not None
-            or managed.process.stdin is None
-        ):
+        if managed is None or managed.process.poll() is not None or managed.process.stdin is None:
             return False
         try:
             managed.process.stdin.write(value)
@@ -177,15 +191,12 @@ class ProcessManagerMixin:
                 self._update_controls()
                 self._refresh_recordings()
                 self._refresh_info()
-                if (
-                    managed.kind == "firmware"
-                    and not self.serial_sensor_reader.running
-                ):
+                if managed.kind == "firmware" and not self.serial_sensor_reader.running:
                     # Native USB commonly disappears and returns while the C3
-                    # resets. Give Windows time to enumerate it, then resume
-                    # the in-process sensor monitor on the refreshed port.
+                    # resets. Give Windows time to enumerate the refreshed port.
                     self.after(750, self._refresh_recording_ports)
-                    self.after(1000, self._start_serial_dashboard_if_available)
+                if not active and hasattr(self, "_start_ble_dashboard_if_available"):
+                    self.after(1000, self._start_ble_dashboard_if_available)
         except queue.Empty:
             pass
         self.after(100, self._drain_log_queue)
@@ -193,7 +204,13 @@ class ProcessManagerMixin:
     def stop_program(self) -> None:
         """Gracefully stop every active program after one confirmation."""
         active = self._active_processes()
-        if not active or not self._confirm_sensitive_stop(active):
+        if not active:
+            stop_ble = getattr(self, "_stop_ble_dashboard", None)
+            if stop_ble is not None:
+                stop_ble()
+                self._update_controls()
+            return
+        if not self._confirm_sensitive_stop(active):
             return
         self._stop_processes(active)
 
@@ -207,7 +224,9 @@ class ProcessManagerMixin:
             if not self._request_process_stop(managed.process):
                 self._append_log(f"[{managed.name}] Could not send a stop signal.\n")
                 continue
-            self.after(4000, lambda process=managed.process: self._kill_process_tree_if_running(process))
+            self.after(
+                4000, lambda process=managed.process: self._kill_process_tree_if_running(process)
+            )
         self._set_status("Stopping active programs", "running")
         self._update_controls()
 
@@ -263,10 +282,8 @@ class ProcessManagerMixin:
             else:
                 os.killpg(process.pid, signal.SIGKILL)
         except (OSError, subprocess.TimeoutExpired):
-            try:
+            with contextlib.suppress(OSError):
                 process.kill()
-            except OSError:
-                pass
 
     def _close_processes(self) -> bool:
         """Stop all children during window close; return false if cancelled."""

@@ -1,15 +1,15 @@
+# Majd
 """Recognize a recorded movement profile with the migrated GRU model."""
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import json
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
-
 
 AI_DIR = Path(__file__).resolve().parent
 DEFAULT_MODEL = AI_DIR / "models" / "movement_gru.onnx"
@@ -171,8 +171,7 @@ def recognize_recording(
     distances = np.linalg.norm(reference_embeddings - target_embedding, axis=1)
     order = np.argsort(distances)
     matches = [
-        ReferenceMatch(valid[index][1], valid[index][0], float(distances[index]))
-        for index in order
+        ReferenceMatch(valid[index][1], valid[index][0], float(distances[index])) for index in order
     ]
     prediction = matches[0].user_id if matches[0].distance <= threshold else "Unknown"
     return prediction, matches, skipped

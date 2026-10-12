@@ -1,11 +1,11 @@
+# Majd, Christian
 """Open a live RGB preview from a connected Luxonis OAK camera."""
 
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "recording"))
@@ -67,8 +67,7 @@ def main() -> None:
                 break
         if args.frames:
             print(
-                f"PASS: received {received}/{args.frames} RGB frames "
-                f"at {args.width}x{args.height}."
+                f"PASS: received {received}/{args.frames} RGB frames at {args.width}x{args.height}."
             )
 
 

@@ -112,8 +112,9 @@ unavailable. This setting does not affect which streams are recorded.
 Camera correction weights channels available from both sources. `0` prefers
 IMUs and `1` prefers camera; single-source channels remain available. At `0.25`,
 IMUs contribute to elevation and elbow movement while camera supplies absolute
-abduction and corrects the upper-arm gyro twist state. Live feedback initially stays paused with the simulated arm fully
-extended. Copy that pose with the real arm, then press `L` to calibrate and
+abduction and corrects the upper-arm gyro twist state. Live feedback initially stays paused with the simulated arm in its neutral
+tabletop pose (shoulder and elbow at 45 degrees, wrist neutral and hand open).
+Copy that pose with the real arm, then press `L` to calibrate and
 start feedback. Press `R` to pause, reset the scene, and show the reference pose
 again. `K` recalibrates at the current pose. Press `Q` in the camera window to
 stop.

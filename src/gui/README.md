@@ -45,6 +45,12 @@ boards do not establish correct anatomical mapping. Camera correction needs a
 bent elbow; wrist twist has no camera correction and may drift. Q/E and
 Left/Right provide manual rotation when live targets are unavailable. Follow
 [the mounting checks](../../docs/SIMULATION.md#mounting-and-twist-calibration).
+The table defaults to 60 × 60 cm. Its centerline represents the torso center,
+with the shoulder mounted on the left. The cup starts on the left of the table,
+to the right of the arm; the green disc is the landing area farther right.
+The width/depth fields in Simulation apply to
+keyboard and live control. Reset returns to a neutral tabletop pose with a bent
+elbow; calibration keeps that displayed pose as the camera/IMU reference.
 Its **Open live BLE graphs** button opens the same standalone BLE monitor.
 Starting live control releases that monitor and opens its own graph window
 using the same BLE connection: raw EMG and both IMUs' acceleration and gyro

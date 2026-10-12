@@ -24,13 +24,13 @@ controller, and the separate sensor display.
 | Show sensor display | I |
 | Recalibrate live IMUs | K (live mode) |
 | Start live feedback after matching reference | L (live mode) |
-| Reset and return to straight-arm reference | R |
+| Reset and return to neutral tabletop reference | R |
 | Quit | Escape |
 
 The GUI can start the simulator in direct mode or physics mode. Physics mode
 uses gravity, motor control, collision, and simulated torque/contact values.
-The arm is a complete left/right reflection, including the wrist and fingers;
-the cup and camera are mirrored with it. See [Joint limits](JOINT_LIMITS.md)
+The arm is a complete left/right reflection, including the wrist and fingers,
+mounted to the left of the centered table. See [Joint limits](JOINT_LIMITS.md)
 for the source of every movement range and the camera-to-CAD zero conversion.
 
 **Start live interactive control** opens the same task scene together with an
@@ -75,7 +75,7 @@ can verify sensor reception, but cannot establish correct anatomical movement.
    recordings keep their original sensor axes. Defaults preserve the existing
    Y/Z tilt mapping. An X-length mounting uses sensor Y for the bend axis;
    Y/Z-length mountings use sensor X for the bend axis.
-3. Match the straight-arm reference, press **L**, and hold both sensors still for
+3. Match the neutral tabletop reference, press **L**, and hold both sensors still for
    **0.5 seconds**. Moving restarts the twist baseline. K recalibrates the current
    pose; R returns to alignment. Recalibration/reconnection resets twist references.
 4. Test small isolated movements: elbow bend, upper-arm twist, then forearm
@@ -116,8 +116,8 @@ live graph window:
    half a second.
 2. Press **2. Calibrate strong grip (3 s)** and hold a strong, comfortable grip
    until the status says **Grip calibrated**.
-3. Relax to open the simulated hand and contract to close it. Match the straight
-   reference arm and press **L** to enable feedback. L/K only align the IMUs;
+3. Relax to open the simulated hand and contract to close it. Match the neutral
+   tabletop pose and press **L** to enable feedback. L/K align the arm sensors;
    they preserve the EMG calibration.
 
 Repeat both EMG steps after starting a new simulator or moving electrodes. The
@@ -168,8 +168,29 @@ control because only one process can own the camera.
 The **Motion AI** tab can play compatible OAK-D pose recordings and run the
 experimental movement-recognition model.
 
-Live control begins paused with the simulated arm fully extended. Match that
+The tabletop defaults to **60 × 60 cm**, with the cup placed above its surface.
+Change **Tabletop width × depth (cm)** in Simulation to match another surface;
+the keyboard and live simulator use the same dimensions. CLI equivalents are
+`--table-width-cm 60 --table-depth-cm 60`.
+
+The table is centered on the torso's world-X centerline. The left shoulder is
+mounted outside the table's left edge, angled inward, so a forward lift beside
+the table clears it with either a straight or bent elbow. Lift before swinging
+over the tabletop. The cup starts on the left side of the table, to the right of
+the arm; the green disc marks its destination farther right. Grip, carry and
+release the cup using the existing controls. Reach assistance uses the mounted
+shoulder's coordinate frame. In physics mode, open the fingers and tilt or
+withdraw the hand when placing the cup so it can settle onto the table.
+
+Live control begins paused with the shoulder and elbow at 45 degrees and the
+forearm approximately horizontal beside the table's left edge, wrist neutral
+and hand open. Match that
 pose with the tracked real arm, then press `L` to calibrate and start feedback.
 Press `R` to pause and return to the reference pose, or `K` to recalibrate at
 the current pose. Press `Q` in the camera window to stop. See
 [Sensor data](SENSOR_DATA.md) for wiring and units.
+
+Calibration anchors camera and IMU angles to the displayed joint pose. A matched
+bent elbow therefore stays bent instead of being reset to zero; raising/lowering
+and bending/extending use signed changes around this reference. Relative wrist
+twist uses the calibrated elbow angle when subtracting shared upper-arm rotation.

@@ -291,6 +291,8 @@ class LiveBleTests(unittest.TestCase):
         self.assertEqual(command[command.index("--transport") + 1], "ble")
         self.assertEqual(command[command.index("--device") + 1], "LIMBServer")
         self.assertNotIn("--port", command)
+        self.assertEqual(command[command.index("--table-width-cm") + 1], "60")
+        self.assertEqual(command[command.index("--table-depth-cm") + 1], "60")
         self.assertEqual(command[command.index("--grip-source") + 1], "camera")
         self.assertEqual(command[command.index("--shoulder-twist-axis") + 1], "y")
         self.assertEqual(command[command.index("--wrist-twist-axis") + 1], "-y")
@@ -307,6 +309,24 @@ class LiveBleTests(unittest.TestCase):
 
 
 class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
+    def test_camera_reference_preserves_displayed_pose(self):
+        controller = LiveSensorInput(camera_weight=0)
+        controller.mp = controller.np = Mock()
+        controller.cv2 = SimpleNamespace(waitKey=lambda _delay: -1)
+        controller.video_queue = Mock()
+        frame = controller.video_queue.tryGet.return_value
+        frame.getCvFrame.return_value = object()
+        measured = {"shoulder_flexion": 35, "elbow_flexion": 40, "shoulder_abduction": 8}
+        with patch("live_sensor_input.analyze_frame", return_value=(None, "tracked", None,
+                   {"angles_deg": measured})):
+            controller.poll()
+            controller.calibrate({"shoulder_flexion": 45, "elbow_flexion": 45,
+                                  "shoulder_abduction": 5})
+            snapshot = controller.poll()
+        self.assertEqual(snapshot.angles["shoulder_flexion"], 45)
+        self.assertEqual(snapshot.angles["elbow_flexion"], 45)
+        self.assertEqual(snapshot.angles["shoulder_abduction"], 5)
+
     async def test_disconnect_clears_old_values_and_reconnects(self):
         reader = BleSensorReader(address="test-device")
         attempts = []

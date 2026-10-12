@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 
 import pybullet as p
@@ -26,10 +27,19 @@ from .arm_control import (
     sync_to_pybullet,
 )
 from .settings import (
+    ARM_BASE_POSITION_M,
+    ARM_BASE_YAW_DEG,
     CONTACT_STIFFNESS_N_PER_M,
     FINGER_JOINT_TOKENS,
+    OVERVIEW_CAMERA_DISTANCE_M,
+    OVERVIEW_CAMERA_PITCH_DEG,
+    OVERVIEW_CAMERA_TARGET,
+    OVERVIEW_CAMERA_YAW_DEG,
     PHYSICS_SUBSTEPS,
     SIMULATION_FREQUENCY_HZ,
+    TABLE_CENTER_XY,
+    TABLE_THICKNESS_M,
+    TABLE_TOP_HEIGHT_M,
     TARGET_HEIGHT_M,
     TARGET_NORMAL_MASS_KG,
     TARGET_RADIUS_M,
@@ -75,10 +85,31 @@ class SceneMixin:
             numSubSteps=PHYSICS_SUBSTEPS,
         )
         p.loadURDF("plane.urdf")
-        p.loadURDF("table/table.urdf", [0, 0.8, -0.2], useFixedBase=True)
+        self.initialize_table()
 
-        # Mirror the proven right-arm task across world X together with the arm.
-        self.target_start_position = [-0.2, 0.6, 0.5]
+        # Cup starts on the table's left, to the right of the left shoulder.
+        margin = TARGET_RADIUS_M + 0.01
+        self.target_start_position = [
+            max(self.table_bounds[0][0] + margin, -0.20),
+            max(self.table_bounds[0][1] + margin,
+                min(self.table_bounds[1][1] - margin, 0.60)),
+            TABLE_TOP_HEIGHT_M + TARGET_HEIGHT_M / 2 + 0.002,
+        ]
+        self.target_destination_position = [
+            min(self.table_bounds[1][0] - margin, 0.04),
+            max(self.table_bounds[0][1] + margin,
+                min(self.table_bounds[1][1] - margin, 0.48)),
+            self.target_start_position[2],
+        ]
+        destination_visual = p.createVisualShape(
+            p.GEOM_CYLINDER, radius=TARGET_RADIUS_M + 0.005, length=0.001,
+            rgbaColor=[0.18, 0.65, 0.35, 0.65],
+        )
+        # A visual landing marker must never obstruct the arm or falling cup.
+        self.destination_marker_body = p.createMultiBody(
+            baseMass=0, baseVisualShapeIndex=destination_visual,
+            basePosition=[*self.target_destination_position[:2], TABLE_TOP_HEIGHT_M + 0.001],
+        )
         self.target_start_orientation = p.getQuaternionFromEuler([0, 0, 0])
         cup_collision_shape = p.createCollisionShape(
             shapeType=p.GEOM_CYLINDER,
@@ -98,6 +129,41 @@ class SceneMixin:
             basePosition=self.target_start_position,
             baseOrientation=self.target_start_orientation,
         )
+
+    def initialize_table(self) -> None:
+        """Use measured tabletop dimensions rather than the large demo URDF."""
+        width = self.args.table_width_cm / 100
+        depth = self.args.table_depth_cm / 100
+        center_x, center_y = TABLE_CENTER_XY
+        self.table_bounds = (
+            (center_x - width / 2, center_y - depth / 2, TABLE_TOP_HEIGHT_M - TABLE_THICKNESS_M),
+            (center_x + width / 2, center_y + depth / 2, TABLE_TOP_HEIGHT_M),
+        )
+        leg_half_width = 0.02
+        leg_height = TABLE_TOP_HEIGHT_M - TABLE_THICKNESS_M
+        sizes = [[width / 2, depth / 2, TABLE_THICKNESS_M / 2]]
+        centers = [[center_x, center_y, TABLE_TOP_HEIGHT_M - TABLE_THICKNESS_M / 2]]
+        for x_sign in (-1, 1):
+            for y_sign in (-1, 1):
+                sizes.append([leg_half_width, leg_half_width, leg_height / 2])
+                centers.append([
+                    center_x + x_sign * (width / 2 - leg_half_width),
+                    center_y + y_sign * (depth / 2 - leg_half_width),
+                    leg_height / 2,
+                ])
+        collision = p.createCollisionShapeArray(
+            shapeTypes=[p.GEOM_BOX] * len(sizes), halfExtents=sizes,
+            collisionFramePositions=centers,
+        )
+        visual = p.createVisualShapeArray(
+            shapeTypes=[p.GEOM_BOX] * len(sizes), halfExtents=sizes,
+            visualFramePositions=centers,
+            rgbaColors=[[0.70, 0.54, 0.36, 1]] + [[0.22, 0.25, 0.29, 1]] * 4,
+        )
+        self.table_body = p.createMultiBody(
+            baseMass=0, baseCollisionShapeIndex=collision, baseVisualShapeIndex=visual,
+        )
+        print(f"Tabletop: {width * 100:g} x {depth * 100:g} cm")
 
     def anchor_target_to_world(self) -> int:
         """Hold the target at its start pose until grasping begins."""
@@ -120,17 +186,17 @@ class SceneMixin:
         """Load the existing arm model and resolve its joints and links."""
         self.target_anchor_constraint = self.anchor_target_to_world()
         p.resetDebugVisualizerCamera(
-            cameraDistance=1.25,
-            cameraYaw=-45,
-            cameraPitch=-24,
-            cameraTargetPosition=[0, 0.35, 0.45],
+            cameraDistance=OVERVIEW_CAMERA_DISTANCE_M,
+            cameraYaw=OVERVIEW_CAMERA_YAW_DEG,
+            cameraPitch=OVERVIEW_CAMERA_PITCH_DEG,
+            cameraTargetPosition=OVERVIEW_CAMERA_TARGET,
         )
 
         try:
             print("Attempting to load robot...")
-            # left_arm.urdf is a complete world-X reflection of the proven right arm.
-            # Its own mirrored base joint already points it toward the task table.
-            base_orientation = p.getQuaternionFromEuler([0, 0, 0])
+            base_orientation = p.getQuaternionFromEuler(
+                [0, 0, math.radians(ARM_BASE_YAW_DEG)]
+            )
 
             # PyBullet on Windows cannot open a non-ASCII absolute path reliably. Load
             # the repository-relative path while this directory is the working folder.
@@ -140,7 +206,7 @@ class SceneMixin:
                 p.setAdditionalSearchPath(".")
                 self.robot_body = p.loadURDF(
                     "arm/left_arm.urdf",
-                    [0, 0, 0.7],
+                    ARM_BASE_POSITION_M,
                     base_orientation,
                     useFixedBase=True,
                 )
@@ -277,7 +343,7 @@ class SceneMixin:
         """Apply the selected overview, shoulder, or hand view."""
         if self.camera_mode == "overview" and self.camera_changed:
             p.resetDebugVisualizerCamera(
-                cameraDistance=1.25,
+                cameraDistance=OVERVIEW_CAMERA_DISTANCE_M,
                 cameraYaw=self.default_cam_yaw,
                 cameraPitch=self.default_cam_pitch,
                 cameraTargetPosition=self.default_cam_target,

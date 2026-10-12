@@ -87,9 +87,15 @@ class DualImuArmEstimator:
         self.yaw_delta: dict[str, float] = {}
         self.elbow_zero = 0.0
         self.active_roles: tuple[str, ...] = ()
+        self.reference_angles: dict[str, float] = {}
 
-    def reset_calibration(self) -> None:
-        self.twist.reset()
+    def reset_calibration(self, reference_angles: object = None) -> None:
+        if reference_angles is not None:
+            self.reference_angles = camera_control_angles(reference_angles)
+        self.twist.reset(
+            shoulder_angle=-self.reference_angles.get("shoulder_rotation_proxy", 0.0),
+            wrist_angle=self.reference_angles.get("wrist_rotation", 0.0),
+        )
         self.filtered_accel = {}
         self.tilt_offsets = {}
         self.gyro_bias_z = {}
@@ -199,7 +205,7 @@ class DualImuArmEstimator:
             self.elbow_zero = wrist_tilt - (shoulder_tilt or 0.0)
 
         self.active_roles = active_roles
-        relative_bend = (
+        relative_bend = self.reference_angles.get("elbow_flexion", 0.0) + (
             (wrist_tilt - shoulder_tilt) - self.elbow_zero
             if wrist_tilt is not None and shoulder_tilt is not None else 0.0
         )
@@ -208,13 +214,19 @@ class DualImuArmEstimator:
             return {}
 
         result = {
-            "shoulder_flexion": abs(shoulder_tilt),
+            "shoulder_flexion": (
+                self.reference_angles.get("shoulder_flexion", 0.0) + shoulder_tilt
+                if self.reference_angles else abs(shoulder_tilt)
+            ),
             # Preserve the gyro sign.  Taking abs() here made both real motion
             # directions command the robot outward/left.
-            "shoulder_abduction": self.yaw_delta.get("shoulder", 0.0),
+            "shoulder_abduction": (
+                self.reference_angles.get("shoulder_abduction", 0.0)
+                + self.yaw_delta.get("shoulder", 0.0)
+            ),
         }
         if wrist_tilt is not None:
-            result["elbow_flexion"] = abs((wrist_tilt - shoulder_tilt) - self.elbow_zero)
+            result["elbow_flexion"] = relative_bend if self.reference_angles else abs(relative_bend)
         result.update(rotations)
         return camera_control_angles(result)
 
@@ -352,3 +364,14 @@ def interactive_control_targets(angles: object) -> dict[str, float] | None:
     if "wrist_rotation" in fused:
         result["wrist_rotation"] = fused["wrist_rotation"]
     return result or None
+
+
+def anatomical_reference_angles(joints: dict[str, float]) -> dict[str, float]:
+    """Invert the joint mapping so calibration preserves the displayed pose."""
+    return camera_control_angles({
+        "shoulder_flexion": 90.0 - joints["shoulder_y"],
+        "shoulder_abduction": -joints["shoulder_z"],
+        "shoulder_rotation_proxy": -joints["shoulder_x"],
+        "elbow_flexion": joints["elbow_x"],
+        "wrist_rotation": joints["wrist_rotation"],
+    })

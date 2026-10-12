@@ -221,7 +221,7 @@ class DashboardMixin:
                 live_phase = (
                     "Feedback ACTIVE"
                     if self.live_feedback_active
-                    else "ALIGN STRAIGHT ARM - press L when matched"
+                    else "MATCH TABLETOP POSE - press L when matched"
                 )
                 self.sensor_vars["live_status"].set(f"{live_phase} | {self.live_snapshot.status}")
                 self.sensor_vars["live_shoulder"].set(

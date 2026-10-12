@@ -20,6 +20,9 @@ from .scene import SceneMixin
 from .settings import (
     CAMERA_MODES,
     FINGER_JOINT_TOKENS,
+    OVERVIEW_CAMERA_PITCH_DEG,
+    OVERVIEW_CAMERA_TARGET,
+    OVERVIEW_CAMERA_YAW_DEG,
     SIMULATION_FREQUENCY_HZ,
 )
 
@@ -75,9 +78,9 @@ class InteractiveSimulator(
         self.target_text_id = -1
 
         self.camera_mode = CAMERA_MODES[0]
-        self.default_cam_yaw = -45
-        self.default_cam_pitch = -24
-        self.default_cam_target = [0, 0.35, 0.45]
+        self.default_cam_yaw = OVERVIEW_CAMERA_YAW_DEG
+        self.default_cam_pitch = OVERVIEW_CAMERA_PITCH_DEG
+        self.default_cam_target = list(OVERVIEW_CAMERA_TARGET)
         self.notice_text = "Ready - click this window to control the arm"
         self.notice_until_ms = 0
 
@@ -144,7 +147,7 @@ class InteractiveSimulator(
             try:
                 self.live_sensor_input.start()
                 self.notice_text = (
-                    "Match the straight simulated arm, then press L and hold still for 0.5 s"
+                    "Match the neutral tabletop pose, then press L and hold still for 0.5 s"
                 )
                 self.notice_until_ms = pygame.time.get_ticks() + 6000
                 sensor_connection = (

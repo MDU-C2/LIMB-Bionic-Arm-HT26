@@ -3,6 +3,11 @@
 The main simulation is the interactive PyBullet table-and-target scene. It can
 be driven by the keyboard or by live OAK-D, one/two-IMU, and EMG measurements.
 
+The 60 × 60 cm table is centered in front of the torso centerline. The left
+shoulder sits outside its left edge. The cup starts on the left of the table,
+to the right of the arm; carry it to the green landing marker farther right.
+Lift beside the table before rotating inward over it.
+
 Start it from the **Simulation** tab in the GUI:
 
 ```powershell
@@ -41,7 +46,7 @@ controls grip by default; select EMG once electrodes and muscle signals are
 ready. Auto retains EMG-first selection with camera fallback when EMG is absent.
 Q/E and Left/Right provide manual fallback when live twist targets are absent. A wrist-only
 sensor is monitored without being misidentified as the upper arm. Press `K` in
-the simulator to recalibrate. At startup, copy the simulated straight-arm pose
+the simulator to recalibrate. At startup, copy the simulated neutral tabletop pose
 and press `L` to start feedback. Press `R` to pause and align again.
 
 See [the simulation guide](../../docs/SIMULATION.md) for the controls.

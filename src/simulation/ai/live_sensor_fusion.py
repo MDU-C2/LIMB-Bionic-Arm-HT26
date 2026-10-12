@@ -30,6 +30,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wrist-twist-axis", choices=TWIST_AXES, default=DEFAULT_TWIST_AXIS)
     parser.add_argument("--grip-source", choices=("camera", "emg", "auto"), default="camera")
     parser.add_argument("--depth", action="store_true")
+    parser.add_argument("--table-width-cm", type=float, default=60)
+    parser.add_argument("--table-depth-cm", type=float, default=60)
     parser.add_argument("--mode", choices=("kinematic", "dynamic"), default="kinematic")
     return parser.parse_args()
 
@@ -56,6 +58,8 @@ def main() -> int:
         args.side,
         "--camera-weight",
         str(args.camera_weight),
+        "--table-width-cm", str(args.table_width_cm),
+        "--table-depth-cm", str(args.table_depth_cm),
         "--grip-source",
         args.grip_source,
         "--shoulder-twist-axis",

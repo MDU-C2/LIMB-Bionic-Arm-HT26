@@ -113,6 +113,46 @@ class SensorFusionTests(unittest.TestCase):
         fused = fuse_control_angles(imu, {"elbow_flexion": 50.0}, 0.25)
         self.assertAlmostEqual(fused["elbow_flexion"], 57.5)
 
+    def test_tabletop_reference_preserves_pose_and_distinguishes_raise_from_lower(self):
+        import math
+
+        def sensors(tilt):
+            return {
+                role: {"connected": True,
+                       "accel_g": {"x": 0, "y": math.sin(math.radians(tilt)),
+                                   "z": math.cos(math.radians(tilt))},
+                       "gyro_dps": dict.fromkeys("xyz", 0)}
+                for role in ("shoulder", "wrist")
+            }
+
+        estimator = DualImuArmEstimator(alpha=0)
+        reference = {"shoulder_flexion": 45, "shoulder_abduction": 5,
+                     "elbow_flexion": 45, "wrist_rotation": 20,
+                     "shoulder_rotation_proxy": 0}
+        estimator.reset_calibration(reference)
+        for _ in range(51):
+            initial = estimator.update(sensors(40), 0.01)
+        self.assertEqual(initial, reference)
+        raised = estimator.update(sensors(55), 0.01)
+        lowered = estimator.update(sensors(25), 0.01)
+        self.assertAlmostEqual(raised["shoulder_flexion"], 60)
+        self.assertAlmostEqual(lowered["shoulder_flexion"], 30)
+        self.assertEqual(raised["elbow_flexion"], 45)
+        self.assertEqual(raised["wrist_rotation"], 20)
+        fused = fuse_control_angles(initial, reference, 0.25)
+        self.assertEqual(interactive_control_targets(fused)["shoulder_y"], 45)
+
+    def test_tabletop_reference_allows_elbow_extension(self):
+        estimator = DualImuArmEstimator(alpha=0)
+        reference = {"shoulder_flexion": 45, "elbow_flexion": 45}
+        estimator.reset_calibration(reference)
+        sensors = {role: {"connected": True, "accel_g": {"x": 0, "y": 1, "z": 0},
+                          "gyro_dps": dict.fromkeys("xyz", 0)}
+                   for role in ("shoulder", "wrist")}
+        estimator.update(sensors, 0.01)
+        sensors["wrist"]["accel_g"] = {"x": 0, "y": 0.8660254, "z": 0.5}
+        self.assertAlmostEqual(estimator.update(sensors, 0.01)["elbow_flexion"], 15, places=5)
+
     def test_single_imu_controls_shoulder_and_camera_can_supply_elbow(self) -> None:
         estimator = DualImuArmEstimator(alpha=0.0)
         level = {

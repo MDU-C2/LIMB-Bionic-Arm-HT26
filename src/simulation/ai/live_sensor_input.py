@@ -119,7 +119,7 @@ def _draw_overlay(
     )
     cv2.putText(
         canvas,
-        "Arm down + C: calibrate IMUs   Q: stop live control",
+        "L/K in simulator: align current pose   Q: stop live control",
         (14, 80),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.48,
@@ -171,6 +171,9 @@ class LiveSensorInput:
         self.latest_frame = None
         self.camera_status = "Waiting for OAK-D frame"
         self.camera_angles: dict[str, float] = {}
+        self.raw_camera_angles: dict[str, float] = {}
+        self.reference_angles: dict[str, float] | None = None
+        self.camera_origin: dict[str, float] = {}
         self.camera_time = 0.0
         self.hand_curl: float | None = None
         self.hand_time = 0.0
@@ -245,10 +248,15 @@ class LiveSensorInput:
             self.close()
             raise
 
-    def calibrate(self) -> None:
-        self.estimator.reset_calibration()
+    def calibrate(self, reference_angles: object = None) -> None:
+        if reference_angles is not None:
+            self.reference_angles = camera_control_angles(reference_angles)
+        self.camera_origin = (
+            dict(self.raw_camera_angles) if time.monotonic() - self.camera_time <= 0.5 else {}
+        )
+        self.estimator.reset_calibration(self.reference_angles)
         if self.transport == "ble" and self.reader is not None:
-            self.reader.calibrate(reset_emg=False)
+            self.reader.calibrate(reset_emg=False, reference_angles=self.reference_angles)
         self.camera_smoother.reset()
         self.imu_angles = None
         self.imu_time = 0.0
@@ -317,6 +325,13 @@ class LiveSensorInput:
                 raw_camera_angles = camera_control_angles(
                     observation.get("angles_deg") if isinstance(observation, dict) else None
                 )
+                self.raw_camera_angles = dict(raw_camera_angles)
+                if self.reference_angles is not None:
+                    for name, value in raw_camera_angles.items():
+                        origin = self.camera_origin.setdefault(name, value)
+                        raw_camera_angles[name] = (
+                            self.reference_angles.get(name, origin) + value - origin
+                        )
                 camera_dt = now - self.previous_camera_time
                 self.previous_camera_time = now
                 measured = self.camera_smoother.update(

@@ -89,9 +89,9 @@ class BleSensorReader:
         if self.thread is not None:
             self.thread.join(timeout=timeout)
 
-    def calibrate(self, reset_emg: bool = True) -> None:
+    def calibrate(self, reset_emg: bool = True, reference_angles: object = None) -> None:
         with self._lock:
-            self.imu_estimator.reset_calibration()
+            self.imu_estimator.reset_calibration(reference_angles)
             if reset_emg:
                 self.emg_estimator.reset()
                 self.activation = None

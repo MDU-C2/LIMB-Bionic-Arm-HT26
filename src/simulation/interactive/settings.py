@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 
 from ai.imu_twist import DEFAULT_TWIST_AXIS, TWIST_AXES
-from sim.joint_limits import (
-    LEFT_ARM_LIMITS_DEG,
-)
+from sim.joint_limits import LEFT_ARM_LIMITS_DEG as LEFT_ARM_LIMITS_DEG
 from sim.robot_model import (
     LEFT_GRIP_OFFSET_M,
 )
@@ -65,6 +64,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Camera hand tracking by default; select EMG when electrodes are ready",
     )
     parser.add_argument("--depth", action="store_true", help="Use OAK-D stereo depth")
+    parser.add_argument("--table-width-cm", type=float, default=60)
+    parser.add_argument("--table-depth-cm", type=float, default=60)
     args = parser.parse_args(argv)
     dynamic_mode = args.mode == "dynamic"
     if (args.telemetry_out is not None or args.torque_out is not None) and not dynamic_mode:
@@ -76,6 +77,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--baud must be positive")
     if not 0.0 <= args.camera_weight <= 1.0:
         parser.error("--camera-weight must be between 0 and 1")
+    if any(not math.isfinite(value) or value < 12 for value in (
+        args.table_width_cm, args.table_depth_cm,
+    )):
+        parser.error("Table width and depth must be finite and at least 12 cm")
     return args
 
 
@@ -88,6 +93,17 @@ SAFE_REACH_DISTANCE_M = 0.10
 # rejecting the manual F grip because the unrounded distance is just above it.
 GRASP_CAPTURE_DISTANCE_M = 0.25
 TARGET_NORMAL_MASS_KG = 0.1
+TABLE_TOP_HEIGHT_M = 0.425
+TABLE_THICKNESS_M = 0.03
+TABLE_CENTER_XY = (0.0, 0.58)
+# The torso centerline is world X=0. Keep the left shoulder outside the
+# tabletop edge, with an inward mounting angle for the pick-and-place task.
+ARM_BASE_POSITION_M = (-0.43, 0.0, 0.7)
+ARM_BASE_YAW_DEG = -40.0
+OVERVIEW_CAMERA_TARGET = (-0.10, 0.35, 0.45)
+OVERVIEW_CAMERA_DISTANCE_M = 1.35
+OVERVIEW_CAMERA_YAW_DEG = 0
+OVERVIEW_CAMERA_PITCH_DEG = -28
 HAND_GRIP_OFFSET_M = LEFT_GRIP_OFFSET_M
 MIN_GRASP_CURL = 0.45
 MAX_GRASP_CURL = 1.5
@@ -102,17 +118,11 @@ FINGER_JOINT_TOKENS = ("thumb", "index", "middle", "ring", "pinky")
 
 READY_POSE_DEG = {
     "shoulder_x": 0.0,
-    "shoulder_y": 15.0,
-    "shoulder_z": -18.0,
-    "elbow_x": 20.0,
+    "shoulder_y": 45.0,
+    "shoulder_z": -35.0,
+    "elbow_x": 45.0,
     # HT25's neutral pose and reset command both use zero wrist rotation.
     "wrist_rotation": 0.0,
 }
-LIVE_ALIGNMENT_POSE_DEG = {
-    "shoulder_x": 0.0,
-    "shoulder_y": LEFT_ARM_LIMITS_DEG["shoulder_y"].upper,
-    "shoulder_z": LEFT_ARM_LIMITS_DEG["shoulder_z"].upper,
-    "elbow_x": LEFT_ARM_LIMITS_DEG["elbow_x"].lower,
-    "wrist_rotation": LEFT_ARM_LIMITS_DEG["wrist_rotation"].lower,
-}
+LIVE_ALIGNMENT_POSE_DEG = dict(READY_POSE_DEG)
 CAMERA_MODES = ("overview", "shoulder", "hand")

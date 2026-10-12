@@ -78,6 +78,8 @@ class ProjectGui(
         self.save_simulation_torque = tk.BooleanVar(value=True)
         self.fusion_camera_weight = tk.StringVar(value="0.25")
         self.fusion_depth = tk.BooleanVar(value=False)
+        self.table_width_cm = tk.StringVar(value="60")
+        self.table_depth_cm = tk.StringVar(value="60")
         self.fusion_grip_source = tk.StringVar(value="Camera")
         self.fusion_shoulder_twist_axis = tk.StringVar(value="y")
         self.fusion_wrist_twist_axis = tk.StringVar(value="y")

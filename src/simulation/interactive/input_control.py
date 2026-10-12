@@ -7,9 +7,10 @@ import math
 
 import pybullet as p
 import pygame
-from ai.sensor_fusion import interactive_control_targets
+from ai.sensor_fusion import anatomical_reference_angles, interactive_control_targets
 
 from .arm_control import (
+    get_angles_deg,
     set_elbow,
     set_live_alignment_pose,
     set_ready_pose,
@@ -42,15 +43,18 @@ class InputMixin:
 
         try:
             self.target_position, _ = p.getBasePositionAndOrientation(self.target_body)
-            self.robot_position, _ = p.getBasePositionAndOrientation(self.robot_body)
+            self.robot_position, robot_orientation = p.getBasePositionAndOrientation(self.robot_body)
         except p.error:
             self.running = False
             return False
 
-        target_x_relative = self.target_position[0] - self.robot_position[0]
-        target_y_relative = self.target_position[1] - self.robot_position[1]
-        target_z_relative = self.target_position[2] - self.robot_position[2]
-        self.target_relative_position = (target_x_relative, target_y_relative, target_z_relative)
+        # IK and reachability use the mounted arm's frame, including its yaw.
+        inverse_position, inverse_orientation = p.invertTransform(
+            self.robot_position, robot_orientation,
+        )
+        self.target_relative_position, _ = p.multiplyTransforms(
+            inverse_position, inverse_orientation, self.target_position, (0, 0, 0, 1),
+        )
         self.hand_target_distance = math.dist(self.hand_position, self.target_position)
 
         if self.live_sensor_input is not None:
@@ -154,12 +158,12 @@ class InputMixin:
                 self.live_snapshot.camera_ready or self.live_snapshot.imu_ready
             )
             if tracking_ready:
-                self.live_sensor_input.calibrate()
+                self.live_sensor_input.calibrate(anatomical_reference_angles(get_angles_deg(self.arm)))
                 # Do not apply the snapshot captured before calibration.  Keeping
                 # the reference pose for one more frame prevents a visible jump.
                 self.live_snapshot = None
                 self.live_feedback_active = True
-                self.notice_text = "Live feedback started from the matched straight-arm pose"
+                self.notice_text = "Live feedback started from the matched tabletop pose"
                 self.notice_until_ms = pygame.time.get_ticks() + 3000
             else:
                 self.notice_text = (
@@ -168,7 +172,7 @@ class InputMixin:
                 self.notice_until_ms = pygame.time.get_ticks() + 3000
 
         if calibrate_requested:
-            self.live_sensor_input.calibrate()
+            self.live_sensor_input.calibrate(anatomical_reference_angles(get_angles_deg(self.arm)))
             self.live_snapshot = None
             self.notice_text = "Live sensors recalibrated at the current pose"
             self.notice_until_ms = pygame.time.get_ticks() + 2600
@@ -218,7 +222,7 @@ class InputMixin:
                 )
                 p.performCollisionDetection()
             self.notice_text = (
-                "Straight-arm reference ready - match it, then press L"
+                "Neutral tabletop pose ready - match it, then press L"
                 if self.live_sensor_input is not None
                 else "Arm and target reset"
             )

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -59,13 +60,20 @@ class SimulationTabsMixin:
             style="Card.TCheckbutton",
         ).grid(row=4, column=0, sticky="w", pady=(4, 0))
 
+        table_settings = ttk.Frame(interactive, style="Card.TFrame")
+        table_settings.grid(row=5, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(table_settings, text="Tabletop width × depth (cm)", style="Card.TLabel").pack(side="left")
+        ttk.Entry(table_settings, textvariable=self.table_width_cm, width=8).pack(side="left", padx=6)
+        ttk.Label(table_settings, text="×", style="Card.TLabel").pack(side="left")
+        ttk.Entry(table_settings, textvariable=self.table_depth_cm, width=8).pack(side="left", padx=6)
+
         fusion = self._card(
             tab,
             3,
             "Interactive simulator with live sensors",
             "Open the same table-and-target scene, show the camera monitor, and control "
             "the arm from the OAK-D plus a shoulder IMU over BLE, "
-            "optional wrist IMU, and camera or EMG grip. Copy the simulator's straight-arm "
+            "optional wrist IMU, and camera or EMG grip. Copy the simulator's neutral tabletop "
             "reference and press L "
             "to start feedback. Press R to pause and align again.",
         )
@@ -327,6 +335,10 @@ class SimulationTabsMixin:
             )
             return
         command = [str(self.simulation_python), "-u", str(INTERACTIVE_SIMULATION_SCRIPT)]
+        table_arguments = SimulationTabsMixin._table_arguments(self)
+        if table_arguments is None:
+            return
+        command += table_arguments
         command += ["--mode", "dynamic" if self.dynamic_simulation.get() else "kinematic"]
         if self.dynamic_simulation.get() and self.save_simulation_torque.get():
             output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S}.csv"
@@ -350,6 +362,9 @@ class SimulationTabsMixin:
         device = self.recording_ble_device.get().strip()
         if not device:
             messagebox.showerror("BLE device required", "Enter the ESP32 BLE device name first.")
+            return
+        table_arguments = SimulationTabsMixin._table_arguments(self)
+        if table_arguments is None:
             return
         try:
             weight = float(self.fusion_camera_weight.get().strip())
@@ -401,6 +416,7 @@ class SimulationTabsMixin:
             "--wrist-twist-axis",
             self.fusion_wrist_twist_axis.get(),
         ]
+        command += table_arguments
         if self.fusion_depth.get():
             command.append("--depth")
         if self.dynamic_simulation.get() and self.save_simulation_torque.get():
@@ -408,5 +424,19 @@ class SimulationTabsMixin:
             torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name
             command += ["--torque-out", str(torque_output)]
         self._start_program("Interactive live sensor control", "simulation", command)
+
+    def _table_arguments(self) -> list[str] | None:
+        values = []
+        try:
+            for attribute in ("table_width_cm", "table_depth_cm"):
+                variable = getattr(self, attribute, None)
+                value = float(variable.get()) if variable is not None else 60
+                if not math.isfinite(value) or value < 12:
+                    raise ValueError("Table dimensions must be at least 12 cm.")
+                values.append(str(value))
+        except ValueError as error:
+            messagebox.showerror("Invalid table size", str(error))
+            return None
+        return ["--table-width-cm", values[0], "--table-depth-cm", values[1]]
 
     # Recording programs

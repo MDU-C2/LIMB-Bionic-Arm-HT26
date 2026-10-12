@@ -14,6 +14,7 @@ import pybullet as p
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "simulation"))
 
 from ai.sensor_fusion import interactive_control_targets
+from interactive.settings import READY_POSE_DEG
 from sim.dynamics import ArmDynamics
 from sim.joint_limits import LEFT_ARM_LIMITS_DEG, RIGHT_ARM_LIMITS_DEG
 from sim.robot_model import (
@@ -126,7 +127,9 @@ class UrdfGeometryTests(SimulationPhysicsCase):
             grip_offset=LEFT_GRIP_OFFSET_M,
         )
         q = np.zeros(dynamics.dof)
-        q[:5] = np.radians([-18.0, 15.0, 0.0, 20.0, 0.0])
+        q[:5] = np.radians([READY_POSE_DEG[name] for name in (
+            "shoulder_z", "shoulder_y", "shoulder_x", "elbow_x", "wrist_rotation",
+        )])
         for joint, angle in zip(dynamics.joints, q, strict=False):
             p.resetJointState(robot, joint, float(angle))
         ready = np.asarray(dynamics.end_effector_state()["position_m"])
@@ -145,7 +148,7 @@ class UrdfGeometryTests(SimulationPhysicsCase):
         self.assertAlmostEqual(hand_roll_deg, 0.0, delta=0.5)
 
         # A decreases shoulder-Z and moves the mirrored arm farther left.
-        p.resetJointState(robot, dynamics.joints[0], math.radians(-23.0))
+        p.resetJointState(robot, dynamics.joints[0], math.radians(READY_POSE_DEG["shoulder_z"] - 5))
         moved = np.asarray(dynamics.end_effector_state()["position_m"])
         self.assertLess(moved[0], ready[0])
 

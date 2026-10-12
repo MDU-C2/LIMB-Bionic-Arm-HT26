@@ -226,7 +226,7 @@ def set_ready_pose(arm: LimbArm) -> None:
 
 
 def set_live_alignment_pose(arm: LimbArm) -> None:
-    """Show the straight-arm pose the operator copies before feedback starts."""
+    """Show the neutral tabletop pose the operator copies before feedback starts."""
     set_shoulder(
         arm,
         x=LIVE_ALIGNMENT_POSE_DEG["shoulder_x"],

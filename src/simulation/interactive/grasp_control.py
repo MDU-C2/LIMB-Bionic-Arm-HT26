@@ -78,8 +78,8 @@ class GraspMixin:
                     horizontal_distance,
                     relative_z,
                 )
-                world_azimuth = math.atan2(relative_y, relative_x)
-                target_shoulder_z = math.degrees(math.pi / 2.0 - world_azimuth)
+                local_azimuth = math.atan2(relative_y, relative_x)
+                target_shoulder_z = math.degrees(math.pi / 2.0 - local_azimuth)
                 while target_shoulder_z > 180:
                     target_shoulder_z -= 360
                 while target_shoulder_z <= -180:

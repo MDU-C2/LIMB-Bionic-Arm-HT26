@@ -52,8 +52,8 @@ def is_reachable(target: Sequence[float]) -> tuple[bool, str]:
     if distance < MIN_REACH_M:
         return False, f"DEAD ZONE: target {distance:.2f} m (min {MIN_REACH_M:.2f} m)"
 
-    # The exact left-arm mirror points along world +Y at zero.  Negative
-    # shoulder-Z moves it into the left (negative-X) half of the table.
+    # Targets are in the mounted shoulder's frame. The mirrored arm points
+    # along local +Y at zero; negative shoulder-Z turns toward local -X.
     azimuth = 90.0 - math.degrees(math.atan2(y, x))
     azimuth = (azimuth + 180.0) % 360.0 - 180.0
     azimuth_limit = LEFT_ARM_LIMITS_DEG["shoulder_z"]

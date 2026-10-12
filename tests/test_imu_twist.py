@@ -44,6 +44,17 @@ class ImuTwistTests(unittest.TestCase):
         self.assertAlmostEqual(targets["shoulder_x"], 30.0)
         self.assertAlmostEqual(targets["wrist_rotation"], 0.0)
 
+    def test_shared_rotation_at_calibrated_tabletop_bend_keeps_wrist_reference(self):
+        estimator = DualImuArmEstimator(alpha=0)
+        estimator.reset_calibration({"elbow_flexion": 45, "wrist_rotation": 20})
+        sensors = resting_sensors()
+        calibrate(estimator, sensors)
+        sensors["shoulder"]["gyro_dps"]["y"] = 30
+        sensors["wrist"]["gyro_dps"]["y"] = 30 * math.cos(math.pi / 4)
+        for _ in range(10):
+            angles = estimator.update(sensors, 0.1)
+        self.assertAlmostEqual(angles["wrist_rotation"], 20)
+
     def test_forearm_rotates_in_both_directions_without_turning_upper_arm(self):
         estimator = DualImuArmEstimator(alpha=0)
         sensors = resting_sensors()

@@ -32,12 +32,14 @@ class ImuTwistEstimator:
         self.baseline_s = max(0.0, float(baseline_s))
         self.reset()
 
-    def reset(self) -> None:
+    def reset(self, shoulder_angle: float = 0.0, wrist_angle: float = 0.0) -> None:
         self.bias: dict[str, tuple[float, float, float]] = {}
         self.baseline_time: dict[str, float] = {}
         self.baseline_sum: dict[str, tuple[float, float, float]] = {}
-        self.shoulder_angle = 0.0
-        self.wrist_angle = 0.0
+        self.shoulder_home = max(-60.0, min(60.0, shoulder_angle))
+        self.wrist_home = max(0.0, min(140.0, wrist_angle))
+        self.shoulder_angle = self.shoulder_home
+        self.wrist_angle = self.wrist_home
         self.dual_ready = False
         self.camera_aligned = False
 
@@ -67,7 +69,7 @@ class ImuTwistEstimator:
                 self.baseline_time.pop(role, None)
                 self.baseline_sum.pop(role, None)
                 if role == "shoulder":
-                    self.shoulder_angle = 0.0
+                    self.shoulder_angle = self.shoulder_home
                     self.camera_aligned = False
                 continue
             if role not in self.bias:
@@ -113,7 +115,7 @@ class ImuTwistEstimator:
                 # Clamp the stored command too, so reversing at a stop works immediately.
                 self.wrist_angle = max(0.0, min(140.0, self.wrist_angle + relative_rate * dt))
             else:
-                self.wrist_angle = 0.0
+                self.wrist_angle = self.wrist_home
             result["wrist_rotation"] = self.wrist_angle
         self.dual_ready = dual_ready
         return result

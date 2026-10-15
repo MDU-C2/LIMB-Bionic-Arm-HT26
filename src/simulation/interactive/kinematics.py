@@ -81,11 +81,7 @@ def calculate_ik_angles(
     horizontal_distance: float,
     height_difference: float,
 ) -> tuple[float, float]:
-    """Return shoulder elevation and elbow flexion in degrees.
-
-    This preserves the V-shaped two-link solution used by the final LIMB25
-    simulator. The target distance is clamped to the model's reachable shell.
-    """
+    """Find shoulder and elbow angles within the arm's reach."""
     horizontal_distance = float(horizontal_distance)
     height_difference = float(height_difference)
     if not all(math.isfinite(value) for value in (horizontal_distance, height_difference)):
@@ -106,9 +102,7 @@ def calculate_ik_angles(
     gamma = math.degrees(math.acos(max(-1.0, min(1.0, gamma_cosine))))
     target_slope = math.degrees(math.atan2(height_difference, horizontal_distance))
 
-    # Preserve the proven task-scene solution. The left URDF exposes physical
-    # elbow flexion as a positive angle, so only the elbow sign differs from
-    # the former right-arm command.
+    # Elbow flexion is positive in the left-arm model.
     shoulder_elevation = alpha - target_slope
     elbow_flexion = 180.0 - gamma
     return shoulder_elevation, elbow_flexion

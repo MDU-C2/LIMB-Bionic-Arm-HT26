@@ -161,8 +161,11 @@ class ProcessManagerMixin:
                         and managed.kind == "recording"
                         and str(line).startswith("[CAPTURE] ")
                     ):
+                        cue = str(line).removeprefix("[CAPTURE] ").strip()
+                        if hasattr(self, "recording_grip_status"):
+                            self.recording_grip_status.set(cue)
                         self._set_status(
-                            f"{name}: {str(line).removeprefix('[CAPTURE] ').strip()}",
+                            f"{name}: {cue}",
                             "running",
                         )
                     continue

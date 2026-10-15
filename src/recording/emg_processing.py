@@ -1,5 +1,5 @@
 # Johan Sandred, Majd
-"""Process recorded EMG with the LIMB-HT25 filters and window features."""
+"""Filter recorded EMG and calculate RMS and mean absolute value."""
 
 from __future__ import annotations
 
@@ -55,14 +55,14 @@ def preprocess_emg(
     highcut_hz: float = 450.0,
     notch_hz: float = 50.0,
 ) -> np.ndarray:
-    """Remove DC, then apply HT25's fourth-order band-pass and Q=30 notch."""
+    """Remove the offset, then apply a band-pass and mains notch."""
     values = np.asarray(samples, dtype=np.float64)
     if values.ndim != 1 or not np.all(np.isfinite(values)):
         raise ValueError("EMG must be a finite, one-dimensional signal")
     if not np.isfinite(rate_hz) or not 0 < lowcut_hz < highcut_hz < rate_hz / 2:
         raise ValueError(
             f"Need 0 < lowcut < highcut < Nyquist ({rate_hz / 2:g} Hz). "
-            "Use full-rate BLE data for the HT25 20–450 Hz band, or choose --highcut explicitly."
+            "Use full-rate BLE data for the 20–450 Hz band, or choose --highcut explicitly."
         )
     if not 0 < notch_hz < rate_hz / 2:
         raise ValueError("The notch frequency must be below Nyquist")
@@ -83,7 +83,7 @@ def window_features(
     window_ms: float = 200.0,
     overlap_ms: float = 50.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Calculate HT25's RMS and mean absolute value for complete windows."""
+    """Calculate RMS and mean absolute value for complete windows."""
     values = np.asarray(filtered, dtype=np.float64)
     if values.ndim != 1 or not np.all(np.isfinite(values)):
         raise ValueError("Features need a finite, one-dimensional signal")
@@ -111,8 +111,21 @@ def main() -> int:
     parser.add_argument("--notch", type=float, default=50.0)
     parser.add_argument("--window-ms", type=float, default=200.0)
     parser.add_argument("--overlap-ms", type=float, default=50.0)
+    parser.add_argument("--labels", type=Path, help="Rebuild grip features from edited trial labels.")
     args = parser.parse_args()
     try:
+        if args.labels is not None:
+            from emg_trials import export_features
+
+            summary = export_features(args.file, args.labels)
+            metadata_file = args.file.with_name("meta.json")
+            if metadata_file.is_file():
+                metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+                if isinstance(metadata.get("grip_trial"), dict):
+                    metadata["grip_trial"].update(summary)
+                    metadata_file.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+            print(f"Saved {summary['features']}: {summary['windows_by_phase']}")
+            return 0
         times, raw = load_emg(args.file)
         rate_hz = sample_rate(times)
         filtered = preprocess_emg(raw, rate_hz, args.lowcut, args.highcut, args.notch)

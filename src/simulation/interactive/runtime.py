@@ -1,5 +1,5 @@
 # Majd, Christian
-"""Interactive task lifecycle and frame orchestration."""
+"""Start the scene, update each frame and close the simulator."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 # Majd, Christian
-"""Recording tabs and multi-source recording orchestration for AURORA."""
+"""Set up recording sessions and start the selected sources."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ RECORDING_MODULE_DIR = Path(__file__).resolve().parents[1] / "recording"
 if str(RECORDING_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(RECORDING_MODULE_DIR))
 
+from emg_trials import GripTrial
 from imu_protocol import ImuStreamDecoder
 from project_support import (
     DEFAULT_RECORDINGS_DIRECTORY,
@@ -57,6 +58,9 @@ class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashbo
             for name, _label in BLE_SENSOR_OPTIONS
         }
         self.recording_ble_dataset = tk.BooleanVar(value=False)
+        self.recording_grip_trial = tk.BooleanVar(value=False)
+        self.recording_grip_repeats = tk.StringVar(value="5")
+        self.recording_grip_status = tk.StringVar(value="Follow the grip cues here when recording starts.")
         self.recording_movement_label = tk.StringVar(value="1")
         self.recording_serial_port = tk.StringVar()
         self.recording_serial_baud = tk.StringVar(value="115200")
@@ -141,6 +145,15 @@ class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashbo
             duration = float(self.recording_duration.get().strip())
             if duration < 0:
                 raise ValueError("Duration cannot be negative.")
+            if self.recording_grip_trial.get():
+                if "record_ble_sensors.py" not in filenames or "emg" not in self._selected_ble_sensors():
+                    raise ValueError("Select Bluetooth and EMG for a grip trial.")
+                repeats = int(self.recording_grip_repeats.get())
+                if self.recording_ble_dataset.get() or not 1 <= repeats <= 20:
+                    raise ValueError("Choose 1 to 20 grip repeats and leave movement labels off.")
+                minimum_duration = GripTrial(repeats).duration + 3
+                if duration and duration < minimum_duration:
+                    raise ValueError(f"Use duration 0 or at least {minimum_duration:g} seconds.")
             baud = int(self.recording_serial_baud.get().strip() or "115200")
             if baud <= 0:
                 raise ValueError("Baud must be positive.")
@@ -230,6 +243,8 @@ class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashbo
                 camera_arguments,
                 dataset_label,
                 self._selected_ble_sensors(),
+                self.recording_grip_trial.get(),
+                int(self.recording_grip_repeats.get()) if self.recording_grip_trial.get() else 5,
             )
             display_name = next(
                 title
@@ -277,6 +292,8 @@ class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashbo
                 arguments,
                 dataset_label,
                 self._selected_ble_sensors(),
+                self.recording_grip_trial.get(),
+                int(self.recording_grip_repeats.get()) if self.recording_grip_trial.get() else 5,
             )
         elif program.name == "record_oak_pose.py":
             arguments = ["--auto-start", *arguments]

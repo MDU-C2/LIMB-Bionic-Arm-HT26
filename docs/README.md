@@ -1,19 +1,12 @@
-# Documentation
+# Guides
 
-The current guides are:
-
-- [Recording guide](RECORDING_GUIDE.md): connect BLE, check live graphs,
-  collect a trial and review the saved files.
-- [Sensor data](SENSOR_DATA.md): wire and flash the dual IMUs, open their
-  monitor, record with OAK-D, and run live fusion.
-- [Simulation](SIMULATION.md): run and control the simulated arm.
-- [Hardware validation](HARDWARE_VALIDATION.md): connected BLE, camera and live
-  simulation results, remaining checks, and rollback files.
-- [Joint limits](JOINT_LIMITS.md): source-backed ranges and coordinate
-  conventions for the mirrored left arm.
-- [Simulation dynamics](SIMULATION_DYNAMICS.md): details about the current
-  physics model.
-- [Motor notes](MOTORS.md): motor information inherited by the simulation.
-- [Resources](resources.md): useful project and library links.
-
-Hardware documentation will be added when the physical files are ready.
+- [Setup](../scripts/README.md): install and start the app.
+- [Recording](RECORDING_GUIDE.md): check signals, record a session and run a grip trial.
+- [Simulation](SIMULATION.md): arm controls and live input.
+- [Sensors](SENSOR_DATA.md): wiring, sample formats and calibration.
+- [Bluetooth timing](BLUETOOTH_SYNC.md): align sensor data with camera frames.
+- [Joint limits](JOINT_LIMITS.md): actuator ranges and angle mapping.
+- [Dynamics](SIMULATION_DYNAMICS.md): the physics model.
+- [Motors](MOTORS.md): motor settings.
+- [Hardware checks](HARDWARE_VALIDATION.md): what has been tested and what remains.
+- [EMG signal check](EMG_SIGNAL_CHECK.md): the recorded rest and grip comparison.

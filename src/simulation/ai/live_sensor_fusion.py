@@ -1,10 +1,5 @@
 # Majd
-"""Compatibility launcher for interactive camera and one/two-IMU control.
-
-The live controller now uses the full interactive task simulator. This small
-entry point keeps older commands working while avoiding a second arm scene and
-a duplicate sensor loop.
-"""
+"""Start live control using the interactive simulator."""
 
 from __future__ import annotations
 

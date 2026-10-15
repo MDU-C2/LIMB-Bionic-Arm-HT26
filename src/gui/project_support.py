@@ -1,9 +1,5 @@
 # Majd, Christian
-"""Repository configuration and discovery helpers for the AURORA GUI.
-
-Path, environment and tool discovery live here so they can be used without
-opening a Tkinter window.
-"""
+"""Shared paths, settings and tool checks for the app."""
 
 from __future__ import annotations
 
@@ -41,7 +37,7 @@ POSE_RECORDING_SCRIPT = REPOSITORY_ROOT / "src" / "simulation" / "ai" / "pose_re
 MOVEMENT_RECOGNITION_SCRIPT = (
     REPOSITORY_ROOT / "src" / "simulation" / "ai" / "movement_recognition.py"
 )
-MOVEMENT_MODEL = REPOSITORY_ROOT / "src" / "simulation" / "ai" / "models" / "movement_gru.onnx"
+MOVEMENT_MODEL = REPOSITORY_ROOT / "artifacts" / "models" / "movement_gru.onnx"
 DEFAULT_RECORDINGS_DIRECTORY = Path("outputs/recordings")
 DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/references")
 DEFAULT_SIMULATION_OUTPUT_DIRECTORY = Path("outputs/simulation")
@@ -77,8 +73,7 @@ RECORDER_DETAILS = {
     ),
 }
 
-# Shared visual language.  Keeping the palette beside other application
-# configuration prevents individual tabs from inventing one-off styles.
+# Keep the colours the same across tabs.
 BACKGROUND = "#f3f5f9"
 CARD = "#ffffff"
 INK = "#172033"

@@ -1,10 +1,5 @@
 # Christian, Majd
-"""One/two-IMU orientation and camera correction for live arm control.
-
-Following LIMB-HT25, mounted Y/Z gravity tilt drives shoulder elevation and gyro Z
-drives the shoulder base. Elbow flexion is the forearm tilt relative to the upper arm.
-Axial gyros add upper-arm and relative forearm twist; camera corrects upper-arm drift.
-"""
+"""Combine mounted IMU readings with camera angles for live arm control."""
 
 from __future__ import annotations
 
@@ -105,7 +100,7 @@ class DualImuArmEstimator:
 
     @staticmethod
     def _mounted_tilt(accel: tuple[float, float, float]) -> float:
-        """Return HT25's installed-sensor Y/Z tilt in degrees."""
+        """Calculate tilt from the mounted sensor's Y and Z axes."""
         _ax, ay, az = accel
         return math.degrees(math.atan2(ay, az))
 

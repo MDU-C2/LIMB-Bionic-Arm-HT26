@@ -1,7 +1,4 @@
 # Hardware
 
-The physical hardware files are not included yet. This folder will be filled
-after the arm, wiring, CAD, and electronics have been checked.
-
-The models in the simulation are software assets and should not be used as
-final measurements for the physical arm.
+CAD, wiring and electronics files will go here after they have been checked.
+The arm models in the simulator are kept under `src/simulation/sim/arm/`.

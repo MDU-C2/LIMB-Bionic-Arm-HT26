@@ -1,10 +1,7 @@
 # Data
 
-`movement/training/` contains 100 JSON movement recordings from five
-participants. The files are used by the code in `src/ml/`.
+`movement/training/` contains 100 movement recordings from five participants.
+The training code in `src/ml/` uses these JSON files.
 
-New recordings made in the GUI are stored below `outputs/recordings/`, not in
-this folder.
-
-The JSON data contains body and hand landmarks. Do not add participant names or
-other personal information to these files.
+New recordings go in `outputs/recordings/`. Keep subject IDs instead of names
+in recording files.

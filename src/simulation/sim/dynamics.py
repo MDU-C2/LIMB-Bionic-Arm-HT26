@@ -1,10 +1,5 @@
 # Majd
-"""Reusable PyBullet kinematics and rigid-body dynamics for a LIMB arm.
-
-The five arm joints are a subset of the full model, which also has articulated
-finger joints. Arrays here always follow PyBullet's full movable-joint order.
-The optional payload is a point mass at the grip center, not a CAD model.
-"""
+"""Calculate arm motion and torque. Arrays include all movable joints and fingers."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 # Johan Sandred, Majd
-"""Read live BLE sensors in a background loop, following LIMB-HT25's reader."""
+"""Read BLE sensors in the background and share the latest values."""
 
 from __future__ import annotations
 

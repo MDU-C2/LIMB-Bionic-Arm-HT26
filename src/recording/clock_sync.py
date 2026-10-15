@@ -1,12 +1,5 @@
 # Christian
-"""Map independent BLE device clocks onto one host monotonic timeline.
-
-The exchange follows the same four timestamps used by NTP: host transmit ``t0``,
-device receive/transmit ``t1``/``t2``, and host receive ``t3``.  Repeating the
-exchange lets the mapper estimate both offset and oscillator drift.  Every
-sensor node gets its own mapper, while all mapped values share the host's
-``time.monotonic_ns()`` domain and can therefore be joined with camera data.
-"""
+"""Put BLE sample times on the PC clock so they can be matched to camera frames."""
 
 from __future__ import annotations
 

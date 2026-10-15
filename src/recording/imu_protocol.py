@@ -1,11 +1,5 @@
 # Majd, Christian
-"""Normalize the serial IMU packets used by AURORA and LIMB-HT25.
-
-The current firmware names the physical sensor roles explicitly.  The legacy
-LIMB-HT25 dual reader used ``imu1`` and ``imu2`` and Adafruit SI units, so this
-module accepts both formats while exposing one stable representation to the GUI
-and simulation.
-"""
+"""Read current and older IMU packets in one format."""
 
 from __future__ import annotations
 

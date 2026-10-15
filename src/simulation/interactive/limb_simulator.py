@@ -1,5 +1,5 @@
 # Majd, Christian
-"""Run the interactive LIMB task simulator migrated from LIMB-HT25."""
+"""Run the interactive arm simulator."""
 
 from __future__ import annotations
 

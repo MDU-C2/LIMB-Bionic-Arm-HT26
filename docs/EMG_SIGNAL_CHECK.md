@@ -19,11 +19,8 @@ The requested grip signal rose only about 8% above rest. These recordings do not
 establish a reliable grip-related contraction. Large raw ADC swings were mostly
 slow drift, so treating their amplitude as grip would also respond to drift.
 
-The ADC source reads GPIO0 directly; it does not rectify the samples. The
-legacy [KiCad schematic](https://github.com/MDU-C2/LIMB-HT25/blob/main/designs/EMG-KiCad/EMG-KiCad.kicad_sch)
-contains an AD623 instrumentation amplifier, op-amp stages, a 10 kΩ trimmer and
-a Vout label. This supports raw analogue processing; code cannot establish the
-current electrode contact or physical gain setting.
+The ADC reads GPIO0 directly and does not rectify the samples. Electrode
+contact and the amplifier gain still need checking on the connected setup.
 
 Software changes:
 

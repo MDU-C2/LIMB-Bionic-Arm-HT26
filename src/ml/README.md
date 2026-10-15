@@ -1,24 +1,24 @@
-# Movement model
+# Movement training
 
-This folder contains the movement-data capture and GRU training code. It was
-moved from the Applied Artificial Intelligence student project.
+The training data is in `data/movement/training/`.
+Run these commands from the project environment.
 
-The current dataset is in `data/movement/training/`.
-
-## Capture a movement
+Capture a movement:
 
 ```powershell
-micromamba run -n aurora-simulation python src/ml/capture_movement.py --user-id 6 --side right
+python src/ml/capture_movement.py --user-id 6 --side right
 ```
 
-Press `Space` to start and press it again to save.
+Press Space to start and press it again to save.
 
-## Train the model
+Train the GRU model:
 
 ```powershell
-micromamba run -n aurora-simulation python -m pip install -r src/ml/requirements.txt
-micromamba run -n aurora-simulation python src/ml/train_gru.py
+python src/ml/train_gru.py
 ```
 
-Training output is written below `artifacts/models/`. The model and dataset are
-experimental and are not a medical or identification result.
+Training saves the best model and its ONNX export in `artifacts/models/`.
+The app loads `movement_gru.onnx` from that folder.
+
+For labelled EMG trials, use **Guided grip trial** under Recording.
+These recordings are separate from the movement dataset.

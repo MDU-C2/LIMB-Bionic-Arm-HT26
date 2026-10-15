@@ -13,7 +13,7 @@ from imu_protocol import ImuStreamDecoder, extract_imus
 
 
 class SerialPacketReader:
-    """Keep only the newest ESP32 packet, following LIMB-HT25's reader."""
+    """Keep the newest ESP32 packet for live control."""
 
     def __init__(self, serial_module, port: str, baud: int) -> None:
         self.serial_module = serial_module

@@ -64,6 +64,32 @@ after L. Follow Simulation's mounting checks; moving loose boards is a reception
 test, not a check of anatomical accuracy. Mounting-axis selections do not alter
 the raw recorded coordinates.
 
+## Guided grip trial
+
+Select **Guided grip trial** under Recording and choose the number of repeats.
+Keep Bluetooth and EMG selected. Set duration to 0 and start recording.
+Follow the cues on the Recording page: relax, close your hand, hold, then open it.
+Five repeats take about 38 seconds after the countdown. The BLE recorder stops
+when the trial finishes. If the camera is also running with duration 0, stop it
+after the grip trial.
+
+The BLE folder keeps the raw samples and adds:
+
+- `emg_trial.json`: phase labels and cue times, in seconds from the trial start.
+- `emg_trial_features.csv`: RMS and mean absolute value for each labelled window.
+- `grip_trial` in `meta.json`: phase counts, rest/hold levels and their ratio.
+
+The labels follow the cues. Check the signal and correct the times if your
+movement started later. Edit `start_s` and `end_s` in `emg_trial.json`, then run:
+
+```powershell
+python src/recording/emg_processing.py --file outputs/recordings/SESSION/emg.csv --labels outputs/recordings/SESSION/emg_trial.json
+```
+
+Features keep their ADC scale. Windows crossing a phase boundary are left out.
+Missing or irregular samples stop feature export; the raw recording is kept.
+Use whole recording sessions for training and separate sessions for testing.
+
 ## 4. Check every saved session
 
 Open Recordings, refresh the list, or use Open output folder. A combined trial

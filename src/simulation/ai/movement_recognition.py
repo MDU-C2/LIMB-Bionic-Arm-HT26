@@ -1,5 +1,5 @@
 # Majd
-"""Recognize a recorded movement profile with the migrated GRU model."""
+"""Compare recorded movements using the GRU model."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 
 AI_DIR = Path(__file__).resolve().parent
-DEFAULT_MODEL = AI_DIR / "models" / "movement_gru.onnx"
+DEFAULT_MODEL = AI_DIR.parents[2] / "artifacts" / "models" / "movement_gru.onnx"
 SEQUENCE_LENGTH = 60
 FEATURE_COUNT = 69
 UNKNOWN_THRESHOLD = 0.51

@@ -1,16 +1,10 @@
 # Source code
 
-Start the current software through the GUI:
+Run the app with `Start.bat` from the repository root.
 
-```powershell
-micromamba run -n aurora-simulation python src/gui/app.py
-```
+- `gui/`: the app and its controls.
+- `recording/`: BLE, camera and USB recording, signal processing and grip trials.
+- `simulation/`: the arm, movement playback and live sensor input.
+- `ml/`: movement capture and model training.
 
-| Folder | Contents |
-| --- | --- |
-| `gui/` | Desktop interface and program control. |
-| `recording/` | Sensor and camera previews and recordings. |
-| `simulation/` | Arm simulation, trajectories, and Motion AI. |
-| `ml/` | Movement-data capture and model training. |
-
-Generated recordings and simulation output belong in `outputs/`, not `src/`.
+Recordings go in `outputs/recordings/`. Models go in `artifacts/models/`.

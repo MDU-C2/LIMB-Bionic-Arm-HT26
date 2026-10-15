@@ -37,6 +37,16 @@ from recording_tab import DEFAULT_BATCH_SOURCES, DEFAULT_BLE_SENSORS, batch_argu
 
 
 class RecordingBatchTests(unittest.TestCase):
+    def test_grip_options_only_reach_the_ble_recorder(self):
+        self.assertEqual(
+            batch_arguments("record_ble_sensors.py", [], "", ("emg",), True, 3),
+            ["--sensors", "emg", "--grip-trial", "--grip-repeats", "3"],
+        )
+        self.assertEqual(batch_arguments("record_oak_pose.py", ["--depth"], "", (), True, 3),
+                         ["--auto-start", "--depth"])
+        with self.assertRaises(ValueError):
+            batch_arguments("record_ble_sensors.py", [], "1", ("emg",), True, 3)
+
     def test_recorder_releases_ble_preview_before_opening_the_connection(self):
         order = []
         manager = types.SimpleNamespace(

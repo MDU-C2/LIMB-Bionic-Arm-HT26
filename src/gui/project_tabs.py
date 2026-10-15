@@ -41,7 +41,7 @@ class ProjectTabsMixin:
         self._heading(
             tab,
             "Build and flash the ESP32",
-            "The firmware follows the ESP-IDF layout used by LIMB-HT25.",
+            "Build the sensor firmware, then flash it over USB.",
         )
         card = self._card(
             tab,

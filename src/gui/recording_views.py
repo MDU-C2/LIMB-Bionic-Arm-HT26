@@ -27,17 +27,15 @@ class RecordingViewsMixin:
         tab.columnconfigure(0, weight=1)
         self._heading(
             tab,
-            "Record a synchronized session",
-            "Choose one or more sources. All selected programs launch together and share "
-            "the same session, subject, and trial identifiers.",
+            "Record a session",
+            "Choose the sensors and camera you need. They use the same subject and trial details.",
         )
 
         source_card = self._card(
             tab,
             2,
             "Sources",
-            "The Bluetooth sensors and OAK-D camera are selected by default. "
-            "Camera recording starts automatically with the batch.",
+            "Bluetooth and the camera are selected by default.",
         )
         self.recording_source_buttons: dict[str, ttk.Checkbutton] = {}
         for row, (filename, title, description) in enumerate(MAINTAINED_SOURCES, start=2):
@@ -61,7 +59,7 @@ class RecordingViewsMixin:
             tab,
             3,
             "Session settings",
-            "Every source receives the same metadata and writes a separate folder under Output.",
+            "Each source saves its own folder under Output.",
         )
 
         session_row = ttk.Frame(settings, style="Card.TFrame")
@@ -160,6 +158,20 @@ class RecordingViewsMixin:
             sensor_choices, text="Live BLE graphs", command=self.open_ble_monitor
         ).grid(row=0, column=2, padx=(0, 12))
 
+        grip_row = ttk.Frame(ble_row, style="Card.TFrame")
+        grip_row.grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ttk.Checkbutton(
+            grip_row, text="Guided grip trial", variable=self.recording_grip_trial,
+            style="Card.TCheckbutton",
+        ).pack(side="left")
+        ttk.Label(grip_row, text="Repeats", style="Card.TLabel").pack(side="left", padx=(16, 6))
+        ttk.Spinbox(grip_row, from_=1, to=20, width=4,
+                    textvariable=self.recording_grip_repeats).pack(side="left")
+        ttk.Label(
+            ble_row, textvariable=self.recording_grip_status, style="Card.TLabel",
+            wraplength=800,
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
         option_row = ttk.Frame(settings, style="Card.TFrame")
         option_row.grid(row=5, column=0, sticky="ew", pady=(0, 10))
         option_row.columnconfigure(0, weight=1)
@@ -208,8 +220,7 @@ class RecordingViewsMixin:
             tab,
             4,
             "Advanced single recorder",
-            "Run a discovered training or experimental recorder separately. Optional arguments "
-            "are passed to this program exactly as entered.",
+            "Run one recording tool with extra options.",
         )
         program_row = ttk.Frame(advanced, style="Card.TFrame")
         program_row.grid(row=2, column=0, sticky="ew")

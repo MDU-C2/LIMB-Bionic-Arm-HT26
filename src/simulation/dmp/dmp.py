@@ -1,10 +1,5 @@
 # Majd
-"""Dynamic Movement Primitive fitting and rollout algorithms.
-
-The trajectory simulator uses the simple Euler rollout. Curvature coupling and
-RK4 remain available for later motion experiments, but their additional model
-data is only fitted when explicitly requested.
-"""
+"""Fit and replay movement trajectories using dynamic movement primitives."""
 
 from __future__ import annotations
 
@@ -231,7 +226,6 @@ def fit(
     centers, widths = _centers_and_widths(alpha_canonical, n_basis_functions)
     phi = _rbf_normalized(phase, centers, widths) * phase[:, None]
 
-    # These values reproduce the migrated LIMB25 fitting behavior.
     ridge_lambda = 1e-6
     diff_g_q0_eps = 0.02  # About 1.15 degrees when angles are in radians.
     savgol_window_length = 11

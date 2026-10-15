@@ -39,13 +39,19 @@ def batch_arguments(
     camera_arguments: list[str],
     dataset_label: str = "",
     ble_sensors: tuple[str, ...] = (),
+    grip_trial: bool = False,
+    grip_repeats: int = 5,
 ) -> list[str]:
-    """Return source-specific arguments without leaking options to other recorders."""
+    """Build arguments for the selected recorder."""
     if filename == "record_oak_pose.py":
         return ["--auto-start", *camera_arguments]
     if filename == "record_ble_sensors.py":
+        if grip_trial and (dataset_label or not 1 <= grip_repeats <= 20):
+            raise ValueError("Choose 1 to 20 grip repeats and leave movement labels off.")
         arguments = ["--sensors", *ble_sensors] if ble_sensors else []
         if dataset_label:
             arguments.extend(("--dataset-label", dataset_label))
+        if grip_trial:
+            arguments.extend(("--grip-trial", "--grip-repeats", str(grip_repeats)))
         return arguments
     return []

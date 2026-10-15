@@ -11,7 +11,7 @@ import numpy as np
 
 from .dmp import fit, rollout_simple
 
-# --- LIMB25 filename compatibility -----------------------------------------
+# Keep older trajectory filenames readable.
 
 
 def _prefix(trial_dir: Path) -> str:
@@ -122,7 +122,7 @@ def load_dmp_trajectory(
 
     q_demo = load_angles_demo(trial_dir, source=rollout_source)
     dt = 1.0 / (len(q_demo) - 1)
-    # These parameters reproduce Oscar Ågren's one-second LIMB25 rollout.
+    # Fit a one-second trajectory.
     model = fit(
         [q_demo],
         tau=1.0,

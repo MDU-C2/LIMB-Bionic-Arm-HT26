@@ -1,31 +1,26 @@
-# ESP32-C3 EMG and IMU firmware
+# ESP32-C3 sensors
 
-This is the single maintained firmware target. It combines the 4 kHz
-continuous ADC and LSM6DSO32 implementation from the Jonas-AURORA snapshot
-with the existing AURORA single-IMU fallback and BLE time-sync service.
-The IMU driver is credited to Cornelia, with Jonas's adaptation, in its source
-headers.
+The firmware records EMG at 4 kHz and reads up to two LSM6DSO32 IMUs at about
+100 Hz. Data uses BLE by default. The device name is `LIMBServer`.
+USB is used for power, flashing and diagnostics.
 
-The default configuration in [`include/config.h`](include/config.h) acquires
-EMG, IMU1 (`0x6B`) and IMU2 (`0x6A`). It sends all acquired EMG samples over
-BLE in blocks and reads available IMUs at about 100 Hz. Sensor output defaults
-to BLE only. If USB output is enabled for diagnostics, it prints every tenth
-EMG sample (400 Hz). All samples use the ESP32 monotonic clock;
-the BLE time-sync characteristic maps that clock onto the host clock used by
-the camera recorder. USB IMU values are mg and mdps. The BLE recorder converts
-them to g and dps. The device advertises as `LIMBServer`.
+## Wiring
 
-Select `SENSOR_MODE_EMG`, `SENSOR_MODE_IMU`, or `SENSOR_MODE_EMG_IMU`, and
-`TRANSPORT_USB`, `TRANSPORT_BLE`, or `TRANSPORT_BOTH` in `config.h`. The default
-is both sensor types and BLE transport. BLE packets contain a mask for whichever
-IMUs are connected, so one IMU can be used alone. An absent IMU is probed
-again during acquisition. The firmware tries SDA/SCL `2/1` first, then `4/5`
-and `8/5`. EMG uses GPIO0 / ADC1 channel 0. Both IMUs share the bus and must
-have distinct SA0/SDO addresses.
+- EMG output: GPIO0 / ADC1 channel 0.
+- IMU bus: SDA GPIO2 and SCL GPIO1.
+- Shoulder IMU: address `0x6B`; wrist IMU: `0x6A`.
+- Both IMUs share the bus and need different SA0/SDO settings.
+
+The bus also tries SDA/SCL 4/5 and 8/5. Missing IMUs are checked again while
+running. Sensor and transport options are in `include/config.h`.
+
+BLE sends all acquired EMG samples and uses the ESP32 clock for sample times.
+Clock synchronization puts those times on the same clock as the camera.
+USB streaming, when enabled, sends every tenth EMG sample at 400 Hz.
 
 ## Build and flash
 
-Use the GUI **Firmware** tab or run from this directory:
+Use the app's Firmware tab, or run these commands from this folder:
 
 ```powershell
 platformio run
@@ -33,8 +28,7 @@ platformio run -t upload --upload-port COM5
 platformio device monitor --port COM5
 ```
 
-The checked-in PlatformIO environment uses ESP-IDF 5.4 through
-`espressif32@6.10.0`. An activated native ESP-IDF 5.x installation also works:
+For a native ESP-IDF environment:
 
 ```powershell
 idf.py set-target esp32c3
@@ -42,26 +36,14 @@ idf.py build
 idf.py -p COM5 flash monitor
 ```
 
-The GUI stages this project in a path without spaces before running either
-toolchain. `Setup` builds this target and prepares the PlatformIO toolchain.
+PlatformIO uses `espressif32@6.10.0` with ESP-IDF 5.4. The app builds from a
+working folder without spaces because the toolchain needs it.
 
-## Record and plot
+## Recording
 
-For simultaneous camera and BLE sensors, use the GUI **Recording** tab's default
-OAK-D and Bluetooth sources, with both IMU and EMG selected. The BLE recorder
-writes `emg.csv`, `imu.csv`, `packets.jsonl`, and `meta.json`. Process the saved
-EMG and plot the result with:
+Select Bluetooth under Recording in the app. Use the guided grip option to
+collect labelled rest, grip, hold and release phases. Raw samples and clock
+information are saved with every session.
 
-```powershell
-python src/recording/emg_processing.py --file outputs/recordings/SESSION/emg.csv
-python src/recording/plot_sensor_recording.py --file outputs/recordings/SESSION/emg.filtered.csv
-```
-
-USB is still used for flashing and console diagnostics.
-The BLE recorder preserves every received packet and writes individual sample
-times. A connected 30-second trial delivered 120,000 EMG samples and both IMUs
-at about 100 Hz without detected notification gaps. The link configuration in
-`main/ble_connection.c` restores HT25's data-length, PHY and interval requests;
-NimBLE notification logs are suppressed to avoid unnecessary USB output.
-See [hardware validation](../../docs/HARDWARE_VALIDATION.md) for evidence,
-rollback files and the remaining signal-quality and camera-alignment checks.
+See the [recording guide](../../docs/RECORDING_GUIDE.md) for the saved files
+and signal checks.

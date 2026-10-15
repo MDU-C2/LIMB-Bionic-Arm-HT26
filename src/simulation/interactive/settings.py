@@ -121,7 +121,7 @@ READY_POSE_DEG = {
     "shoulder_y": 45.0,
     "shoulder_z": -35.0,
     "elbow_x": 45.0,
-    # HT25's neutral pose and reset command both use zero wrist rotation.
+    # Keep the wrist neutral on reset.
     "wrist_rotation": 0.0,
 }
 LIVE_ALIGNMENT_POSE_DEG = dict(READY_POSE_DEG)

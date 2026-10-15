@@ -27,10 +27,8 @@ class JointLimit:
         return self.speed_positive if direction >= 0 else self.speed_negative
 
 
-# Nominal actuator commands configured by the final LIMB-HT25 motor firmware.
-# These are robot limits, not generic human anatomical ranges.  The shoulder
-# firmware explicitly notes that its nominal 90 degree up/down range only
-# reaches approximately 75 degrees on the assembled mechanism.
+# The firmware accepts 90 degrees of shoulder travel. The assembled arm was
+# reported to reach about 75 degrees, which is the limit used by the simulator.
 FIRMWARE_COMMAND_LIMITS_DEG = {
     "shoulder_up_down": JointLimit(0.0, 90.0, 10.0, 20.0, 15.0),
     "shoulder_left_right": JointLimit(5.0, 40.0, 20.0, 10.0, 15.0, 5.0),
@@ -39,9 +37,7 @@ FIRMWARE_COMMAND_LIMITS_DEG = {
     "lower_arm_rotation": JointLimit(0.0, 140.0, 100.0, 100.0),
 }
 
-# Use the observed mechanism travel in the simulator.  Keep the nominal
-# command table above so serial/CAN code can distinguish what the firmware
-# accepts from what the HT25 arm was reported to achieve physically.
+# Keep the command range and the reported travel separate.
 HARDWARE_JOINT_LIMITS_DEG = {
     **FIRMWARE_COMMAND_LIMITS_DEG,
     "shoulder_up_down": JointLimit(0.0, 75.0, 10.0, 20.0, 15.0),
@@ -57,7 +53,7 @@ FINGER_LIMITS_DEG = {
 
 
 def shared_grip_step(direction: float, dt: float, max_curl: float = 1.5) -> float:
-    """Limit a shared grip by the slowest normalized HT25 finger servo travel."""
+    """Limit grip speed using the slowest finger servo."""
     normalized_speed = min(
         limit.speed(direction) / (limit.upper - limit.lower)
         for limit in FINGER_LIMITS_DEG.values()
@@ -72,8 +68,7 @@ def finger_joint_angles_rad(curl: float) -> dict[str, float]:
     curl = max(0.0, min(1.5, curl))
     progress = curl / 1.5
     angles = {
-        # LIMB-HT25 omits the thumb; drive all three joints here so it closes
-        # with the hand instead of staying fixed or flapping under gravity.
+        # Move all thumb joints so it closes with the hand.
         "thumb_1": -0.10 - 0.38 * progress,
         "thumb_2": 1.10 * progress,
         "thumb_3": 0.60 * progress,
@@ -81,9 +76,7 @@ def finger_joint_angles_rad(curl: float) -> dict[str, float]:
         "index_2": 0.95 * progress,
         "middle_1": 1.18 * progress,
         "middle_2": 0.98 * progress,
-        # Starting at zero avoids the LIMB-HT25 -1.4 radian open-hand kink.
-        # LIMB-HT25 effectively ends at 1.5 - 1.4 = 0.1 rad here. Keeping
-        # this base joint nearly straight stops the last two fingers dropping.
+        # Keep these base joints nearly straight so the last two fingers do not drop.
         "ring_1": 0.10 * progress,
         "ring_2": 0.90 * progress,
         "ring_3": 0.55 * progress,

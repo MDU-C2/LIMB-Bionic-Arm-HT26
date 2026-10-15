@@ -1,71 +1,33 @@
 # Simulation
 
-The main simulation is the interactive PyBullet table-and-target scene. It can
-be driven by the keyboard or by live OAK-D, one/two-IMU, and EMG measurements.
+Open Simulation in the app. Choose keyboard control or live camera and sensor
+input. Direct mode shows the requested angles. Physics mode adds gravity,
+collisions, motor control and torque estimates.
 
-The 60 × 60 cm table is centered in front of the torso centerline. The left
-shoulder sits outside its left edge. The cup starts on the left of the table,
-to the right of the arm; carry it to the green landing marker farther right.
-Lift beside the table before rotating inward over it.
+The table is 60 x 60 cm and centered in front of the torso. The left shoulder
+sits outside its left edge. Lift beside the table, turn inward, pick up the cup
+and carry it to the green disc on the right.
 
-Start it from the **Simulation** tab in the GUI:
+For live control, use BLE with the device name `LIMBServer`. Match the displayed
+pose and press L. Press R to pause and reset, or K to recalibrate at the current
+pose. Select Camera or EMG for grip. Calibrate EMG at rest and during a strong
+grip before using it.
 
-```powershell
-micromamba run -n aurora-simulation python src/gui/app.py
-```
-
-The current simulation can:
-
-- move the shoulder, upper arm, elbow, wrist, and fingers;
-- run with direct joint control or PyBullet physics;
-- reach for and hold the simulated cup;
-- show simulated contact and motor torque values;
-- play compatible camera pose recordings through Motion AI; and
-- fuse live OAK-D and available IMU angles to control the left arm;
-- select camera hand curl or calibrated EMG activation for grip.
-
-Useful direct commands:
+Run directly from the project environment:
 
 ```powershell
-micromamba run -n aurora-simulation python src/simulation/interactive/limb_simulator.py
-micromamba run -n aurora-simulation python src/simulation/sim/limb_sim.py --headless
+python src/simulation/interactive/limb_simulator.py
+python src/simulation/sim/limb_sim.py --headless
 ```
 
-Live control is started from the Simulation tab after entering the ESP32 BLE
-device name (default `LIMBServer`). No COM port is needed. Close standalone BLE
-and camera previews first. BLE input reconnects automatically and processes
-EMG/IMU samples in the background without saving a recording.
-It opens the same interactive task scene plus an annotated OAK-D camera window.
-A shoulder IMU controls elevation and left/right movement; adding the wrist IMU
-enables relative-IMU elbow control. Camera tracking supplies absolute arm pose
-and corrects IMU upper-arm twist when the bent elbow is visible. Both IMUs also
-supply relative forearm twist with elbow-bend compensation. Mount matching axes
-along the limbs and hold still for 0.5 seconds after L; default axes are Y.
-Forearm twist has no camera correction and can drift. Camera hand curl
-controls grip by default; select EMG once electrodes and muscle signals are
-ready. Auto retains EMG-first selection with camera fallback when EMG is absent.
-Q/E and Left/Right provide manual fallback when live twist targets are absent. A wrist-only
-sensor is monitored without being misidentified as the upper arm. Press `K` in
-the simulator to recalibrate. At startup, copy the simulated neutral tabletop pose
-and press `L` to start feedback. Press `R` to pause and align again.
+See the [simulation guide](../../docs/SIMULATION.md) for keyboard controls,
+sensor mounting and calibration.
 
-See [the simulation guide](../../docs/SIMULATION.md) for the controls.
+## Code
 
-## Interactive code
+- `interactive/`: task scene, arm controls, grip and displays.
+- `sim/`: arm models, joint limits and physics calculations.
+- `ai/`: live sensor input, pose playback and movement comparison.
+- `dmp/`: trajectory fitting and playback.
 
-`interactive/limb_simulator.py` is the launcher. `runtime.py` owns initialization,
-the frame order, and cleanup. The existing behavior is divided by responsibility:
-
-| Module | Responsibility |
-| --- | --- |
-| `settings.py` | Arguments, reference poses, and task settings. |
-| `arm_control.py` | Arm commands, limits, and PyBullet joint mapping. |
-| `scene.py` | World setup, target collisions, and camera views. |
-| `input_control.py` | Keyboard commands, live calibration, and arm movement. |
-| `grasp_control.py` | Safe approach, finger movement, grasping, and release. |
-| `physics.py` | Physics steps, measured state, and torque output. |
-| `dashboard.py` / `hud.py` | Tk sensor monitor and Pygame controls display. |
-
-Each part operates on the simulator instance, so task state is explicit rather
-than stored in module globals. `dmp/dmp_signal.py` holds trajectory preprocessing
-and optional curvature coupling; `dmp.py` keeps the fitting and rollout API.
+The movement model is loaded from `artifacts/models/movement_gru.onnx`.

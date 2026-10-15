@@ -1,11 +1,5 @@
 # Majd, Christian
-"""Portable Tkinter control center for the AURORA project.
-
-The launcher owns shared discovery, process supervision, and activity logging.
-Notebook pages are declared in ``TAB_DEFINITIONS`` so tab order and extension
-points stay visible in one place. Recording and firmware programs are discovered
-from repository conventions instead of machine-specific paths.
-"""
+"""The AURORA app. Open recording, simulation and firmware tools from here."""
 
 from __future__ import annotations
 
@@ -58,10 +52,10 @@ class ProjectGui(
     ProcessManagerMixin,
     ttk.Frame,
 ):
-    """Main AURORA launcher frame shared by all registered project tabs."""
+    """Build the app and share state between its tabs."""
 
     def __init__(self, window: tk.Tk) -> None:
-        """Initialize shared state, build the interface, and start background refreshes."""
+        """Build the interface and start the background checks."""
         self.window = window
         self.style = ttk.Style(window)
         self._configure_styles()

@@ -164,8 +164,7 @@ class GraspMixin:
                     hand_step,
                 )
 
-        # Match LIMB-HT25 manual handling: holding F inside 20 cm closes the hand
-        # and immediately secures the object. Space keeps the assisted workflow.
+        # F secures a nearby cup. Space starts the assisted reach and grip.
         manual_grasp_requested = (
             self.keys[pygame.K_f] or self.bullet_key_down("f")
         ) and self.hand_target_distance <= GRASP_CAPTURE_DISTANCE_M

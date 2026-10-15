@@ -281,7 +281,7 @@ class SimulationTabsMixin:
         return recording
 
     def start_movement_recognition(self) -> None:
-        """Analyze a pose recording with the migrated GRU model."""
+        """Compare a recorded movement with the saved references."""
         recording = self._selected_motion_recording()
         if recording is None:
             return

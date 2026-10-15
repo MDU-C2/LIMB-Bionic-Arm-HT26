@@ -1,5 +1,5 @@
 # Christian, Majd
-"""Calibrated axial gyro integration, adapted from HT25's sensor_logic.py."""
+"""Estimate arm twist from calibrated gyroscope readings."""
 
 from __future__ import annotations
 
@@ -10,12 +10,9 @@ DEFAULT_TWIST_AXIS = "y"
 
 
 class ImuTwistEstimator:
-    """Track upper-arm twist and relative forearm twist with matched mounting axes.
+    """Subtract upper-arm motion to find forearm twist.
 
-    HT25 integrates gyro angles and subtracts upper-arm motion from the forearm.
-    Here the longitudinal axes are selectable because the current Y/Z elevation
-    mapping already uses rotation around sensor X. Y is a mounting convention,
-    not a measurement of how the loose boards are currently placed.
+    The selected axes must run along the mounted arm segments.
     """
 
     def __init__(

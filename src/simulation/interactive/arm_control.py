@@ -158,7 +158,7 @@ class Hand:
         """Initialize the hand in an open pose."""
         self.curl = 0.0  # 0.0 is open; 1.0 is a closed fist.
         self.min_curl = 0.0
-        self.max_curl = 1.5  # Original LIMB-HT25 hand travel, in radians.
+        self.max_curl = 1.5  # Hand travel in radians.
 
 
 class LimbArm:

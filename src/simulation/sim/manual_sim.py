@@ -1,10 +1,5 @@
 # Oscar Ågren, Majd
-"""Open the LIMB PyBullet model with arm and wrist joint sliders.
-
-Adapted from ``sim/sandbox_limb_sim.py`` in Oscar Agren's DMP-arm project at
-commit 88b0d2ea5df63764ebb56aad8926f92084926fc7.  This version uses the limits
-and joint mapping selected for the AURORA simulation baseline.
-"""
+"""Open the arm model with joint sliders."""
 
 from __future__ import annotations
 

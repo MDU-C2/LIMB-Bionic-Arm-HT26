@@ -339,7 +339,7 @@ class BleRecorder:
         if len(data) == HIGH_RATE_IMU_PACKET.size:
             flags, sequence, first_us, second_us, *raw = HIGH_RATE_IMU_PACKET.unpack(data)
             if flags >> 8 != 1:
-                raise ValueError("unsupported Jonas IMU packet version")
+                raise ValueError("unsupported IMU packet version")
             connected_mask = flags & 0x03
             samples = []
             for sensor_id, (device_us, offset) in enumerate(((first_us, 0), (second_us, 6))):

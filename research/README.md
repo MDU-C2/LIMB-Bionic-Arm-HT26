@@ -1,3 +1,5 @@
 # Research
 
-Use this folder for experiments that are separate from the app.
+Experiments and research on EMG processing, sensor fusion and movement control.
+
+- [Related work and method](related_work.md): supporting studies and evaluation methods.

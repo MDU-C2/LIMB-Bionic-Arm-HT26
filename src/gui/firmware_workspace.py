@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -43,15 +46,28 @@ def staged_project(project: Path) -> Path:
         digest.update(source.read_bytes())
         digest.update(b"\0")
 
-    staging_root = Path(tempfile.gettempdir()) / "aurora_firmware"
-    destination = staging_root / f"{project.name}-{digest.hexdigest()[:12]}"
+    runtime = os.environ.get("AURORA_SETUP_DIRECTORY", "").strip()
+    if not runtime:
+        try:
+            state = json.loads(
+                (Path(__file__).resolve().parents[2] / ".aurora/runtime.json").read_text(
+                    encoding="utf-8-sig"
+                )
+            )
+            runtime = str(Path(state["prefix"]).parent)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    staging_root = Path(runtime).expanduser() if runtime else Path(tempfile.gettempdir())
+    staging_root = staging_root.resolve() / "aurora_firmware"
+    name = re.sub(r"[^A-Za-z0-9_-]", "_", project.name)
+    destination = staging_root / f"{name}-{digest.hexdigest()[:12]}"
     if any(character.isspace() for character in str(destination)):
         raise RuntimeError(f"Temporary firmware path still contains whitespace: {destination}")
-    if not destination.is_dir():
-        destination.mkdir(parents=True)
-        for source in files:
-            target = destination / source.relative_to(project)
-            target.parent.mkdir(parents=True, exist_ok=True)
+    destination.mkdir(parents=True, exist_ok=True)
+    for source in files:
+        target = destination / source.relative_to(project)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.is_file() or target.read_bytes() != source.read_bytes():
             shutil.copy2(source, target)
     return destination
 

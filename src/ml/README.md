@@ -11,7 +11,8 @@ python src/ml/capture_movement.py --user-id 6 --side right
 
 Press Space to start and press it again to save.
 
-Train the GRU model:
+Use recordings from at least two participants, with enough recordings from each
+to keep both training and validation splits populated. Train the GRU model:
 
 ```powershell
 python src/ml/train_gru.py

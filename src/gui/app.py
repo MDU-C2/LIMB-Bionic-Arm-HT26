@@ -345,10 +345,7 @@ def main() -> None:
         if simulation_python is not None and simulation_python.resolve() != current_python:
             environment = os.environ.copy()
             environment["AURORA_GUI_RELAUNCHED"] = "1"
-            # os.execve() does not preserve quoting reliably when a Microsoft
-            # Store Python hands a Windows path containing spaces to another
-            # interpreter. subprocess receives an argument list and quotes the
-            # script path correctly (including the OneDrive university path).
+            # Keep a script path containing spaces as one argument.
             try:
                 return_code = subprocess.call(
                     [

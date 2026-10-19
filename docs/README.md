@@ -10,3 +10,4 @@
 - [Motors](MOTORS.md): motor settings.
 - [Hardware checks](HARDWARE_VALIDATION.md): what has been tested and what remains.
 - [EMG signal check](EMG_SIGNAL_CHECK.md): the recorded rest and grip comparison.
+- [Related work and method](../research/related_work.md): research, model comparison and evaluation plan.

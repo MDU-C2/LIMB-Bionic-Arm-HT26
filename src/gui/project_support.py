@@ -389,9 +389,7 @@ def firmware_command(
             command.extend(["-p", port])
         command.append(action)
 
-    # ESP-IDF/PlatformIO rejects whitespace in this project path. Keep the
-    # user's OneDrive checkout in place and build an exact source mirror from
-    # a content-addressed temporary path instead.
+    # Build from a source mirror when the toolchain cannot use the checkout path.
     if any(character.isspace() for character in str(project.directory.resolve())):
         return [
             str(console_python(Path(sys.executable))),

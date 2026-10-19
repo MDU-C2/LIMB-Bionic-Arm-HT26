@@ -126,7 +126,7 @@ def install() -> None:
     run_python("-m", "pip", "install", "-r", "requirements-setup.txt")
     verify()
     print("Preparing and building the ESP32-C3 firmware toolchain...", flush=True)
-    # Reuse the GUI's mirror to support OneDrive paths containing spaces.
+    # Reuse the GUI's build folder for checkout paths containing spaces.
     # Always build via the installed PlatformIO rather than a machine's old IDF.
     run_python(
         "src/gui/firmware_workspace.py",

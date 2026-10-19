@@ -100,14 +100,12 @@ These are software checks; they do not establish human motion or muscle accuracy
 
 ## Saved evidence and rollback
 
-- [BLE recording metadata](../outputs/recordings/20261010_131157_128651_hardware_validation_ht25_link_ble/meta.json)
-- [Sample timing and ADC checks](../outputs/recordings/20261010_131157_128651_hardware_validation_ht25_link_ble/validation.json)
-- [EMG processing check](../outputs/recordings/20261010_131157_128651_hardware_validation_ht25_link_ble/processing_validation.json)
-- [Camera recording metadata](../outputs/recordings/20261010_131159_317572_hardware_validation_ht25_link_oak_pose/meta.json)
-- [Live simulation check](../outputs/recordings/20261010_131337_360094_hardware_validation_ht25_link_live_simulation/meta.json)
+Validation recordings and firmware backups are kept in the ignored `outputs/`
+folder. They are not included when cloning the repo. Run the checks in
+[`scripts/`](../scripts/README.md) to collect measurements on another setup.
 
-The original bootloader, partition table and application were preserved in
-`outputs/firmware_backup/before_ble_validation_20261010_COM5/`. Their MD5 hashes
+The original bootloader, partition table and application were preserved before
+the validation flash. Their MD5 hashes
 were verified against the installed flash before replacement. The manifest
 contains addresses, lengths and SHA-256 hashes. NVS was not included in this
 backup or overwritten during flashing. Full-flash USB reads failed, so this

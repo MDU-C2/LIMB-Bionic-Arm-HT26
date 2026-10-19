@@ -129,6 +129,8 @@ class TripletDataset(Dataset):
         self.base_dataset = base_dataset
         self.data = base_dataset.samples
         self.is_val = is_val
+        if len({user for _sample, user in self.data}) < 2:
+            raise ValueError("Triplet training needs recordings from at least two participants in each split.")
 
     def __len__(self):
         return len(self.data)
@@ -276,7 +278,7 @@ def main():
     folder = os.path.join(REPOSITORY_ROOT, "data", "movement", "training")
     if not os.path.exists(folder):
         print(f"Error: Folder not found -> {folder}")
-        return
+        return 1
 
     files = [f for f in os.listdir(folder) if f.endswith(".json")]
 
@@ -301,12 +303,12 @@ def main():
         train_files.extend(train)
         val_files.extend(val)
 
-    train_dataset = TripletDataset(MovementDataset(folder, train_files), is_val=False)
-    val_dataset = TripletDataset(MovementDataset(folder, val_files), is_val=True)
-
-    if len(train_dataset) == 0 or len(val_dataset) == 0:
-        print("Error: No samples found in train or validation dataset.")
-        return
+    try:
+        train_dataset = TripletDataset(MovementDataset(folder, train_files), is_val=False)
+        val_dataset = TripletDataset(MovementDataset(folder, val_files), is_val=True)
+    except ValueError as error:
+        print(f"Training could not start: {error}")
+        return 1
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     model = MovementGRU().to(device)
@@ -376,6 +378,7 @@ def main():
         export_to_onnx(model, ONNX_PATH)
     except Exception as e:
         print(f"Error loading best model or exporting to ONNX: {e}")
+        return 1
 
     # Save the validation curves next to the model.
     epochs_range = range(1, len(history_val_loss) + 1)
@@ -409,4 +412,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

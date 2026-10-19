@@ -96,7 +96,7 @@ Open Recordings, refresh the list, or use Open output folder. A combined trial
 creates separate BLE and camera folders with the same session prefix.
 
 - BLE: emg.csv, imu.csv, packets.jsonl and meta.json.
-- Camera: video.mp4, pose.json, frame_timing.json and meta.json.
+- Camera: video.mp4, pose.json and meta.json. Frame times are stored in pose.json.
 - Check metadata for the subject/trial, requested and subscribed streams,
   duration, packet counts and packet_health. Review any gaps, missing packets
   or decode errors before using a trial for training.

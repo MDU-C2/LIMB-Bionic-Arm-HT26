@@ -17,10 +17,63 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src/gui"))
 
 import setup_project
+import firmware_workspace
 from project_support import simulation_python_candidates
 
 
 class SetupTests(unittest.TestCase):
+    def test_firmware_uses_the_runtime_when_the_system_temp_path_has_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "checkout with spaces"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text("project(sensor)\n", encoding="utf-8")
+            runtime = root / "runtime"
+            with (
+                patch.dict(os.environ, {"AURORA_SETUP_DIRECTORY": str(runtime)}),
+                patch.object(firmware_workspace.tempfile, "gettempdir", return_value=str(root / "user name")),
+            ):
+                staged = firmware_workspace.staged_project(source)
+            self.assertTrue(staged.is_relative_to(runtime.resolve()))
+            self.assertEqual((staged / "CMakeLists.txt").read_text(), "project(sensor)\n")
+
+    def test_firmware_staging_recovers_after_an_interrupted_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            (source / "main").mkdir(parents=True)
+            (source / "CMakeLists.txt").write_text("project(sensor)\n", encoding="utf-8")
+            original = source / "main" / "main.c"
+            original.write_text("void app_main(void) {}\n", encoding="utf-8")
+            with patch.dict(os.environ, {"AURORA_SETUP_DIRECTORY": str(root / "runtime")}):
+                with patch.object(firmware_workspace.shutil, "copy2", side_effect=OSError("Interrupted")):
+                    with self.assertRaises(OSError):
+                        firmware_workspace.staged_project(source)
+                staged = firmware_workspace.staged_project(source)
+                self.assertEqual((staged / "main" / "main.c").read_bytes(), original.read_bytes())
+                (staged / "main" / "main.c").write_text("partial", encoding="utf-8")
+                self.assertEqual(firmware_workspace.staged_project(source), staged)
+                self.assertEqual((staged / "main" / "main.c").read_bytes(), original.read_bytes())
+
+    def test_direct_gui_launch_uses_the_saved_runtime_for_firmware(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / ".aurora").mkdir()
+            runtime = root / "runtime"
+            (root / ".aurora" / "runtime.json").write_text(
+                json.dumps({"prefix": str(runtime / "env")}), encoding="utf-8-sig"
+            )
+            source = root / "firmware"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text("project(sensor)\n", encoding="utf-8")
+            with (
+                patch.dict(os.environ, {"AURORA_SETUP_DIRECTORY": ""}),
+                patch.object(firmware_workspace, "__file__", str(root / "src/gui/firmware_workspace.py")),
+                patch.object(firmware_workspace.tempfile, "gettempdir", return_value=str(root / "user name")),
+            ):
+                staged = firmware_workspace.staged_project(source)
+            self.assertTrue(staged.is_relative_to(runtime.resolve()))
+
     def test_dependency_conflicts_fail_verification_before_native_checks(self) -> None:
         with (
             patch.object(

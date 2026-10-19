@@ -18,11 +18,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "ml"))
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 if TORCH_AVAILABLE:
     import torch
-    from train_gru import BATCH_SIZE, MovementDataset, compute_top1_accuracy
+    from train_gru import BATCH_SIZE, MovementDataset, TripletDataset, compute_top1_accuracy
 
 
 @unittest.skipUnless(TORCH_AVAILABLE, "Install ML dependencies to check GRU training")
 class MovementTrainingTests(unittest.TestCase):
+    def test_triplet_training_rejects_a_split_without_a_different_participant(self) -> None:
+        samples = [(np.zeros((60, 69)), "a"), (np.ones((60, 69)), "a")]
+        for is_val in (False, True):
+            with self.subTest(validation=is_val):
+                with self.assertRaisesRegex(ValueError, "at least two participants"):
+                    TripletDataset(SimpleNamespace(samples=samples), is_val=is_val)
+
+    def test_triplets_use_matching_and_different_participants(self) -> None:
+        samples = [(np.full((60, 69), value), user)
+                   for value, user in ((0, "a"), (1, "a"), (2, "b"), (3, "b"))]
+        dataset = TripletDataset(SimpleNamespace(samples=samples), is_val=True)
+        for index, (anchor, positive, negative) in enumerate(dataset):
+            anchor_user = samples[index][1]
+            self.assertTrue(any(user == anchor_user and np.array_equal(positive.numpy(), sample)
+                                for sample, user in samples))
+            self.assertTrue(any(user != anchor_user and np.array_equal(negative.numpy(), sample)
+                                for sample, user in samples))
+
     def test_centering_matches_the_original_loop(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             frame = {"shoulder": [1, 2, 3], "elbow": [4, 6, 8], "hand": []}

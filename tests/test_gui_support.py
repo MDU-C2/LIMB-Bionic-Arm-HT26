@@ -159,9 +159,9 @@ class RecordingBatchTests(unittest.TestCase):
         self.assertEqual(DEFAULT_BLE_SENSORS, ("imu", "emg"))
 
     def test_firmware_project_uses_native_esp_idf_commands(self) -> None:
-        discovered = discover_firmware_projects()["firmware\\high_rate_emg_imu"]
+        discovered = discover_firmware_projects()[str(Path("firmware") / "high_rate_emg_imu")]
         project = FirmwareProject(
-            Path(r"C:\firmware\high_rate_emg_imu"),
+            Path(ROOT.anchor) / "firmware" / "high_rate_emg_imu",
             discovered.system,
             discovered.executable,
         )
@@ -185,13 +185,13 @@ class RecordingBatchTests(unittest.TestCase):
             )
 
     def test_firmware_can_fall_back_to_platformio_with_esp_idf_only(self) -> None:
-        discovered = discover_firmware_projects()["firmware\\high_rate_emg_imu"]
+        discovered = discover_firmware_projects()[str(Path("firmware") / "high_rate_emg_imu")]
         project = FirmwareProject(
-            Path(r"C:\firmware\high_rate_emg_imu"),
+            Path(ROOT.anchor) / "firmware" / "high_rate_emg_imu",
             discovered.system,
             discovered.executable,
         )
-        platformio = r"C:\Users\tester\.platformio\platformio.exe"
+        platformio = str(Path(ROOT.anchor) / "tools" / "platformio")
         with patch(
             "project_support.resolve_firmware_tool",
             return_value=(platformio,),
@@ -217,7 +217,7 @@ class RecordingBatchTests(unittest.TestCase):
             )
 
     def test_firmware_finds_platformio_installed_in_the_python_environment(self) -> None:
-        project = discover_firmware_projects()["firmware\\high_rate_emg_imu"]
+        project = discover_firmware_projects()[str(Path("firmware") / "high_rate_emg_imu")]
         python = Path(r"C:\env with spaces\python.exe")
         with (
             patch("project_support.shutil.which", return_value=None),
@@ -230,7 +230,7 @@ class RecordingBatchTests(unittest.TestCase):
             )
 
     def test_firmware_build_is_staged_when_repository_path_contains_spaces(self) -> None:
-        project = discover_firmware_projects()["firmware\\high_rate_emg_imu"]
+        project = FirmwareProject(ROOT / "firmware with spaces", "ESP-IDF", "idf.py")
         platformio = (sys.executable, "-m", "platformio")
         with patch("project_support.resolve_firmware_tool", return_value=platformio):
             self.assertEqual(

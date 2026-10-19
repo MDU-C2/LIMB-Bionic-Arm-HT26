@@ -55,8 +55,7 @@ FINGER_LIMITS_DEG = {
 def shared_grip_step(direction: float, dt: float, max_curl: float = 1.5) -> float:
     """Limit grip speed using the slowest finger servo."""
     normalized_speed = min(
-        limit.speed(direction) / (limit.upper - limit.lower)
-        for limit in FINGER_LIMITS_DEG.values()
+        limit.speed(direction) / (limit.upper - limit.lower) for limit in FINGER_LIMITS_DEG.values()
     )
     return normalized_speed * max_curl * max(0.0, dt)
 

@@ -127,9 +127,18 @@ class UrdfGeometryTests(SimulationPhysicsCase):
             grip_offset=LEFT_GRIP_OFFSET_M,
         )
         q = np.zeros(dynamics.dof)
-        q[:5] = np.radians([READY_POSE_DEG[name] for name in (
-            "shoulder_z", "shoulder_y", "shoulder_x", "elbow_x", "wrist_rotation",
-        )])
+        q[:5] = np.radians(
+            [
+                READY_POSE_DEG[name]
+                for name in (
+                    "shoulder_z",
+                    "shoulder_y",
+                    "shoulder_x",
+                    "elbow_x",
+                    "wrist_rotation",
+                )
+            ]
+        )
         for joint, angle in zip(dynamics.joints, q, strict=False):
             p.resetJointState(robot, joint, float(angle))
         ready = np.asarray(dynamics.end_effector_state()["position_m"])

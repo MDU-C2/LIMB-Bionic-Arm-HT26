@@ -91,9 +91,7 @@ class ImuTwistEstimator:
             shoulder_rate = rates.get("shoulder", (0.0, 0.0, 0.0))[1]
             if abs(shoulder_rate) <= self.deadzone_dps:
                 shoulder_rate = 0.0
-            self.shoulder_angle = max(
-                -60.0, min(60.0, self.shoulder_angle + shoulder_rate * dt)
-            )
+            self.shoulder_angle = max(-60.0, min(60.0, self.shoulder_angle + shoulder_rate * dt))
             # The camera's medial-positive proxy has the opposite left-CAD sign.
             result["shoulder_rotation_proxy"] = -self.shoulder_angle
         dual_ready = all(role in self.bias for role in self.axes)
@@ -103,8 +101,8 @@ class ImuTwistEstimator:
                 forearm_gyro = rates.get("wrist", (0.0, 0.0, 0.0))
                 # Express shared motion along the forearm's axis at the measured elbow bend.
                 # Subtracting raw Y rates would create wrist motion at a bent elbow.
-                shared_rate = (
-                    upper_gyro[1] * math.cos(bend_rad) + upper_gyro[2] * math.sin(bend_rad)
+                shared_rate = upper_gyro[1] * math.cos(bend_rad) + upper_gyro[2] * math.sin(
+                    bend_rad
                 )
                 relative_rate = forearm_gyro[1] - shared_rate
                 if abs(relative_rate) <= self.deadzone_dps:

@@ -202,7 +202,8 @@ class DualImuArmEstimator:
         self.active_roles = active_roles
         relative_bend = self.reference_angles.get("elbow_flexion", 0.0) + (
             (wrist_tilt - shoulder_tilt) - self.elbow_zero
-            if wrist_tilt is not None and shoulder_tilt is not None else 0.0
+            if wrist_tilt is not None and shoulder_tilt is not None
+            else 0.0
         )
         rotations = self.twist.update(gyros, dt, math.radians(relative_bend))
         if shoulder_tilt is None:
@@ -211,7 +212,8 @@ class DualImuArmEstimator:
         result = {
             "shoulder_flexion": (
                 self.reference_angles.get("shoulder_flexion", 0.0) + shoulder_tilt
-                if self.reference_angles else abs(shoulder_tilt)
+                if self.reference_angles
+                else abs(shoulder_tilt)
             ),
             # Preserve the gyro sign.  Taking abs() here made both real motion
             # directions command the robot outward/left.
@@ -363,10 +365,12 @@ def interactive_control_targets(angles: object) -> dict[str, float] | None:
 
 def anatomical_reference_angles(joints: dict[str, float]) -> dict[str, float]:
     """Invert the joint mapping so calibration preserves the displayed pose."""
-    return camera_control_angles({
-        "shoulder_flexion": 90.0 - joints["shoulder_y"],
-        "shoulder_abduction": -joints["shoulder_z"],
-        "shoulder_rotation_proxy": -joints["shoulder_x"],
-        "elbow_flexion": joints["elbow_x"],
-        "wrist_rotation": joints["wrist_rotation"],
-    })
+    return camera_control_angles(
+        {
+            "shoulder_flexion": 90.0 - joints["shoulder_y"],
+            "shoulder_abduction": -joints["shoulder_z"],
+            "shoulder_rotation_proxy": -joints["shoulder_x"],
+            "elbow_flexion": joints["elbow_x"],
+            "wrist_rotation": joints["wrist_rotation"],
+        }
+    )

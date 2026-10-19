@@ -64,5 +64,3 @@ class SerialPacketReader:
                 self.error = str(error)
                 if self.running:
                     time.sleep(1.0)
-
-

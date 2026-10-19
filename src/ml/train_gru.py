@@ -130,7 +130,9 @@ class TripletDataset(Dataset):
         self.data = base_dataset.samples
         self.is_val = is_val
         if len({user for _sample, user in self.data}) < 2:
-            raise ValueError("Triplet training needs recordings from at least two participants in each split.")
+            raise ValueError(
+                "Triplet training needs recordings from at least two participants in each split."
+            )
 
     def __len__(self):
         return len(self.data)
@@ -141,7 +143,7 @@ class TripletDataset(Dataset):
         positives = [x for x in self.data if x[1] == user and not np.array_equal(x[0], anchor)]
         negatives = [x for x in self.data if x[1] != user]
 
-        # Säkerhetsspärr om en användare bara har en sekvens
+        # Reuse the recording when no other positive sample is available.
         if len(positives) == 0:
             positives = [x for x in self.data if x[1] == user]
 
@@ -171,7 +173,7 @@ class MovementGRU(nn.Module):
 
     def forward(self, x):
         out, _ = self.gru(x)
-        out = out.mean(dim=1)  # Mean pooling över tidsaxeln
+        out = out.mean(dim=1)
         out = self.dropout(out)
 
         emb = self.fc(out)

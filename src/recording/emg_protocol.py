@@ -88,7 +88,11 @@ class EmgActivationEstimator:
             return f"Hold a strong comfortable grip: {max(0, 3 - self._strength_elapsed):.1f} s"
         if self.calibration_error:
             return self.calibration_error
-        return "Grip calibrated" if self.reference is not None else "Calibrate strong grip (scale estimated)"
+        return (
+            "Grip calibrated"
+            if self.reference is not None
+            else "Calibrate strong grip (scale estimated)"
+        )
 
     def calibrate_strength(self) -> bool:
         """Capture three seconds of deliberate grip after a relaxed baseline."""
@@ -121,7 +125,7 @@ class EmgActivationEstimator:
         if self._strength_elapsed is not None:
             self._strength_elapsed = None
             self.calibration_error = "Grip calibration interrupted by missing BLE samples; repeat"
-        self._energy = self.rest_envelope ** 2
+        self._energy = self.rest_envelope**2
         self.envelope = self.rest_envelope
         self.activation = None
 
@@ -170,10 +174,11 @@ class EmgActivationEstimator:
             self.baseline = mean
             self.rest_envelope = (
                 math.sqrt(sum(self._rest_energy) / len(self._rest_energy))
-                if self._rest_energy else sum(centered) / len(centered)
+                if self._rest_energy
+                else sum(centered) / len(centered)
             )
             self.envelope = self.rest_envelope
-            self._energy = self.rest_envelope ** 2
+            self._energy = self.rest_envelope**2
             self.peak = max(50.0, self.rest_envelope * 10.0)
             self.activation = 0.0
             return self.activation

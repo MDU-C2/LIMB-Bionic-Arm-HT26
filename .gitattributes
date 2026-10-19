@@ -1,3 +1,8 @@
-# Unix launchers must retain LF even when committed from Windows.
+# Keep source line endings consistent across operating systems.
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.c text eol=lf
+*.h text eol=lf
 *.command text eol=lf
 *.bat text eol=crlf

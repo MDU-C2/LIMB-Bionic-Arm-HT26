@@ -77,9 +77,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--baud must be positive")
     if not 0.0 <= args.camera_weight <= 1.0:
         parser.error("--camera-weight must be between 0 and 1")
-    if any(not math.isfinite(value) or value < 12 for value in (
-        args.table_width_cm, args.table_depth_cm,
-    )):
+    if any(
+        not math.isfinite(value) or value < 12
+        for value in (
+            args.table_width_cm,
+            args.table_depth_cm,
+        )
+    ):
         parser.error("Table width and depth must be finite and at least 12 cm")
     return args
 

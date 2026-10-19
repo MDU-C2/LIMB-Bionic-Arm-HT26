@@ -1,18 +1,22 @@
 # Tests
 
-Run each test module in a separate process from the project environment:
+Run the software checks from the project environment:
 
 ```powershell
-python -m compileall -q src
-Get-ChildItem tests/test_*.py | ForEach-Object {
-    python -m unittest discover -s tests -p $_.Name
-    if ($LASTEXITCODE -ne 0) { throw "Failed: $($_.Name)" }
-}
+python scripts/check_project.py
 ```
 
-Separate processes avoid conflicts between the camera and training libraries.
+The runner uses separate processes to avoid conflicts between camera and training libraries.
 The checks cover recording, EMG filtering and grip labels, sensor mapping,
 model loading, simulation, the app and setup. Hardware tests use mock data.
 
 Use the checks in `scripts/` for connected devices. Physical grip accuracy and
 sensor placement still need a recording with the electrodes mounted on an arm.
+
+Check code style:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m ruff check src scripts tests
+python -m ruff format --check src scripts tests
+```

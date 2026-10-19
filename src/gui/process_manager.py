@@ -70,12 +70,19 @@ class ProcessManagerMixin:
         if stop_ble is not None and not stop_ble():
             release_ble = getattr(self, "_release_ble_for", None)
             if release_ble is None:
-                self._append_log("[BLE monitor] Waiting for the connection to close. Try again shortly.\n")
+                self._append_log(
+                    "[BLE monitor] Waiting for the connection to close. Try again shortly.\n"
+                )
                 return False
             if release_ble(
                 lambda: self._start_program(
-                    name, kind, command, working_directory=working_directory,
-                    environment=environment, parallel=parallel, process_key=process_key,
+                    name,
+                    kind,
+                    command,
+                    working_directory=working_directory,
+                    environment=environment,
+                    parallel=parallel,
+                    process_key=process_key,
                 )
             ):
                 return True

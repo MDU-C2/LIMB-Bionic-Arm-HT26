@@ -62,10 +62,16 @@ class SimulationTabsMixin:
 
         table_settings = ttk.Frame(interactive, style="Card.TFrame")
         table_settings.grid(row=5, column=0, sticky="w", pady=(8, 0))
-        ttk.Label(table_settings, text="Tabletop width × depth (cm)", style="Card.TLabel").pack(side="left")
-        ttk.Entry(table_settings, textvariable=self.table_width_cm, width=8).pack(side="left", padx=6)
+        ttk.Label(table_settings, text="Tabletop width × depth (cm)", style="Card.TLabel").pack(
+            side="left"
+        )
+        ttk.Entry(table_settings, textvariable=self.table_width_cm, width=8).pack(
+            side="left", padx=6
+        )
         ttk.Label(table_settings, text="×", style="Card.TLabel").pack(side="left")
-        ttk.Entry(table_settings, textvariable=self.table_depth_cm, width=8).pack(side="left", padx=6)
+        ttk.Entry(table_settings, textvariable=self.table_depth_cm, width=8).pack(
+            side="left", padx=6
+        )
 
         fusion = self._card(
             tab,

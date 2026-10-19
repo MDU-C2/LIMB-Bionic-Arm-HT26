@@ -24,7 +24,6 @@ from ble_packets import SERVICE_UUID as SERVICE_UUID
 from ble_packets import TIMESTAMPED_PACKETS as TIMESTAMPED_PACKETS
 from ble_packets import BleRecorder as BleRecorder
 from clock_sync import TIME_SYNC_UUID, BleClockSyncClient, ClockSynchronizer
-from emg_trials import GripTrial
 from common import (
     create_session_directory,
     enable_ctrl_break_as_interrupt,
@@ -32,6 +31,7 @@ from common import (
     experiment_metadata,
     write_metadata,
 )
+from emg_trials import GripTrial
 
 
 def parse_args() -> argparse.Namespace:
@@ -120,8 +120,12 @@ async def record(args: argparse.Namespace) -> int:
         print("bleak is missing. Recreate the simulation environment.")
         return 2
 
-    if (not math.isfinite(args.duration) or not math.isfinite(args.scan_timeout)
-            or args.duration < 0 or args.scan_timeout <= 0):
+    if (
+        not math.isfinite(args.duration)
+        or not math.isfinite(args.scan_timeout)
+        or args.duration < 0
+        or args.scan_timeout <= 0
+    ):
         print("Duration cannot be negative and scan timeout must be positive.")
         return 2
     try:

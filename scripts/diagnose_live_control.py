@@ -34,11 +34,19 @@ def main() -> int:
     from interactive.settings import parse_args
 
     simulator = InteractiveSimulator(
-        parse_args([
-            "--control", "camera-imu", "--grip-source", "emg",
-            "--mode", args.mode, "--address", args.address,
-            *(["--depth"] if args.depth else []),
-        ])
+        parse_args(
+            [
+                "--control",
+                "camera-imu",
+                "--grip-source",
+                "emg",
+                "--mode",
+                args.mode,
+                "--address",
+                args.address,
+                *(["--depth"] if args.depth else []),
+            ]
+        )
     )
     report = {"depth": args.depth, "samples": [], "error": None}
     try:
@@ -72,11 +80,16 @@ def main() -> int:
             data = live.reader.graph_data()
             report["sensor_health"] = {
                 key: data[key]
-                for key in ("health", "status", "error", "emg_calibration", "emg_rest", "emg_reference")
+                for key in (
+                    "health",
+                    "status",
+                    "error",
+                    "emg_calibration",
+                    "emg_rest",
+                    "emg_reference",
+                )
             }
-            report["emg_adc_range"] = (
-                [min(data["emg"]), max(data["emg"])] if data["emg"] else None
-            )
+            report["emg_adc_range"] = [min(data["emg"]), max(data["emg"])] if data["emg"] else None
     except (Exception, SystemExit) as error:
         report["error"] = str(error)
         report["traceback"] = traceback.format_exc()

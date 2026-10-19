@@ -20,9 +20,9 @@ class LiveSignalGraphs:
         self.window.protocol("WM_DELETE_WINDOW", self.window.withdraw)
         self.last_draw = 0.0
         self.status = tk.StringVar(master=self.window, value="Waiting for BLE samples")
-        tk.Label(
-            self.window, textvariable=self.status, anchor="w", wraplength=980
-        ).grid(row=0, column=0, columnspan=2, sticky="ew", padx=12, pady=8)
+        tk.Label(self.window, textvariable=self.status, anchor="w", wraplength=980).grid(
+            row=0, column=0, columnspan=2, sticky="ew", padx=12, pady=8
+        )
         self.zoom_emg = tk.BooleanVar(master=self.window, value=False)
         tk.Checkbutton(
             self.window,
@@ -33,9 +33,9 @@ class LiveSignalGraphs:
             actions = tk.Frame(self.window)
             actions.grid(row=1, column=1, sticky="e", padx=12)
         if calibrate_emg is not None:
-            tk.Button(
-                actions, text="1. Calibrate EMG at rest", command=calibrate_emg
-            ).pack(side="left")
+            tk.Button(actions, text="1. Calibrate EMG at rest", command=calibrate_emg).pack(
+                side="left"
+            )
         if calibrate_strength is not None:
             tk.Button(
                 actions, text="2. Calibrate strong grip (3 s)", command=calibrate_strength
@@ -85,7 +85,8 @@ class LiveSignalGraphs:
         envelope = data.get("emg_envelope")
         signal_levels = (
             f" | RMS {envelope:.1f}, rest {data.get('emg_rest', 0):.1f} ADC"
-            if envelope is not None else ""
+            if envelope is not None
+            else ""
         )
         self.status.set(
             f"BLE {data['status']} | grip activation {grip} | missing {missing} | "
@@ -104,7 +105,6 @@ class LiveSignalGraphs:
         for (role, signal), canvas in self.imu.items():
             samples = data["imus"][role]
             traces = [
-                [sample[axis] for sample in samples]
-                for axis in range(signal * 3, signal * 3 + 3)
+                [sample[axis] for sample in samples] for axis in range(signal * 3, signal * 3 + 3)
             ]
             _draw_traces(canvas, traces, unit="g" if signal == 0 else "deg/s")

@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src/gui"))
 
-import setup_project
 import firmware_workspace
+import setup_project
 from project_support import simulation_python_candidates
 
 
@@ -31,7 +31,9 @@ class SetupTests(unittest.TestCase):
             runtime = root / "runtime"
             with (
                 patch.dict(os.environ, {"AURORA_SETUP_DIRECTORY": str(runtime)}),
-                patch.object(firmware_workspace.tempfile, "gettempdir", return_value=str(root / "user name")),
+                patch.object(
+                    firmware_workspace.tempfile, "gettempdir", return_value=str(root / "user name")
+                ),
             ):
                 staged = firmware_workspace.staged_project(source)
             self.assertTrue(staged.is_relative_to(runtime.resolve()))
@@ -46,9 +48,13 @@ class SetupTests(unittest.TestCase):
             original = source / "main" / "main.c"
             original.write_text("void app_main(void) {}\n", encoding="utf-8")
             with patch.dict(os.environ, {"AURORA_SETUP_DIRECTORY": str(root / "runtime")}):
-                with patch.object(firmware_workspace.shutil, "copy2", side_effect=OSError("Interrupted")):
-                    with self.assertRaises(OSError):
-                        firmware_workspace.staged_project(source)
+                with (
+                    patch.object(
+                        firmware_workspace.shutil, "copy2", side_effect=OSError("Interrupted")
+                    ),
+                    self.assertRaises(OSError),
+                ):
+                    firmware_workspace.staged_project(source)
                 staged = firmware_workspace.staged_project(source)
                 self.assertEqual((staged / "main" / "main.c").read_bytes(), original.read_bytes())
                 (staged / "main" / "main.c").write_text("partial", encoding="utf-8")
@@ -68,8 +74,12 @@ class SetupTests(unittest.TestCase):
             (source / "CMakeLists.txt").write_text("project(sensor)\n", encoding="utf-8")
             with (
                 patch.dict(os.environ, {"AURORA_SETUP_DIRECTORY": ""}),
-                patch.object(firmware_workspace, "__file__", str(root / "src/gui/firmware_workspace.py")),
-                patch.object(firmware_workspace.tempfile, "gettempdir", return_value=str(root / "user name")),
+                patch.object(
+                    firmware_workspace, "__file__", str(root / "src/gui/firmware_workspace.py")
+                ),
+                patch.object(
+                    firmware_workspace.tempfile, "gettempdir", return_value=str(root / "user name")
+                ),
             ):
                 staged = firmware_workspace.staged_project(source)
             self.assertTrue(staged.is_relative_to(runtime.resolve()))

@@ -11,8 +11,6 @@ import numpy as np
 
 from .dmp import fit, rollout_simple
 
-# Keep older trajectory filenames readable.
-
 
 def _prefix(trial_dir: Path) -> str:
     """Return Oscar's optional subject/motion/trial filename prefix."""
@@ -45,9 +43,6 @@ def _validate(q_rad: np.ndarray, dt: float) -> np.ndarray:
     if not np.isfinite(dt) or dt <= 0:
         raise ValueError(f"Expected a finite positive timestep, got {dt}")
     return q
-
-
-# --- Public trajectory loaders ---------------------------------------------
 
 
 def load_angles_demo(

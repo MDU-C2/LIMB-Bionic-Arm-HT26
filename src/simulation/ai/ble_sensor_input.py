@@ -81,8 +81,10 @@ class BleSensorReader:
         # A connected client exits its polling loop and disconnects normally.
         # Cancel a pending scan once, without cancelling disconnect cleanup later.
         if (
-            not already_stopping and self.status != "Connected"
-            and loop is not None and task is not None
+            not already_stopping
+            and self.status != "Connected"
+            and loop is not None
+            and task is not None
         ):
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(task.cancel)

@@ -75,7 +75,9 @@ class ImuTwistTests(unittest.TestCase):
         calibrate(estimator, sensors)
         bend = math.radians(60.0)
         sensors["wrist"]["accel_g"] = {
-            "x": 0.0, "y": math.cos(bend), "z": -math.sin(bend),
+            "x": 0.0,
+            "y": math.cos(bend),
+            "z": -math.sin(bend),
         }
         sensors["shoulder"]["gyro_dps"] = {"x": 0.0, "y": 30.0, "z": 20.0}
         sensors["wrist"]["gyro_dps"] = {

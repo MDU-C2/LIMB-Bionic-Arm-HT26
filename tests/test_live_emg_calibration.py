@@ -22,7 +22,8 @@ class LiveEmgCalibrationTests(unittest.TestCase):
         for _ in range(round(seconds * self.rate)):
             time = self.tick / self.rate
             sample = (
-                offset + amplitude * math.sin(2 * math.pi * frequency * time)
+                offset
+                + amplitude * math.sin(2 * math.pi * frequency * time)
                 + mains * math.sin(2 * math.pi * 50 * time)
             )
             self.estimator.update(sample, 1 / self.rate)

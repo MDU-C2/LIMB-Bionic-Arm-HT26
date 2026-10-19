@@ -56,9 +56,9 @@ class HighRateIntegrationTests(unittest.TestCase):
                 patch("record_ble_sensors.BleClockSyncClient", return_value=sync),
                 patch("record_ble_sensors.create_session_directory", return_value=session),
                 patch("record_ble_sensors.asyncio.sleep", side_effect=disconnect),
+                self.assertRaisesRegex(RuntimeError, "BLE disconnected"),
             ):
-                with self.assertRaisesRegex(RuntimeError, "BLE disconnected"):
-                    asyncio.run(record_ble(args))
+                asyncio.run(record_ble(args))
             metadata = json.loads((session / "meta.json").read_text(encoding="utf-8"))
             self.assertEqual(metadata["subscribed_sensors"], ["imu"])
             self.assertEqual(metadata["packet_health"]["imu"]["received_packets"], 0)

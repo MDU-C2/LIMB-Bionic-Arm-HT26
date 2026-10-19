@@ -5,7 +5,6 @@ __pycache__/
 venv/
 artifacts/.matplotlib/
 artifacts/models/*
-!artifacts/models/.gitkeep
 !artifacts/models/movement_gru.onnx
 .pytest_cache/
 .mypy_cache/

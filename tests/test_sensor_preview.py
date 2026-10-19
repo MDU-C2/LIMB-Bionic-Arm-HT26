@@ -29,9 +29,7 @@ class SensorPreviewTests(unittest.TestCase):
         canvas = Mock()
         canvas.winfo_width.return_value = 600
         canvas.winfo_height.return_value = 250
-        _draw_traces(
-            canvas, [[0, 20, 72]], unit="ADC", sample_period=0.00025, limits=(0, 4095)
-        )
+        _draw_traces(canvas, [[0, 20, 72]], unit="ADC", sample_period=0.00025, limits=(0, 4095))
         points = canvas.create_line.call_args.args
         heights = points[1::2]
         self.assertLess(max(heights) - min(heights), 5)

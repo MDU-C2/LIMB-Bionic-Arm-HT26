@@ -54,9 +54,7 @@ def build_pipeline(dai, use_depth: bool = False):
     stereo.setLeftRightCheck(True)
     left_output.link(stereo.left)
     right_output.link(stereo.right)
-    # DepthAI v3 aligns RVC2 stereo depth by linking the exact RGB stream used
-    # for tracking.  The former v2-style setDepthAlign(socket) configuration
-    # could drop both queues with X_LINK_ERROR on the project's OAK-D 2.1.
+    # Align depth to the same RGB stream used for tracking.
     color_output.link(stereo.inputAlignTo)
     return (
         pipeline,

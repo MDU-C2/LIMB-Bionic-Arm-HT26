@@ -44,3 +44,6 @@ python scripts/check_emg_calibration.py --phase grip --interactive --seconds 6
 
 The COM-port check is for USB diagnostics. Normal recording uses BLE.
 Close the app before running a separate BLE check so it can connect to the ESP32.
+
+Run `python scripts/check_project.py` for the software tests. See
+[`tests/`](../tests/README.md) for code style checks.

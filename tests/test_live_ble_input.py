@@ -32,12 +32,12 @@ def emg_packet(values, sequence=0, period_us=250):
 
 
 def imu_packet(
-    mask=3, timestamp=1_000_000, wrist=(0, 0, 1000, 0, 0, 0),
+    mask=3,
+    timestamp=1_000_000,
+    wrist=(0, 0, 1000, 0, 0, 0),
     shoulder=(0, 0, 1000, 0, 0, 0),
 ):
-    return HIGH_RATE_IMU_PACKET.pack(
-        0x100 | mask, 1, timestamp, timestamp, *shoulder, *wrist
-    )
+    return HIGH_RATE_IMU_PACKET.pack(0x100 | mask, 1, timestamp, timestamp, *shoulder, *wrist)
 
 
 class LiveBleTests(unittest.TestCase):
@@ -51,10 +51,14 @@ class LiveBleTests(unittest.TestCase):
         controller.cv2 = SimpleNamespace(waitKey=lambda _delay: -1, imshow=lambda *_args: None)
         controller.mp = controller.np = None
         frame = SimpleNamespace(getCvFrame=lambda: object())
-        controller.video_queue = SimpleNamespace(tryGet=Mock(side_effect=[frame, None, frame, None]))
+        controller.video_queue = SimpleNamespace(
+            tryGet=Mock(side_effect=[frame, None, frame, None])
+        )
         observation = {"angles_deg": {"shoulder_rotation_proxy": -20.0}}
         with (
-            patch("live_sensor_input.analyze_frame", return_value=(object(), "OK", None, observation)),
+            patch(
+                "live_sensor_input.analyze_frame", return_value=(object(), "OK", None, observation)
+            ),
             patch("live_sensor_input._draw_overlay", return_value=object()),
         ):
             with patch("live_sensor_input.time.monotonic", return_value=100.01):
@@ -62,10 +66,14 @@ class LiveBleTests(unittest.TestCase):
                 self.assertAlmostEqual(snapshot.angles["shoulder_rotation_proxy"], -20.0)
                 self.assertEqual(snapshot.rotation_source, "IMU + camera")
             with patch("live_sensor_input.time.monotonic", return_value=100.02):
-                reader.notification("imu", imu_packet(
-                    timestamp=1_500_000, shoulder=(0, 0, 1000, 0, 3000, 0),
-                    wrist=(0, 0, 1000, 0, 3000, 0),
-                ))
+                reader.notification(
+                    "imu",
+                    imu_packet(
+                        timestamp=1_500_000,
+                        shoulder=(0, 0, 1000, 0, 3000, 0),
+                        wrist=(0, 0, 1000, 0, 3000, 0),
+                    ),
+                )
                 snapshot = controller.poll()
                 self.assertAlmostEqual(snapshot.angles["shoulder_rotation_proxy"], -20.3)
                 self.assertEqual(snapshot.angles["wrist_rotation"], 0.0)
@@ -74,10 +82,14 @@ class LiveBleTests(unittest.TestCase):
                 self.assertGreater(snapshot.angles["shoulder_rotation_proxy"], -20.3)
                 self.assertLess(snapshot.angles["shoulder_rotation_proxy"], -20.0)
             with patch("live_sensor_input.time.monotonic", return_value=100.6):
-                reader.notification("imu", imu_packet(
-                    timestamp=1_510_000, shoulder=(0, 0, 1000, 0, 3000, 0),
-                    wrist=(0, 0, 1000, 0, 3000, 0),
-                ))
+                reader.notification(
+                    "imu",
+                    imu_packet(
+                        timestamp=1_510_000,
+                        shoulder=(0, 0, 1000, 0, 3000, 0),
+                        wrist=(0, 0, 1000, 0, 3000, 0),
+                    ),
+                )
                 snapshot = controller.poll()
                 self.assertFalse(snapshot.camera_ready)
                 self.assertEqual(snapshot.rotation_source, "IMU")
@@ -317,11 +329,14 @@ class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
         frame = controller.video_queue.tryGet.return_value
         frame.getCvFrame.return_value = object()
         measured = {"shoulder_flexion": 35, "elbow_flexion": 40, "shoulder_abduction": 8}
-        with patch("live_sensor_input.analyze_frame", return_value=(None, "tracked", None,
-                   {"angles_deg": measured})):
+        with patch(
+            "live_sensor_input.analyze_frame",
+            return_value=(None, "tracked", None, {"angles_deg": measured}),
+        ):
             controller.poll()
-            controller.calibrate({"shoulder_flexion": 45, "elbow_flexion": 45,
-                                  "shoulder_abduction": 5})
+            controller.calibrate(
+                {"shoulder_flexion": 45, "elbow_flexion": 45, "shoulder_abduction": 5}
+            )
             snapshot = controller.poll()
         self.assertEqual(snapshot.angles["shoulder_flexion"], 45)
         self.assertEqual(snapshot.angles["elbow_flexion"], 45)

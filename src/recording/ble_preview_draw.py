@@ -55,9 +55,7 @@ def _draw_traces(
     span = high - low
     left, right, top, bottom = 80, max(width - 12, 82), 14, max(height - 26, 16)
     for value, y in ((high, top), (low, bottom)):
-        canvas.create_text(
-            left - 8, y, text=f"{value:.2f} {unit}", anchor="e", fill="#667085"
-        )
+        canvas.create_text(left - 8, y, text=f"{value:.2f} {unit}", anchor="e", fill="#667085")
     label = "Received samples"
     if sample_period is not None:
         duration = max(len(trace) - 1 for trace in traces) * sample_period

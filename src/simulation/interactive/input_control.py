@@ -43,17 +43,23 @@ class InputMixin:
 
         try:
             self.target_position, _ = p.getBasePositionAndOrientation(self.target_body)
-            self.robot_position, robot_orientation = p.getBasePositionAndOrientation(self.robot_body)
+            self.robot_position, robot_orientation = p.getBasePositionAndOrientation(
+                self.robot_body
+            )
         except p.error:
             self.running = False
             return False
 
         # IK and reachability use the mounted arm's frame, including its yaw.
         inverse_position, inverse_orientation = p.invertTransform(
-            self.robot_position, robot_orientation,
+            self.robot_position,
+            robot_orientation,
         )
         self.target_relative_position, _ = p.multiplyTransforms(
-            inverse_position, inverse_orientation, self.target_position, (0, 0, 0, 1),
+            inverse_position,
+            inverse_orientation,
+            self.target_position,
+            (0, 0, 0, 1),
         )
         self.hand_target_distance = math.dist(self.hand_position, self.target_position)
 
@@ -158,7 +164,9 @@ class InputMixin:
                 self.live_snapshot.camera_ready or self.live_snapshot.imu_ready
             )
             if tracking_ready:
-                self.live_sensor_input.calibrate(anatomical_reference_angles(get_angles_deg(self.arm)))
+                self.live_sensor_input.calibrate(
+                    anatomical_reference_angles(get_angles_deg(self.arm))
+                )
                 # Do not apply the snapshot captured before calibration.  Keeping
                 # the reference pose for one more frame prevents a visible jump.
                 self.live_snapshot = None
@@ -305,12 +313,10 @@ class InputMixin:
             else:
                 self.manual_motion.velocity_deg_s["shoulder_x"] = 0.0
             wrist_keys = {
-                pygame.K_RIGHT: self.keys[pygame.K_RIGHT] or bool(
-                    self.bullet_events.get(p.B3G_RIGHT_ARROW, 0) & p.KEY_IS_DOWN
-                ),
-                pygame.K_LEFT: self.keys[pygame.K_LEFT] or bool(
-                    self.bullet_events.get(p.B3G_LEFT_ARROW, 0) & p.KEY_IS_DOWN
-                ),
+                pygame.K_RIGHT: self.keys[pygame.K_RIGHT]
+                or bool(self.bullet_events.get(p.B3G_RIGHT_ARROW, 0) & p.KEY_IS_DOWN),
+                pygame.K_LEFT: self.keys[pygame.K_LEFT]
+                or bool(self.bullet_events.get(p.B3G_LEFT_ARROW, 0) & p.KEY_IS_DOWN),
             }
             if targets and "wrist_rotation" in targets:
                 set_wrist(

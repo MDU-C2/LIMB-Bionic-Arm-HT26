@@ -24,8 +24,9 @@ class GripTrial:
         if not 1 <= repeats <= 20:
             raise ValueError("Choose 1 to 20 grip repeats.")
         self.repeats = repeats
-        self.steps = [(trial, phase, seconds)
-                      for trial in range(1, repeats + 1) for phase, seconds in PHASES]
+        self.steps = [
+            (trial, phase, seconds) for trial in range(1, repeats + 1) for phase, seconds in PHASES
+        ]
         self.steps.append((repeats, "rest", 3.0))
         self.segments: list[dict] = []
         self.start_ns: int | None = None
@@ -101,8 +102,13 @@ def export_features(emg_file: Path, labels_file: Path) -> dict:
                 raise ValueError("Invalid phase or trial number.")
         except (KeyError, TypeError, ValueError) as error:
             raise ValueError("Each phase needs trial, phase, start_s and end_s values.") from error
-        if (segment["phase"] not in PROMPTS or not math.isfinite(start)
-                or not math.isfinite(end) or start < previous_end or end <= start):
+        if (
+            segment["phase"] not in PROMPTS
+            or not math.isfinite(start)
+            or not math.isfinite(end)
+            or start < previous_end
+            or end <= start
+        ):
             raise ValueError("Trial labels must have ordered, non-overlapping phase times.")
         previous_end = end
 
@@ -131,8 +137,16 @@ def export_features(emg_file: Path, labels_file: Path) -> dict:
         )
         for index in selected:
             phase = segment["phase"]
-            rows.append((emg_file.parent.name, segment["trial"], phase,
-                         device_times[starts[index]], rms[index], mav[index]))
+            rows.append(
+                (
+                    emg_file.parent.name,
+                    segment["trial"],
+                    phase,
+                    device_times[starts[index]],
+                    rms[index],
+                    mav[index],
+                )
+            )
             counts[phase] += 1
             levels[phase].append(float(rms[index]))
     if not rows or (labels.get("complete") and not all(counts.values())):
@@ -141,8 +155,9 @@ def export_features(emg_file: Path, labels_file: Path) -> dict:
         writer = csv.writer(destination)
         writer.writerow(("session", "trial", "phase", "timestamp_us", "rms", "mav"))
         writer.writerows(rows)
-    medians = {phase: float(np.median(values)) if values else None
-               for phase, values in levels.items()}
+    medians = {
+        phase: float(np.median(values)) if values else None for phase, values in levels.items()
+    }
     rest, hold = medians["rest"], medians["hold"]
     return {
         "features_saved": True,

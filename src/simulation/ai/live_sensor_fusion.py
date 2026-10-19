@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from imu_twist import DEFAULT_TWIST_AXIS, TWIST_AXES
+
 INTERACTIVE_SIMULATOR = Path(__file__).resolve().parents[1] / "interactive" / "limb_simulator.py"
 
 
@@ -53,8 +54,10 @@ def main() -> int:
         args.side,
         "--camera-weight",
         str(args.camera_weight),
-        "--table-width-cm", str(args.table_width_cm),
-        "--table-depth-cm", str(args.table_depth_cm),
+        "--table-width-cm",
+        str(args.table_width_cm),
+        "--table-depth-cm",
+        str(args.table_depth_cm),
         "--grip-source",
         args.grip_source,
         "--shoulder-twist-axis",

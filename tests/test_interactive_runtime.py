@@ -88,14 +88,20 @@ class InteractiveRuntimeTests(unittest.TestCase):
         tabletop_shape = p.getCollisionShapeData(simulator.table_body, -1)[0]
         self.assertAlmostEqual(tabletop_shape[3][0], 0.60)
         self.assertAlmostEqual(tabletop_shape[3][1], 0.60)
-        self.assertAlmostEqual(simulator.target_start_position[2] - TARGET_HEIGHT_M / 2,
-                               TABLE_TOP_HEIGHT_M + 0.002)
+        self.assertAlmostEqual(
+            simulator.target_start_position[2] - TARGET_HEIGHT_M / 2, TABLE_TOP_HEIGHT_M + 0.002
+        )
         self.assertEqual(get_angles_deg(simulator.arm), READY_POSE_DEG)
         initial_height = simulator.hand_position[2]
         for angle in range(45, -1, -1):
             set_shoulder(simulator.arm, y=angle)
-            sync_to_pybullet(simulator.arm, simulator.robot_body, simulator.joint_indices,
-                             client=p, use_motors=False)
+            sync_to_pybullet(
+                simulator.arm,
+                simulator.robot_body,
+                simulator.joint_indices,
+                client=p,
+                use_motors=False,
+            )
             p.performCollisionDetection()
             self.assertFalse(p.getClosestPoints(simulator.robot_body, simulator.table_body, -0.001))
         self.assertGreater(simulator.dynamics.end_effector_state()["position_m"][2], initial_height)
@@ -107,7 +113,11 @@ class InteractiveRuntimeTests(unittest.TestCase):
         simulator.args.control = "camera-imu"
         simulator.live_sensor_input = Mock()
         simulator.live_sensor_input.poll.return_value = LiveFusionSnapshot(
-            angles=None, sensors={}, camera_ready=False, imu_ready=False, status="waiting",
+            angles=None,
+            sensors={},
+            camera_ready=False,
+            imu_ready=False,
+            status="waiting",
         )
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
         self.frame()
@@ -146,11 +156,20 @@ class InteractiveRuntimeTests(unittest.TestCase):
                 with self.subTest(elbow=elbow, shoulder=shoulder):
                     set_shoulder(simulator.arm, x=0, y=shoulder, z=-40)
                     set_elbow(simulator.arm, x=elbow)
-                    sync_to_pybullet(simulator.arm, simulator.robot_body, simulator.joint_indices,
-                                     client=p, use_motors=False)
-                    self.assertFalse(p.getClosestPoints(
-                        simulator.robot_body, simulator.table_body, -0.001,
-                    ))
+                    sync_to_pybullet(
+                        simulator.arm,
+                        simulator.robot_body,
+                        simulator.joint_indices,
+                        client=p,
+                        use_motors=False,
+                    )
+                    self.assertFalse(
+                        p.getClosestPoints(
+                            simulator.robot_body,
+                            simulator.table_body,
+                            -0.001,
+                        )
+                    )
 
     def test_cup_can_be_lifted_carried_right_and_released_on_table(self):
         import math
@@ -173,8 +192,10 @@ class InteractiveRuntimeTests(unittest.TestCase):
         # Lift first, swing inward, then use upper-arm rotation to carry right.
         for waypoint in ((0, 25, azimuth, elbow), (0, 25, -5, 40), (-30, 30, -5, 40)):
             for step in range(1, 26):
-                angles = tuple(start + (end - start) * step / 25
-                               for start, end in zip(current, waypoint))
+                angles = tuple(
+                    start + (end - start) * step / 25
+                    for start, end in zip(current, waypoint, strict=True)
+                )
                 set_shoulder(simulator.arm, x=angles[0], y=angles[1], z=angles[2])
                 set_elbow(simulator.arm, x=angles[3])
                 self.frame()
@@ -217,8 +238,10 @@ class InteractiveRuntimeTests(unittest.TestCase):
             self.assertFalse(p.getClosestPoints(simulator.robot_body, simulator.table_body, -0.001))
         self.frame((pygame.K_f,))
         self.assertIsNotNone(simulator.grasp_constraint)
-        for waypoint in ((25, simulator.arm.shoulder.angle_z, simulator.arm.elbow.angle_x),
-                         (25, -5, 40)):
+        for waypoint in (
+            (25, simulator.arm.shoulder.angle_z, simulator.arm.elbow.angle_x),
+            (25, -5, 40),
+        ):
             set_shoulder(simulator.arm, x=0, y=waypoint[0], z=waypoint[1])
             set_elbow(simulator.arm, x=waypoint[2])
             for _ in range(120):
@@ -288,7 +311,9 @@ class InteractiveRuntimeTests(unittest.TestCase):
         before = get_angles_deg(simulator.arm)
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_l))
         self.frame()
-        simulator.live_sensor_input.calibrate.assert_called_once_with(anatomical_reference_angles(before))
+        simulator.live_sensor_input.calibrate.assert_called_once_with(
+            anatomical_reference_angles(before)
+        )
         self.assertTrue(simulator.live_feedback_active)
         self.assertIsNone(simulator.live_snapshot)
         self.assertEqual(get_angles_deg(simulator.arm), before)
@@ -299,13 +324,17 @@ class InteractiveRuntimeTests(unittest.TestCase):
         simulator.live_feedback_active = True
         simulator.live_snapshot = LiveFusionSnapshot(
             angles={"shoulder_flexion": 60.0, "elbow_flexion": 0.0},
-            sensors={}, camera_ready=True, imu_ready=False, status="Camera OK",
+            sensors={},
+            camera_ready=True,
+            imu_ready=False,
+            status="Camera OK",
         )
         simulator.loop_dt_s = 0.1
         simulator.keys = defaultdict(bool)
         # The PyBullet scene can have focus instead of the controller window.
         simulator.bullet_events = {
-            ord("e"): p.KEY_IS_DOWN, p.B3G_RIGHT_ARROW: p.KEY_IS_DOWN,
+            ord("e"): p.KEY_IS_DOWN,
+            p.B3G_RIGHT_ARROW: p.KEY_IS_DOWN,
         }
         for _ in range(80):
             simulator.update_arm()
@@ -324,7 +353,8 @@ class InteractiveRuntimeTests(unittest.TestCase):
 
         simulator.live_snapshot.angles.pop("shoulder_rotation_proxy")
         simulator.bullet_events = {
-            ord("q"): p.KEY_IS_DOWN, p.B3G_LEFT_ARROW: p.KEY_IS_DOWN,
+            ord("q"): p.KEY_IS_DOWN,
+            p.B3G_LEFT_ARROW: p.KEY_IS_DOWN,
         }
         for _ in range(80):
             simulator.update_arm()
@@ -339,8 +369,13 @@ class InteractiveRuntimeTests(unittest.TestCase):
         simulator.args.control = "camera-imu"
         simulator.live_feedback_active = True
         simulator.live_snapshot = LiveFusionSnapshot(
-            angles=None, sensors={}, camera_ready=True, imu_ready=False,
-            status="Camera OK", hand_curl=1.0, grip_source="Camera hand",
+            angles=None,
+            sensors={},
+            camera_ready=True,
+            imu_ready=False,
+            status="Camera OK",
+            hand_curl=1.0,
+            grip_source="Camera hand",
             emg_activation=0.0,
         )
         simulator.loop_dt_s = 0.1
@@ -377,8 +412,22 @@ class InteractiveRuntimeTests(unittest.TestCase):
             arm_rate, wrist_rate = (0, 0) if sample < 50 else (3000, 7000)
             timestamp = 1_000_000 + sample * 10_000
             packet = HIGH_RATE_IMU_PACKET.pack(
-                0x103, sample, timestamp, timestamp,
-                0, 1000, 0, 0, arm_rate, 0, 0, 1000, 0, 0, wrist_rate, 0,
+                0x103,
+                sample,
+                timestamp,
+                timestamp,
+                0,
+                1000,
+                0,
+                0,
+                arm_rate,
+                0,
+                0,
+                1000,
+                0,
+                0,
+                wrist_rate,
+                0,
             )
             reader.notification("imu", packet)
         controller = LiveSensorInput(grip_source="camera")

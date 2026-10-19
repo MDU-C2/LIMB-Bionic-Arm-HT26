@@ -13,8 +13,6 @@ from .dmp_signal import estimate_derivatives as estimate_derivatives
 from .dmp_signal import learn_curvature_weights_from_demo as learn_curvature_weights_from_demo
 from .dmp_signal import savgol_estimation as savgol_estimation
 
-# --- 1. Model and basis functions ------------------------------------------
-
 
 @dataclass
 class DMPModel:
@@ -76,15 +74,6 @@ def _centers_and_widths(
         d = np.hstack((d, [d[-1]]))
         widths = 1.0 / (d**2 + 1e-12)
     return centers, widths
-
-
-# --- 2. Trajectory derivatives ---------------------------------------------
-
-
-# --- 3. Optional curvature coupling ----------------------------------------
-
-
-# --- 4. Model fitting -------------------------------------------------------
 
 
 def _compute_f_target(
@@ -268,9 +257,6 @@ def fit(
         ]
         model.curvature_weights = np.mean(fitted_curvature, axis=0)
     return model
-
-
-# --- 5. Trajectory rollouts -------------------------------------------------
 
 
 def _validate_rollout_inputs(

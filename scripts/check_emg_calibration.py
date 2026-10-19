@@ -14,7 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 for directory in ("src/recording", "src/simulation/ai"):
     sys.path.insert(0, str(ROOT / directory))
 if os.name == "nt":
-    os.environ["PATH"] = str(Path(sys.prefix) / "Library/bin") + os.pathsep + os.environ.get("PATH", "")
+    os.environ["PATH"] = (
+        str(Path(sys.prefix) / "Library/bin") + os.pathsep + os.environ.get("PATH", "")
+    )
 
 
 def describe(samples, period, np):
@@ -26,12 +28,16 @@ def describe(samples, period, np):
     frequencies = np.fft.rfftfreq(len(values), period)
     total = float(spectrum[1:].sum())
     return {
-        "samples": len(values), "sample_rate_hz": 1 / period,
-        "adc_min": float(values.min()), "adc_max": float(values.max()),
-        "adc_mean": float(values.mean()), "raw_rms": float(np.sqrt(np.mean(centered ** 2))),
+        "samples": len(values),
+        "sample_rate_hz": 1 / period,
+        "adc_min": float(values.min()),
+        "adc_max": float(values.max()),
+        "adc_mean": float(values.mean()),
+        "raw_rms": float(np.sqrt(np.mean(centered**2))),
         "clipped_fraction": float(np.mean((values <= 2) | (values >= 4093))),
         "dominant_hz": float(frequencies[1 + spectrum[1:].argmax()]),
-        "mains_power_fraction": float(spectrum[(frequencies >= 48) & (frequencies <= 52)].sum()) / max(total, 1e-12),
+        "mains_power_fraction": float(spectrum[(frequencies >= 48) & (frequencies <= 52)].sum())
+        / max(total, 1e-12),
     }
 
 
@@ -94,26 +100,37 @@ def main():
         active = False
         with reader._lock:
             estimator = reader.emg_estimator
-            report.update({
-                "rest_rms": estimator.rest_envelope,
-                "reference": estimator.reference,
-                "strong_rms": estimator.strong_envelope,
-                "minimum_grip_rms": estimator.minimum_grip_envelope,
-                "status": estimator.status,
-                "filtered_rms_median": float(np.median(envelopes)) if envelopes else None,
-                "filtered_rms_max": max(envelopes) if envelopes else None,
-                "packet_health": reader.decoder.packet_health(),
-                "signal": describe(raw, reader._emg_period, np),
-                "snapshots": captured,
-                "raw_samples": raw,
-            })
+            report.update(
+                {
+                    "rest_rms": estimator.rest_envelope,
+                    "reference": estimator.reference,
+                    "strong_rms": estimator.strong_envelope,
+                    "minimum_grip_rms": estimator.minimum_grip_envelope,
+                    "status": estimator.status,
+                    "filtered_rms_median": float(np.median(envelopes)) if envelopes else None,
+                    "filtered_rms_max": max(envelopes) if envelopes else None,
+                    "packet_health": reader.decoder.packet_health(),
+                    "signal": describe(raw, reader._emg_period, np),
+                    "snapshots": captured,
+                    "raw_samples": raw,
+                }
+            )
     except Exception as error:
         report["error"] = str(error)
     finally:
         reader.stop()
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({key: value for key, value in report.items() if key not in ("snapshots", "raw_samples", "baseline_raw_samples")}), flush=True)
+    print(
+        json.dumps(
+            {
+                key: value
+                for key, value in report.items()
+                if key not in ("snapshots", "raw_samples", "baseline_raw_samples")
+            }
+        ),
+        flush=True,
+    )
     return 1 if report["error"] else 0
 
 

@@ -118,17 +118,26 @@ class SensorFusionTests(unittest.TestCase):
 
         def sensors(tilt):
             return {
-                role: {"connected": True,
-                       "accel_g": {"x": 0, "y": math.sin(math.radians(tilt)),
-                                   "z": math.cos(math.radians(tilt))},
-                       "gyro_dps": dict.fromkeys("xyz", 0)}
+                role: {
+                    "connected": True,
+                    "accel_g": {
+                        "x": 0,
+                        "y": math.sin(math.radians(tilt)),
+                        "z": math.cos(math.radians(tilt)),
+                    },
+                    "gyro_dps": dict.fromkeys("xyz", 0),
+                }
                 for role in ("shoulder", "wrist")
             }
 
         estimator = DualImuArmEstimator(alpha=0)
-        reference = {"shoulder_flexion": 45, "shoulder_abduction": 5,
-                     "elbow_flexion": 45, "wrist_rotation": 20,
-                     "shoulder_rotation_proxy": 0}
+        reference = {
+            "shoulder_flexion": 45,
+            "shoulder_abduction": 5,
+            "elbow_flexion": 45,
+            "wrist_rotation": 20,
+            "shoulder_rotation_proxy": 0,
+        }
         estimator.reset_calibration(reference)
         for _ in range(51):
             initial = estimator.update(sensors(40), 0.01)
@@ -146,9 +155,14 @@ class SensorFusionTests(unittest.TestCase):
         estimator = DualImuArmEstimator(alpha=0)
         reference = {"shoulder_flexion": 45, "elbow_flexion": 45}
         estimator.reset_calibration(reference)
-        sensors = {role: {"connected": True, "accel_g": {"x": 0, "y": 1, "z": 0},
-                          "gyro_dps": dict.fromkeys("xyz", 0)}
-                   for role in ("shoulder", "wrist")}
+        sensors = {
+            role: {
+                "connected": True,
+                "accel_g": {"x": 0, "y": 1, "z": 0},
+                "gyro_dps": dict.fromkeys("xyz", 0),
+            }
+            for role in ("shoulder", "wrist")
+        }
         estimator.update(sensors, 0.01)
         sensors["wrist"]["accel_g"] = {"x": 0, "y": 0.8660254, "z": 0.5}
         self.assertAlmostEqual(estimator.update(sensors, 0.01)["elbow_flexion"], 15, places=5)

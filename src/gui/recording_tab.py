@@ -60,7 +60,9 @@ class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashbo
         self.recording_ble_dataset = tk.BooleanVar(value=False)
         self.recording_grip_trial = tk.BooleanVar(value=False)
         self.recording_grip_repeats = tk.StringVar(value="5")
-        self.recording_grip_status = tk.StringVar(value="Follow the grip cues here when recording starts.")
+        self.recording_grip_status = tk.StringVar(
+            value="Follow the grip cues here when recording starts."
+        )
         self.recording_movement_label = tk.StringVar(value="1")
         self.recording_serial_port = tk.StringVar()
         self.recording_serial_baud = tk.StringVar(value="115200")
@@ -146,7 +148,10 @@ class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashbo
             if duration < 0:
                 raise ValueError("Duration cannot be negative.")
             if self.recording_grip_trial.get():
-                if "record_ble_sensors.py" not in filenames or "emg" not in self._selected_ble_sensors():
+                if (
+                    "record_ble_sensors.py" not in filenames
+                    or "emg" not in self._selected_ble_sensors()
+                ):
                     raise ValueError("Select Bluetooth and EMG for a grip trial.")
                 repeats = int(self.recording_grip_repeats.get())
                 if self.recording_ble_dataset.get() or not 1 <= repeats <= 20:

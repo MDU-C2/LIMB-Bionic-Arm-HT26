@@ -134,9 +134,9 @@ class RecordingViewsMixin:
         ble_device_row = ttk.Frame(ble_row, style="Card.TFrame")
         ble_device_row.grid(row=1, column=0, sticky="ew", pady=(4, 0))
         ble_device_row.columnconfigure(0, weight=1)
-        ttk.Entry(
-            ble_device_row, textvariable=self.recording_ble_device, state="readonly"
-        ).grid(row=0, column=0, sticky="ew")
+        ttk.Entry(ble_device_row, textvariable=self.recording_ble_device, state="readonly").grid(
+            row=0, column=0, sticky="ew"
+        )
         ttk.Button(ble_device_row, text="Change", command=self._edit_ble_device).grid(
             row=0, column=1, padx=(8, 0)
         )
@@ -154,21 +154,26 @@ class RecordingViewsMixin:
                 variable=self.recording_ble_sensors[name],
                 style="Card.TCheckbutton",
             ).grid(row=0, column=column, sticky="w", padx=(0, 12))
-        ttk.Button(
-            sensor_choices, text="Live BLE graphs", command=self.open_ble_monitor
-        ).grid(row=0, column=2, padx=(0, 12))
+        ttk.Button(sensor_choices, text="Live BLE graphs", command=self.open_ble_monitor).grid(
+            row=0, column=2, padx=(0, 12)
+        )
 
         grip_row = ttk.Frame(ble_row, style="Card.TFrame")
         grip_row.grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 0))
         ttk.Checkbutton(
-            grip_row, text="Guided grip trial", variable=self.recording_grip_trial,
+            grip_row,
+            text="Guided grip trial",
+            variable=self.recording_grip_trial,
             style="Card.TCheckbutton",
         ).pack(side="left")
         ttk.Label(grip_row, text="Repeats", style="Card.TLabel").pack(side="left", padx=(16, 6))
-        ttk.Spinbox(grip_row, from_=1, to=20, width=4,
-                    textvariable=self.recording_grip_repeats).pack(side="left")
+        ttk.Spinbox(
+            grip_row, from_=1, to=20, width=4, textvariable=self.recording_grip_repeats
+        ).pack(side="left")
         ttk.Label(
-            ble_row, textvariable=self.recording_grip_status, style="Card.TLabel",
+            ble_row,
+            textvariable=self.recording_grip_status,
+            style="Card.TLabel",
             wraplength=800,
         ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
 

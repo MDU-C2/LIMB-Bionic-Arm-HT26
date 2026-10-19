@@ -1,80 +1,48 @@
-# Related work and method
+# Related work
 
-The main question is whether EMG can give reliable grip control across people
-and arm positions, and whether IMU and camera input improve control. This note
-links the proposed method to published work. The experiments below are planned;
-they are not results from our system.
+These studies cover EMG processing, movement recognition and sensor fusion.
+The LSTM study by Toro-Ossaba et al. [7] was cited in the earlier EMG3 work by Folkesson et al.
+(2025), *sEMG-Based Gesture Classification for Real-Time Embedded Prosthetic
+Control*. References [1-6] are additional literature.
 
-## What the studies support
+## Studies
 
-| Part | Related work | What it means for this project |
+| Topic | Finding | Use in this project |
 | --- | --- | --- |
-| Arm position | Fougner et al. [1] tested EMG classification in ten participants without limb loss. Training in multiple positions and adding accelerometer information reduced the position-related error in their setup. | Record the same grip task in several arm positions. Compare EMG alone with EMG plus IMU features. Our live IMUs currently estimate joint angles; they are not inputs to an EMG classifier. |
-| Simple models | Adewuyi et al. [2] compared features and classifiers for partial-hand control in 16 participants without amputation and four with amputation. LDA performed comparably to the tested linear and nonlinear neural networks. | Include linear discriminant analysis (LDA) as a baseline. A more complex model needs a measured benefit. Their task used multiple EMG channels and different grasp classes. |
-| Temporal models | Toro-Ossaba et al. [7] tested an LSTM with dense layers using four EMG channels for five gestures. | A compact LSTM is a candidate for comparison. Their channel count and gesture task differ from our single-channel grip control. |
-| Other model candidates | Pizzolato et al. [3] compared acquisition setups using support vector machines (SVM) and Random Forests, with features including RMS and time-domain features. They separated movement repetitions for training and evaluation. | SVM and Random Forest are supported candidates for comparison. Their results do not select a winner for our single-channel signal or establish performance on unseen people. |
-| Window length and delay | Smith et al. [4] tested a virtual prosthesis with 13 participants without limb loss. Longer windows reduced classification error but increased delay. Their best control performance occurred with 150-250 ms windows. | Our 200 ms feature window is a reasonable starting point to test. Measure control delay as well as classification scores. The current 50 ms overlap means a 150 ms step, not a 50 ms update interval. |
-| Training across people | Campbell et al. [5] evaluated cross-user adaptation using leave-one-subject-out testing on intact-limb and amputee datasets. Their adapted neural model used a training repetition from the new user. | Compare a model with no target-user training against one with a separate short calibration recording. Keep those results separate. This supports testing adaptation; it does not establish that our GRU is suitable. |
-| Camera and IMU fusion | Chen et al. [6] combined Kinect and IMU measurements using a Kalman filter for robotic arm control, with a data glove for wrist and finger input. | This is related work for combining visual and inertial measurements. Our OAK-D, MediaPipe and weighted angle fusion use different sensors and a different method. The paper does not validate our weights or angle accuracy. |
+| Arm position | Fougner et al. [1] reduced position-related classification error through training in several positions and using accelerometer information. | Compare EMG alone with EMG and IMU inputs across arm positions. |
+| Simple classifiers | Adewuyi et al. [2] found that LDA performed comparably to their tested neural networks for partial-hand grasp classification. | Include LDA as a baseline. |
+| Model comparison | Pizzolato et al. [3] compared SVM and Random Forest classifiers using several EMG features and acquisition setups. | Compare candidates on the same recordings and splits. |
+| Window length | Smith et al. [4] found a trade-off between classification error and delay. Their best control performance used 150-250 ms windows. | Test the current 200 ms window alongside its response delay. |
+| Different participants | Campbell et al. [5] evaluated cross-user adaptation with a separate training repetition from the held-out participant. | Evaluate models with and without personal calibration separately. |
+| Camera and IMU | Chen et al. [6] fused Kinect and IMU measurements with a Kalman filter for robotic arm control. | Compare visual, inertial and combined tracking. Their method differs from our weighted angle fusion. |
+| Temporal models | Toro-Ossaba et al. [7] used a compact LSTM with four EMG channels to recognise five gestures. | Consider an LSTM for comparison, accounting for our single-channel setup. |
 
-These studies guide the method. They do not establish rehabilitation outcomes
-for stroke survivors or validate our hardware. We need to state the participant
-population, channel count and task when comparing results.
+Compare results with their participant groups, channel counts and tasks in mind.
+These studies do not establish accuracy or rehabilitation outcomes for our setup.
 
 ## Current implementation
 
-Live grip control uses filtered EMG amplitude and personal rest/strong-grip
-calibration. There is no trained EMG grip model yet. The existing
-[GRU training](../src/ml/train_gru.py) learns camera movement embeddings grouped
-by `user_id`; it does not learn EMG grip intention.
+Live grip control uses EMG amplitude with rest and strong-grip calibration.
+IMU and camera estimates supply joint angles. The existing
+[GRU](../src/ml/train_gru.py) learns camera movement profiles grouped by `user_id`.
+An EMG classifier is not implemented yet.
 
-The [guided trial](../src/recording/emg_trials.py) saves rest, grip, hold and
-release cue times beside raw EMG and IMU recordings. It exports RMS and mean
-absolute value (MAV). Camera recordings are saved separately with timing data.
-The saved cues describe instructions, not verified movement onset. Review the
-video and correct labels before treating the four phases as ground truth.
-Grip and hold may have similar amplitude, so four separable classes are still
-a hypothesis. Without a force reference, we can evaluate hand state and control
-behaviour, not grip-force accuracy.
+The [guided trial](../src/recording/emg_trials.py) saves cue times and RMS/MAV
+features. Cue times need checking against the actual movement. Offline export
+uses forward-backward filtering; live control uses a causal filter. A deployed
+classifier needs the same processing during training and live use.
 
-The 20-450 Hz band-pass, 50 Hz notch, 80 ms live envelope, calibration thresholds,
-25% camera weight and trial timings are current engineering settings. They
-need explicit justification or experiments; the papers above do not validate
-those exact settings. Offline feature export uses forward-backward filtering;
-live control uses a causal filter. Any deployed classifier must be trained and
-evaluated with the same causal processing it will receive live.
+Filter settings, calibration thresholds and fusion weights still need evaluation.
+See the [sensor guide](../docs/SENSOR_DATA.md) for the current settings.
 
-## Proposed evaluation
+## Checks for future EMG models
 
-1. Check repeated rest and contraction recordings before collecting the dataset.
-   The [signal check](../docs/EMG_SIGNAL_CHECK.md) found only about an 8% RMS
-   increase in one requested-grip capture. That is a local observation, not a
-   reliable accuracy estimate. Check contact, gain, clipping and packet loss.
-2. Use participant IDs and repeated sessions. Record arm position,
-   sensor placement, electrode reapplication and calibration details. Keep raw
-   recordings, reviewed labels and processing settings so features can be rebuilt.
-   The current recorder does not collect all of this placement metadata yet.
-3. Start with rest versus active contraction. Compare calibrated amplitude
-   control against LDA, a small ANN, SVM and Random Forest using the same recordings. Extend
-   RMS/MAV with a justified time-domain feature set if needed. Evaluate grip,
-   hold and release classification only after checking the transition labels.
-   Test a compact LSTM from the earlier work if simpler methods miss useful dynamics.
-4. Split by participant before creating windows. Hold one person out for each
-   test fold and tune settings using only the remaining people. Keep entire
-   sessions and repetitions together. Fit scaling and feature selection on
-   training data only. For personalised control, use a separate calibration
-   recording from the test person and evaluate on later recordings.
-5. Report per-person macro-F1, balanced accuracy, a confusion matrix, false
-   closures and releases, and response delay. Then measure cup-task success and
-   completion time in the simulator. Compare EMG alone with EMG plus IMU inputs.
-   Compare camera-only, IMU-only and fused joint tracking against an independent
-   angle reference, including camera occlusion and sensor drift.
-6. Save the chosen model with the code version, participant/session split,
-   feature definitions, filtering and calibration settings, and evaluation
-   results. Record failures as well as successful trials.
-
-This evaluation pipeline is not implemented yet. Choose the model after these
-comparisons and keep results from our experiments separate from published findings.
+- Keep raw recordings, reviewed labels, participant IDs and session details.
+- Split by participant before making windows when testing generalisation to new
+  people. Fit scaling and feature selection on training data only.
+- Compare models using per-person scores, false closures and releases, response
+  delay and task success. Check joint tracking against an independent angle reference.
+- Save the model with its processing settings, calibration, data split and code version.
 
 ## References
 

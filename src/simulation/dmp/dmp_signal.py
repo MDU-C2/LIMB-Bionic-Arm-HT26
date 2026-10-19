@@ -35,10 +35,6 @@ def savgol_estimation(
         return dq, ddq
     if wl % 2 == 0:
         wl -= 1
-    if wl < 3:
-        dq = np.gradient(y, dt)
-        ddq = np.gradient(dq, dt)
-        return dq, ddq
 
     po = int(savgol_polyorder)
     if po >= wl:

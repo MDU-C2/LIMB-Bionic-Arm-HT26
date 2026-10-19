@@ -2,4 +2,4 @@
 
 Experiments and research on EMG processing, sensor fusion and movement control.
 
-- [Related work and method](related_work.md): supporting studies and evaluation methods.
+- [Related work](related_work.md): studies on EMG control and sensor fusion.

@@ -111,7 +111,9 @@ def main() -> int:
     parser.add_argument("--notch", type=float, default=50.0)
     parser.add_argument("--window-ms", type=float, default=200.0)
     parser.add_argument("--overlap-ms", type=float, default=50.0)
-    parser.add_argument("--labels", type=Path, help="Rebuild grip features from edited trial labels.")
+    parser.add_argument(
+        "--labels", type=Path, help="Rebuild grip features from edited trial labels."
+    )
     args = parser.parse_args()
     try:
         if args.labels is not None:
@@ -123,7 +125,9 @@ def main() -> int:
                 metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
                 if isinstance(metadata.get("grip_trial"), dict):
                     metadata["grip_trial"].update(summary)
-                    metadata_file.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+                    metadata_file.write_text(
+                        json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+                    )
             print(f"Saved {summary['features']}: {summary['windows_by_phase']}")
             return 0
         times, raw = load_emg(args.file)

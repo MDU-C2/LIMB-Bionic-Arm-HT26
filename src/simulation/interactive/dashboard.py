@@ -13,12 +13,12 @@ from sim.controller_params import (
 from .arm_control import (
     rad_to_deg,
 )
+from .live_signal_graphs import LiveSignalGraphs
 from .settings import (
     FINGER_JOINT_TOKENS,
     FINGERTIP_CONTACT_FORCE_N,
     SIMULATION_FREQUENCY_HZ,
 )
-from .live_signal_graphs import LiveSignalGraphs
 from .torque_graph import TorqueGraph
 
 
@@ -42,7 +42,9 @@ class DashboardMixin:
                 self.sensor_window, self.calibrate_live_emg, self.calibrate_live_emg_strength
             )
             tk.Button(
-                self.sensor_window, text="Show live BLE graphs", command=self.live_signal_graphs.show
+                self.sensor_window,
+                text="Show live BLE graphs",
+                command=self.live_signal_graphs.show,
             ).pack(anchor="w", padx=10, pady=4)
 
         self.sensor_vars = {}
@@ -180,7 +182,9 @@ class DashboardMixin:
         )
         self.sensor_vars["live_shoulder"] = tk.StringVar(value="Shoulder IMU: --")
         self.sensor_vars["live_wrist"] = tk.StringVar(value="Wrist IMU: --")
-        self.sensor_vars["live_rotation"] = tk.StringVar(value="Upper-arm twist: waiting for camera")
+        self.sensor_vars["live_rotation"] = tk.StringVar(
+            value="Upper-arm twist: waiting for camera"
+        )
         tk.Label(live_frame, textvariable=self.sensor_vars["live_status"], font=tk_font).pack(
             anchor="w"
         )

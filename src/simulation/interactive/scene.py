@@ -91,23 +91,24 @@ class SceneMixin:
         margin = TARGET_RADIUS_M + 0.01
         self.target_start_position = [
             max(self.table_bounds[0][0] + margin, -0.20),
-            max(self.table_bounds[0][1] + margin,
-                min(self.table_bounds[1][1] - margin, 0.60)),
+            max(self.table_bounds[0][1] + margin, min(self.table_bounds[1][1] - margin, 0.60)),
             TABLE_TOP_HEIGHT_M + TARGET_HEIGHT_M / 2 + 0.002,
         ]
         self.target_destination_position = [
             min(self.table_bounds[1][0] - margin, 0.04),
-            max(self.table_bounds[0][1] + margin,
-                min(self.table_bounds[1][1] - margin, 0.48)),
+            max(self.table_bounds[0][1] + margin, min(self.table_bounds[1][1] - margin, 0.48)),
             self.target_start_position[2],
         ]
         destination_visual = p.createVisualShape(
-            p.GEOM_CYLINDER, radius=TARGET_RADIUS_M + 0.005, length=0.001,
+            p.GEOM_CYLINDER,
+            radius=TARGET_RADIUS_M + 0.005,
+            length=0.001,
             rgbaColor=[0.18, 0.65, 0.35, 0.65],
         )
         # A visual landing marker must never obstruct the arm or falling cup.
         self.destination_marker_body = p.createMultiBody(
-            baseMass=0, baseVisualShapeIndex=destination_visual,
+            baseMass=0,
+            baseVisualShapeIndex=destination_visual,
             basePosition=[*self.target_destination_position[:2], TABLE_TOP_HEIGHT_M + 0.001],
         )
         self.target_start_orientation = p.getQuaternionFromEuler([0, 0, 0])
@@ -146,22 +147,28 @@ class SceneMixin:
         for x_sign in (-1, 1):
             for y_sign in (-1, 1):
                 sizes.append([leg_half_width, leg_half_width, leg_height / 2])
-                centers.append([
-                    center_x + x_sign * (width / 2 - leg_half_width),
-                    center_y + y_sign * (depth / 2 - leg_half_width),
-                    leg_height / 2,
-                ])
+                centers.append(
+                    [
+                        center_x + x_sign * (width / 2 - leg_half_width),
+                        center_y + y_sign * (depth / 2 - leg_half_width),
+                        leg_height / 2,
+                    ]
+                )
         collision = p.createCollisionShapeArray(
-            shapeTypes=[p.GEOM_BOX] * len(sizes), halfExtents=sizes,
+            shapeTypes=[p.GEOM_BOX] * len(sizes),
+            halfExtents=sizes,
             collisionFramePositions=centers,
         )
         visual = p.createVisualShapeArray(
-            shapeTypes=[p.GEOM_BOX] * len(sizes), halfExtents=sizes,
+            shapeTypes=[p.GEOM_BOX] * len(sizes),
+            halfExtents=sizes,
             visualFramePositions=centers,
             rgbaColors=[[0.70, 0.54, 0.36, 1]] + [[0.22, 0.25, 0.29, 1]] * 4,
         )
         self.table_body = p.createMultiBody(
-            baseMass=0, baseCollisionShapeIndex=collision, baseVisualShapeIndex=visual,
+            baseMass=0,
+            baseCollisionShapeIndex=collision,
+            baseVisualShapeIndex=visual,
         )
         print(f"Tabletop: {width * 100:g} x {depth * 100:g} cm")
 
@@ -194,9 +201,7 @@ class SceneMixin:
 
         try:
             print("Attempting to load robot...")
-            base_orientation = p.getQuaternionFromEuler(
-                [0, 0, math.radians(ARM_BASE_YAW_DEG)]
-            )
+            base_orientation = p.getQuaternionFromEuler([0, 0, math.radians(ARM_BASE_YAW_DEG)])
 
             # PyBullet on Windows cannot open a non-ASCII absolute path reliably. Load
             # the repository-relative path while this directory is the working folder.

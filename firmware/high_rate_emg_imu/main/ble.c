@@ -46,10 +46,6 @@ static const ble_uuid128_t k_imu_uuid = BLE_UUID128_INIT(
 static const ble_uuid128_t k_time_sync_uuid = BLE_UUID128_INIT(
     0x22, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef, 0x12, 0x12, 0x25, 0x15, 0x01, 0x27);
 
-//------------------------------------------------------
-// CHARACTERISTICS AND SERVICES
-//------------------------------------------------------
-
 static const char *const k_tag = "AURORA_BLE";
 static uint8_t s_own_address_type;
 static uint16_t s_connection_handle = BLE_HS_CONN_HANDLE_NONE;

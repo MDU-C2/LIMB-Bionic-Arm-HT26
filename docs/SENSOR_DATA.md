@@ -17,8 +17,7 @@ I2C addresses:
 | Wrist | `0x6A` | GND / low | SDA GPIO 2, SCL GPIO 1 |
 
 Connect the EMG module analogue output to **GPIO0 / ADC1 channel 0** and share
-3.3 V and ground. This is the channel selected by Jonas's tested prototype;
-its old GPIO4 comment did not match the ESP32-C3 ADC pin map.
+3.3 V and ground. GPIO0 is ADC1 channel 0 on the ESP32-C3.
 
 Do not put two sensors with the same address on the shared bus. The firmware
 prefers the GPIO 2/1 harness on the current arm. Its only fallback pairs are the
@@ -38,8 +37,7 @@ idf.py build
 idf.py -p COM4 flash monitor
 ```
 
-The checked-in PlatformIO environment is also supported when `idf.py` is not
-installed. It is pinned to `framework = espidf`, never Arduino:
+The PlatformIO environment also builds with ESP-IDF:
 
 ```powershell
 cd firmware/high_rate_emg_imu

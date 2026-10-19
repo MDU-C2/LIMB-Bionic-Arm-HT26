@@ -18,8 +18,8 @@ sys.path.insert(0, str(ROOT / "src" / "recording"))
 sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
 
 import app as gui_app
-from common import create_session_directory, experiment_metadata
 from ble_dashboard import BleDashboardMixin
+from common import create_session_directory, experiment_metadata
 from imu_protocol import (
     i2c_wiring_hint,
 )
@@ -42,8 +42,10 @@ class RecordingBatchTests(unittest.TestCase):
             batch_arguments("record_ble_sensors.py", [], "", ("emg",), True, 3),
             ["--sensors", "emg", "--grip-trial", "--grip-repeats", "3"],
         )
-        self.assertEqual(batch_arguments("record_oak_pose.py", ["--depth"], "", (), True, 3),
-                         ["--auto-start", "--depth"])
+        self.assertEqual(
+            batch_arguments("record_oak_pose.py", ["--depth"], "", (), True, 3),
+            ["--auto-start", "--depth"],
+        )
         with self.assertRaises(ValueError):
             batch_arguments("record_ble_sensors.py", [], "1", ("emg",), True, 3)
 
@@ -76,8 +78,10 @@ class RecordingBatchTests(unittest.TestCase):
 
     def test_recorder_waits_when_ble_disconnect_has_not_finished(self):
         manager = types.SimpleNamespace(
-            processes={}, _active_processes=lambda: [],
-            _stop_ble_dashboard=Mock(return_value=False), _append_log=Mock(),
+            processes={},
+            _active_processes=lambda: [],
+            _stop_ble_dashboard=Mock(return_value=False),
+            _append_log=Mock(),
         )
         with patch("process_manager.subprocess.Popen") as launch:
             self.assertFalse(
@@ -91,7 +95,9 @@ class RecordingBatchTests(unittest.TestCase):
         reader = Mock()
         reader.thread.is_alive.return_value = True
         dashboard = types.SimpleNamespace(
-            ble_reader=reader, ble_graphs=Mock(), ble_sensor_connection=Mock(),
+            ble_reader=reader,
+            ble_graphs=Mock(),
+            ble_sensor_connection=Mock(),
         )
         self.assertFalse(BleDashboardMixin._stop_ble_dashboard(dashboard))
         self.assertIs(dashboard.ble_reader, reader)
@@ -106,7 +112,9 @@ class RecordingBatchTests(unittest.TestCase):
         dashboard = types.SimpleNamespace(
             _ble_handoff_pending=False,
             _stop_ble_dashboard=Mock(side_effect=[False, False, True]),
-            _update_controls=Mock(), after=Mock(), ble_sensor_connection=Mock(),
+            _update_controls=Mock(),
+            after=Mock(),
+            ble_sensor_connection=Mock(),
         )
         self.assertTrue(BleDashboardMixin._release_ble_for(dashboard, action))
         action.assert_not_called()

@@ -28,9 +28,7 @@ class BleDashboardMixin:
         """Show live graphs without creating a recording or opening a COM port."""
         if self._ble_handoff_pending:
             return
-        if any(
-            process.key != "preview:record_oak_pose.py" for process in self._active_processes()
-        ):
+        if any(process.key != "preview:record_oak_pose.py" for process in self._active_processes()):
             messagebox.showinfo(
                 "Sensors in use",
                 "Recording and live control use their own sensor connection. "
@@ -91,7 +89,8 @@ class BleDashboardMixin:
                 text = f"BLE {reader.status}: {reader.error}"
             self.ble_sensor_connection.set(
                 "BLE: disconnecting before the next program starts"
-                if self._ble_handoff_pending else text
+                if self._ble_handoff_pending
+                else text
             )
             if self.ble_graphs is not None:
                 self.ble_graphs.update(reader)
@@ -130,7 +129,9 @@ class BleDashboardMixin:
                     self.after(100, finish_disconnect)
                     return
                 self._ble_handoff_pending = False
-                self.ble_sensor_connection.set("BLE disconnect timed out; stop the monitor and retry")
+                self.ble_sensor_connection.set(
+                    "BLE disconnect timed out; stop the monitor and retry"
+                )
                 self._update_controls()
                 return
             self._ble_handoff_pending = False
@@ -143,7 +144,9 @@ class BleDashboardMixin:
 
     def _edit_ble_device(self) -> None:
         if self._ble_handoff_pending or self._active_processes():
-            messagebox.showinfo("Sensors in use", "Stop the active program before changing devices.")
+            messagebox.showinfo(
+                "Sensors in use", "Stop the active program before changing devices."
+            )
             return
         name = simpledialog.askstring(
             "BLE device name",

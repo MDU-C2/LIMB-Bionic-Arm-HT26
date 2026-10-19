@@ -1,0 +1,9 @@
+idf_component_register(
+  SRCS
+  "hv2060_example.c"
+  INCLUDE_DIRS
+  "."
+  REQUIRES
+  adc_manager
+  continuous_servo
+  freertos)

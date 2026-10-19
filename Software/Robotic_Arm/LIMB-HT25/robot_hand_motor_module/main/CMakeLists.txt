@@ -1,0 +1,9 @@
+idf_component_register(
+  SRCS
+  "main.c"
+  REQUIRES
+  log
+  can_driver
+  imu
+  limb_utils
+  servo)

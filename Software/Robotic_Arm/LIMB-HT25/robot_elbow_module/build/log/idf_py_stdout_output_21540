@@ -1,0 +1,1061 @@
+Command: C:\Espressif\tools\python\v5.5.5\venv\Scripts\python.exe C:\esp\v5.5.5\esp-idf\tools/idf_monitor.py -p COM16 -b 115200 --toolchain-prefix riscv32-esp-elf- --target esp32c3 --revision 3 --decode-panic backtrace C:\Universitet\5.Projekt\LIMB-Bionic-Arm-HT26\Software\Robotic_Arm\LIMB-HT25\robot_elbow_module\build\robot_elbow_module.elf C:\Universitet\5.Projekt\LIMB-Bionic-Arm-HT26\Software\Robotic_Arm\LIMB-HT25\robot_elbow_module\build\bootloader\bootloader.elf --force-color -m 'C:\Espressif\tools\python\v5.5.5\venv\Scripts\python.exe' 'C:\esp\v5.5.5\esp-idf\tools\idf.py'
+ESP-ROM:esp32c3-api1-20210207
+Build:Feb  7 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0xa (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4004c72a
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fcd5820,len:0x155c
+load:0x403cbf10,len:0xc84
+load:0x403ce710,len:0x2fac
+entry 0x403cbf1a
+[0;32mI (24) boot: ESP-IDF v5.5.5 2nd stage bootloader[0m
+[0;32mI (24) boot: compile time Oct 21 2026 12:51:23[0m
+[0;32mI (25) boot: chip revision: v0.4[0m
+[0;32mI (25) boot: efuse block revision: v1.3[0m
+[0;32mI (28) boot.esp32c3: SPI Speed      : 80MHz[0m
+[0;32mI (32) boot.esp32c3: SPI Mode       : DIO[0m
+[0;32mI (36) boot.esp32c3: SPI Flash Size : 2MB[0m
+[0;32mI (39) boot: Enabling RNG early entropy source...[0m
+[0;32mI (44) boot: Partition Table:[0m
+[0;32mI (46) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (53) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (59) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (66) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (72) boot: End of partition table[0m
+[0;32mI (76) esp_image: segment 0: paddr=00010020 vaddr=3c020020 size=0a7b0h ( 42928) map[0m
+[0;32mI (90) esp_image: segment 1: paddr=0001a7d8 vaddr=3fc8da00 size=0170ch (  5900) load[0m
+[0;32mI (91) esp_image: segment 2: paddr=0001beec vaddr=40380000 size=0412ch ( 16684) load[0m
+[0;32mI (101) esp_image: segment 3: paddr=00020020 vaddr=42000020 size=195b0h (103856) map[0m
+[0;32mI (122) esp_image: segment 4: paddr=000395d8 vaddr=4038412c size=096ech ( 38636) load[0m
+[0;32mI (129) esp_image: segment 5: paddr=00042ccc vaddr=50000000 size=00020h (    32) load[0m
+[0;32mI (134) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (134) boot: Disabling RNG early entropy source...[0m
+[0;32mI (147) cpu_start: Unicore app[0m
+[0;32mI (155) cpu_start: GPIO 20 and 21 are used as console UART I/O pins[0m
+[0;32mI (156) cpu_start: Pro cpu start user code[0m
+[0;32mI (156) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (157) app_init: Application information:[0m
+[0;32mI (161) app_init: Project name:     robot_elbow_module[0m
+[0;32mI (166) app_init: App version:      ad285fb-dirty[0m
+[0;32mI (171) app_init: Compile time:     Oct 21 2026 12:54:45[0m
+[0;32mI (176) app_init: ELF file SHA256:  44eb64cff...[0m
+[0;32mI (180) app_init: ESP-IDF:          v5.5.5[0m
+[0;32mI (184) efuse_init: Min chip rev:     v0.3[0m
+[0;32mI (188) efuse_init: Max chip rev:     v1.99 [0m
+[0;32mI (192) efuse_init: Chip rev:         v0.4[0m
+[0;32mI (195) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (202) heap_init: At 3FC90E60 len 0002F1A0 (188 KiB): RAM[0m
+[0;32mI (207) heap_init: At 3FCC0000 len 0001C710 (113 KiB): Retention RAM[0m
+[0;32mI (213) heap_init: At 3FCDC710 len 00002950 (10 KiB): Retention RAM[0m
+[0;32mI (219) heap_init: At 50000020 len 00001FC8 (7 KiB): RTCRAM[0m
+[0;32mI (225) spi_flash: detected chip: generic[0m
+[0;32mI (228) spi_flash: flash io: dio[0m
+[0;33mW (231) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;32mI (243) sleep_gpio: Configure to isolate all GPIO pins in sleep state[0m
+[0;32mI (249) sleep_gpio: Enable automatic switching of GPIO sleep configuration[0m
+[0;32mI (256) main_task: Started on CPU0[0m
+[0;32mI (259) main_task: Calling app_main()[0m
+[0;32mI (262) robot_elbow_module: Robot elbow module starting...[0m
+[0;32mI (267) CAN_DRIVER: CAN initialized (TX=0, RX=1, 1000000 bps)[0m
+[0;32mI (272) robot_elbow_module: CAN initialized (TX=0, RX=1, 1000000 baud)[0m
+[0;32mI (279) adc_mgr: Initializing ADC with max buf size = 400B[0m
+[0;32mI (285) adc_mgr: ADC manager initialized successfully[0m
+[0;32mI (289) adc_mgr: Registered channel 2[0m
+[0;32mI (292) robot_elbow_module: ADC manager initialized[0m
+[0;32mI (307) stepper: Using microstepping factor 1077936128[0m
+[0;32mI (307) stepper: Selecting duty resolution 12 for max frequency 10667[0m
+[0;32mI (308) stepper: Finding min supported frequency...[0m
+[1;31mE (312) ledc: requested frequency 5 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (324) ledc: requested frequency 6 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (335) ledc: requested frequency 7 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (347) ledc: requested frequency 8 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (359) ledc: requested frequency 9 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (370) ledc: requested frequency 10 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (382) ledc: requested frequency 11 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (394) ledc: requested frequency 12 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (405) ledc: requested frequency 13 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (417) ledc: requested frequency 14 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (429) ledc: requested frequency 15 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (441) ledc: requested frequency 16 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (452) ledc: requested frequency 17 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (464) ledc: requested frequency 18 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[1;31mE (476) ledc: requested frequency 19 and duty resolution 12 can not be achieved, try reducing freq_hz or duty_resolution. div_param=0[0m
+[0;32mI (488) stepper: Selecting min frequency 20 Hz[0m
+[0;32mI (492) stepper: Potentiometer initialized: raw=1349, angle=0.00 deg[0m
+[0;32mI (498) stepper: Stepper initialized: steps/deg=266.667, max_vel_pos=10666.67 sps, max_vel_neg=10666.67 spsmax_accel=5333.33 sps²[0m
+[0;32mI (509) CAN_DRIVER: CAN error monitoring enabled[0m
+[0;32mI (514) robot_elbow_module: Tasks created, system running[0m
+[0;32mI (519) main_task: Returned from app_main()[0m
+[0;33mW (525) CAN_DRIVER: CAN entered ERROR-WARNING[0m
+[0;33mW (527) CAN_DRIVER: CAN entered ERROR-PASSIVE[0m
+[0;33mW (584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1[0m
+[0;32mI (614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1014) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=7542 | rx_missed=0[0m
+[0;32mI (1314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1514) robot_elbow_module: adc: 1347, Stepper elbow - Current(pot): 174.50°, Target(pot): 174.76°, Current(Joint): 17.09, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (1584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 101[0m
+[0;32mI (1614) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (1914) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=17851 | rx_missed=0[0m
+[0;32mI (2314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (2584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 201[0m
+[0;32mI (2614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (2914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3014) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=28160 | rx_missed=0[0m
+[0;32mI (3314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (3584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 301[0m
+[0;32mI (3614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (3914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=38470 | rx_missed=0[0m
+[0;32mI (4314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (4584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 401[0m
+[0;32mI (4614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (4914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=48779 | rx_missed=0[0m
+[0;32mI (5314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (5584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 501[0m
+[0;32mI (5614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (5914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=59088 | rx_missed=0[0m
+[0;32mI (6314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (6584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 601[0m
+[0;32mI (6614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (6914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7214) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=69397 | rx_missed=0[0m
+[0;32mI (7314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7514) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (7584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 701[0m
+[0;32mI (7614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (7914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=79707 | rx_missed=0[0m
+[0;32mI (8314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (8584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 801[0m
+[0;32mI (8614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (8914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=90016 | rx_missed=0[0m
+[0;32mI (9314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9414) robot_elbow_module: adc: 1355, Stepper elbow - Current(pot): 175.53°, Target(pot): 174.76°, Current(Joint): 16.22, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (9584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 901[0m
+[0;32mI (9614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (9914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10214) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=100325 | rx_missed=0[0m
+[0;32mI (10314) robot_elbow_module: adc: 1356, Stepper elbow - Current(pot): 175.66°, Target(pot): 174.76°, Current(Joint): 16.11, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (10584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1001[0m
+[0;32mI (10614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10714) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (10914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=110635 | rx_missed=0[0m
+[0;32mI (11314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11514) robot_elbow_module: adc: 1346, Stepper elbow - Current(pot): 174.37°, Target(pot): 174.76°, Current(Joint): 17.19, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (11584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1101[0m
+[0;32mI (11614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (11914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=120944 | rx_missed=0[0m
+[0;32mI (12314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (12584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1201[0m
+[0;32mI (12614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12714) robot_elbow_module: adc: 1346, Stepper elbow - Current(pot): 174.37°, Target(pot): 174.76°, Current(Joint): 17.19, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (12914) robot_elbow_module: adc: 1356, Stepper elbow - Current(pot): 175.66°, Target(pot): 174.76°, Current(Joint): 16.11, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=131253 | rx_missed=0[0m
+[0;32mI (13314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (13584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1301[0m
+[0;32mI (13614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13714) robot_elbow_module: adc: 1356, Stepper elbow - Current(pot): 175.66°, Target(pot): 174.76°, Current(Joint): 16.11, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (13914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=141562 | rx_missed=0[0m
+[0;32mI (14314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (14584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1401[0m
+[0;32mI (14614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (14914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=151872 | rx_missed=0[0m
+[0;32mI (15314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (15584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1501[0m
+[0;32mI (15614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (15914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=162181 | rx_missed=0[0m
+[0;32mI (16314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (16584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1601[0m
+[0;32mI (16614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (16914) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17214) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=172490 | rx_missed=0[0m
+[0;32mI (17314) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (17584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1701[0m
+[0;32mI (17614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (17914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=182800 | rx_missed=0[0m
+[0;32mI (18314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (18584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1801[0m
+[0;32mI (18614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (18914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=193109 | rx_missed=0[0m
+[0;32mI (19314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19514) robot_elbow_module: adc: 1358, Stepper elbow - Current(pot): 175.92°, Target(pot): 174.76°, Current(Joint): 15.90, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (19584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 1901[0m
+[0;32mI (19614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (19914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20114) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=203418 | rx_missed=0[0m
+[0;32mI (20314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (20584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2001[0m
+[0;32mI (20614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (20914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=213727 | rx_missed=0[0m
+[0;32mI (21314) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (21584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2101[0m
+[0;32mI (21614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (21914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=224037 | rx_missed=0[0m
+[0;32mI (22314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22414) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (22584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2201[0m
+[0;32mI (22614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (22914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=234346 | rx_missed=0[0m
+[0;32mI (23314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (23584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2301[0m
+[0;32mI (23614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (23914) robot_elbow_module: adc: 1357, Stepper elbow - Current(pot): 175.79°, Target(pot): 174.76°, Current(Joint): 16.01, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=244655 | rx_missed=0[0m
+[0;32mI (24314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (24584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2401[0m
+[0;32mI (24614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (24914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25214) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=254964 | rx_missed=0[0m
+[0;32mI (25314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (25584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2501[0m
+[0;32mI (25614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (25914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26014) robot_elbow_module: adc: 1356, Stepper elbow - Current(pot): 175.66°, Target(pot): 174.76°, Current(Joint): 16.11, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26214) robot_elbow_module: adc: 1356, Stepper elbow - Current(pot): 175.66°, Target(pot): 174.76°, Current(Joint): 16.11, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=265274 | rx_missed=0[0m
+[0;32mI (26314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (26584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2601[0m
+[0;32mI (26614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26714) robot_elbow_module: adc: 1346, Stepper elbow - Current(pot): 174.37°, Target(pot): 174.76°, Current(Joint): 17.19, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (26914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=275583 | rx_missed=0[0m
+[0;32mI (27314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (27584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2701[0m
+[0;32mI (27614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (27914) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28114) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=285892 | rx_missed=0[0m
+[0;32mI (28314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (28584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2801[0m
+[0;32mI (28614) robot_elbow_module: adc: 1354, Stepper elbow - Current(pot): 175.40°, Target(pot): 174.76°, Current(Joint): 16.33, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (28914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=296202 | rx_missed=0[0m
+[0;32mI (29314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29514) robot_elbow_module: adc: 1355, Stepper elbow - Current(pot): 175.53°, Target(pot): 174.76°, Current(Joint): 16.22, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (29584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 2901[0m
+[0;32mI (29614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (29914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=306511 | rx_missed=0[0m
+[0;32mI (30314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (30584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3001[0m
+[0;32mI (30614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30714) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (30914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31014) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=316820 | rx_missed=0[0m
+[0;32mI (31314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (31584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3101[0m
+[0;32mI (31614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (31914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=327129 | rx_missed=0[0m
+[0;32mI (32314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (32584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3201[0m
+[0;32mI (32614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (32914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=337439 | rx_missed=0[0m
+[0;32mI (33314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (33584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3301[0m
+[0;32mI (33614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (33914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=347748 | rx_missed=0[0m
+[0;32mI (34314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (34584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3401[0m
+[0;32mI (34614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (34914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=358057 | rx_missed=0[0m
+[0;32mI (35314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (35584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3501[0m
+[0;32mI (35614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35814) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (35914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=368367 | rx_missed=0[0m
+[0;32mI (36314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (36584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3601[0m
+[0;32mI (36614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (36914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=378676 | rx_missed=0[0m
+[0;32mI (37314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (37584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3701[0m
+[0;32mI (37614) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (37914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38214) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=388985 | rx_missed=0[0m
+[0;32mI (38314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (38584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3801[0m
+[0;32mI (38614) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (38914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=399294 | rx_missed=0[0m
+[0;32mI (39314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (39584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 3901[0m
+[0;32mI (39614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (39914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=409604 | rx_missed=0[0m
+[0;32mI (40314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (40584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4001[0m
+[0;32mI (40614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40714) robot_elbow_module: adc: 1355, Stepper elbow - Current(pot): 175.53°, Target(pot): 174.76°, Current(Joint): 16.22, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (40914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=419913 | rx_missed=0[0m
+[0;32mI (41314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (41584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4101[0m
+[0;32mI (41614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (41914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=430222 | rx_missed=0[0m
+[0;32mI (42314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (42584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4201[0m
+[0;32mI (42614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (42914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=440531 | rx_missed=0[0m
+[0;32mI (43314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (43584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4301[0m
+[0;32mI (43614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (43914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=450841 | rx_missed=0[0m
+[0;32mI (44314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (44584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4401[0m
+[0;32mI (44614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (44914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=461150 | rx_missed=0[0m
+[0;32mI (45314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (45584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4501[0m
+[0;32mI (45614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (45914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46014) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=471459 | rx_missed=0[0m
+[0;32mI (46314) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (46584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4601[0m
+[0;32mI (46614) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (46914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47014) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=481769 | rx_missed=0[0m
+[0;32mI (47314) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (47584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4701[0m
+[0;32mI (47614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (47914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48214) robot_elbow_module: adc: 1355, Stepper elbow - Current(pot): 175.53°, Target(pot): 174.76°, Current(Joint): 16.22, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=492078 | rx_missed=0[0m
+[0;32mI (48314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (48584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4801[0m
+[0;32mI (48614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (48914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=502387 | rx_missed=0[0m
+[0;32mI (49314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (49584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 4901[0m
+[0;32mI (49614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (49914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=512696 | rx_missed=0[0m
+[0;32mI (50314) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50414) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (50584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5001[0m
+[0;32mI (50614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (50914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=523006 | rx_missed=0[0m
+[0;32mI (51314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (51584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5101[0m
+[0;32mI (51614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (51914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=533315 | rx_missed=0[0m
+[0;32mI (52314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (52584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5201[0m
+[0;32mI (52614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (52914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=543624 | rx_missed=0[0m
+[0;32mI (53314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (53584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5301[0m
+[0;32mI (53614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (53914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54014) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=553934 | rx_missed=0[0m
+[0;32mI (54314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (54584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5401[0m
+[0;32mI (54614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (54914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=564243 | rx_missed=0[0m
+[0;32mI (55314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (55584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5501[0m
+[0;32mI (55614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (55914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56014) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=574552 | rx_missed=0[0m
+[0;32mI (56314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (56584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5601[0m
+[0;32mI (56614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (56914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57014) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57214) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=584861 | rx_missed=0[0m
+[0;32mI (57314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (57584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5701[0m
+[0;32mI (57614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (57914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=595171 | rx_missed=0[0m
+[0;32mI (58314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (58584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5801[0m
+[0;32mI (58614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (58914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=605480 | rx_missed=0[0m
+[0;32mI (59314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (59584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 5901[0m
+[0;32mI (59614) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (59914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60114) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=615789 | rx_missed=0[0m
+[0;32mI (60314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (60584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6001[0m
+[0;32mI (60614) robot_elbow_module: adc: 1355, Stepper elbow - Current(pot): 175.53°, Target(pot): 174.76°, Current(Joint): 16.22, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (60914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=626098 | rx_missed=0[0m
+[0;32mI (61314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (61584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6101[0m
+[0;32mI (61614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (61914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=636408 | rx_missed=0[0m
+[0;32mI (62314) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (62584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6201[0m
+[0;32mI (62614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (62914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=646717 | rx_missed=0[0m
+[0;32mI (63314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (63584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6301[0m
+[0;32mI (63614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63814) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (63914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=657026 | rx_missed=0[0m
+[0;32mI (64314) robot_elbow_module: adc: 1356, Stepper elbow - Current(pot): 175.66°, Target(pot): 174.76°, Current(Joint): 16.11, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (64584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6401[0m
+[0;32mI (64614) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (64914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=667336 | rx_missed=0[0m
+[0;32mI (65314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65414) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (65584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6501[0m
+[0;32mI (65614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (65914) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=677645 | rx_missed=0[0m
+[0;32mI (66314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (66584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6601[0m
+[0;32mI (66614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66814) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (66914) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=687954 | rx_missed=0[0m
+[0;32mI (67314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (67584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6701[0m
+[0;32mI (67614) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (67914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=698263 | rx_missed=0[0m
+[0;32mI (68314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (68584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6801[0m
+[0;32mI (68614) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (68914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=708573 | rx_missed=0[0m
+[0;32mI (69314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (69584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 6901[0m
+[0;32mI (69614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (69914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70114) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=718882 | rx_missed=0[0m
+[0;32mI (70314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (70584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7001[0m
+[0;32mI (70614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (70914) robot_elbow_module: adc: 1347, Stepper elbow - Current(pot): 174.50°, Target(pot): 174.76°, Current(Joint): 17.09, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=729191 | rx_missed=0[0m
+[0;32mI (71314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (71584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7101[0m
+[0;32mI (71614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (71914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=739501 | rx_missed=0[0m
+[0;32mI (72314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (72584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7201[0m
+[0;32mI (72614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (72914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73014) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=749810 | rx_missed=0[0m
+[0;32mI (73314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (73584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7301[0m
+[0;32mI (73614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (73914) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74114) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=760119 | rx_missed=0[0m
+[0;32mI (74314) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (74584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7401[0m
+[0;32mI (74614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74714) robot_elbow_module: adc: 1353, Stepper elbow - Current(pot): 175.27°, Target(pot): 174.76°, Current(Joint): 16.44, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (74914) robot_elbow_module: adc: 1356, Stepper elbow - Current(pot): 175.66°, Target(pot): 174.76°, Current(Joint): 16.11, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75014) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75114) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=770428 | rx_missed=0[0m
+[0;32mI (75314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75414) robot_elbow_module: adc: 1348, Stepper elbow - Current(pot): 174.63°, Target(pot): 174.76°, Current(Joint): 16.98, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (75584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7501[0m
+[0;32mI (75614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75814) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (75914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76014) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76114) robot_elbow_module: adc: 1355, Stepper elbow - Current(pot): 175.53°, Target(pot): 174.76°, Current(Joint): 16.22, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=780738 | rx_missed=0[0m
+[0;32mI (76314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76414) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (76584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7601[0m
+[0;32mI (76614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76714) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (76914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77014) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77214) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=791047 | rx_missed=0[0m
+[0;32mI (77314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77514) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (77584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7701[0m
+[0;32mI (77614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77714) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (77914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78014) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78114) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=801356 | rx_missed=0[0m
+[0;32mI (78314) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78414) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78514) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (78584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7801[0m
+[0;32mI (78614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (78914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79214) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=811665 | rx_missed=0[0m
+[0;32mI (79314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79414) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79514) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (79584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 7901[0m
+[0;32mI (79614) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79714) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79814) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (79914) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80114) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=821975 | rx_missed=0[0m
+[0;32mI (80314) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80414) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80514) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;33mW (80584) robot_elbow_module: Error sending elbow status over CAN: ESP_ERR_TIMEOUT, total error count: 8001[0m
+[0;32mI (80614) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80714) robot_elbow_module: adc: 1350, Stepper elbow - Current(pot): 174.89°, Target(pot): 174.76°, Current(Joint): 16.76, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80814) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (80914) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (81014) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (81114) robot_elbow_module: adc: 1352, Stepper elbow - Current(pot): 175.15°, Target(pot): 174.76°, Current(Joint): 16.55, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (81214) robot_elbow_module: adc: 1351, Stepper elbow - Current(pot): 175.02°, Target(pot): 174.76°, Current(Joint): 16.65, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m
+[0;32mI (81256) CAN_DRIVER: CAN STATUS | state=1 | TEC=128 | REC=0 | bus_errors=832284 | rx_missed=0[0m
+[0;32mI (81314) robot_elbow_module: adc: 1349, Stepper elbow - Current(pot): 174.76°, Target(pot): 174.76°, Current(Joint): 16.87, Target(Joint): 16.87, Velocity: 0.00°/s, Moving: No[0m

@@ -1,0 +1,656 @@
+Command: C:\Espressif\tools\python\v5.5.5\venv\Scripts\python.exe C:\esp\v5.5.5\esp-idf\tools/idf_monitor.py -p COM12 -b 115200 --toolchain-prefix riscv32-esp-elf- --target esp32c3 --revision 3 --decode-panic backtrace C:\Universitet\5.Projekt\LIMB-Bionic-Arm-HT26\Software\Robotic_Arm\LIMB-HT25\robot_hand_motor_module\build\servo_control.elf C:\Universitet\5.Projekt\LIMB-Bionic-Arm-HT26\Software\Robotic_Arm\LIMB-HT25\robot_hand_motor_module\build\bootloader\bootloader.elf --force-color -m 'C:\Espressif\tools\python\v5.5.5\venv\Scripts\python.exe' 'C:\esp\v5.5.5\esp-idf\tools\idf.py' '-p' 'COM12'
+ESP-ROM:esp32c3-api1-20210207
+Build:Feb  7 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4038220a
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fcd5820,len:0x155c
+load:0x403cbf10,len:0xc84
+load:0x403ce710,len:0x2fac
+entry 0x403cbf1a
+[0;32mI (24) boot: ESP-IDF v5.5.5 2nd stage bootloader[0m
+[0;32mI (24) boot: compile time Oct 21 2026 10:19:34[0m
+[0;32mI (25) boot: chip revision: v0.4[0m
+[0;32mI (25) boot: efuse block revision: v1.3[0m
+[0;32mI (28) boot.esp32c3: SPI Speed      : 80MHz[0m
+[0;32mI (32) boot.esp32c3: SPI Mode       : DIO[0m
+[0;32mI (36) boot.esp32c3: SPI Flash Size : 2MB[0m
+[0;32mI (39) boot: Enabling RNG early entropy source...[0m
+[0;32mI (44) boot: Partition Table:[0m
+[0;32mI (46) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (53) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (59) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (66) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (72) boot: End of partition table[0m
+[0;32mI (76) esp_image: segment 0: paddr=00010020 vaddr=3c020020 size=080b8h ( 32952) map[0m
+[0;32mI (88) esp_image: segment 1: paddr=000180e0 vaddr=3fc8c200 size=01620h (  5664) load[0m
+[0;32mI (91) esp_image: segment 2: paddr=00019708 vaddr=40380000 size=06910h ( 26896) load[0m
+[0;32mI (103) esp_image: segment 3: paddr=00020020 vaddr=42000020 size=1458ch ( 83340) map[0m
+[0;32mI (119) esp_image: segment 4: paddr=000345b4 vaddr=40386910 size=0572ch ( 22316) load[0m
+[0;32mI (123) esp_image: segment 5: paddr=00039ce8 vaddr=50000000 size=00020h (    32) load[0m
+[0;32mI (127) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (128) boot: Disabling RNG early entropy source...[0m
+[0;32mI (144) cpu_start: Unicore app[0m
+[0;32mI (152) cpu_start: GPIO 20 and 21 are used as console UART I/O pins[0m
+[0;32mI (152) cpu_start: Pro cpu start user code[0m
+[0;32mI (152) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (154) app_init: Application information:[0m
+[0;32mI (158) app_init: Project name:     servo_control[0m
+[0;32mI (163) app_init: App version:      ad285fb-dirty[0m
+[0;32mI (167) app_init: Compile time:     Oct 21 2026 10:18:40[0m
+[0;32mI (172) app_init: ELF file SHA256:  c26f86a84...[0m
+[0;32mI (176) app_init: ESP-IDF:          v5.5.5[0m
+[0;32mI (180) efuse_init: Min chip rev:     v0.3[0m
+[0;32mI (184) efuse_init: Max chip rev:     v1.99 [0m
+[0;32mI (188) efuse_init: Chip rev:         v0.4[0m
+[0;32mI (192) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (198) heap_init: At 3FC8E790 len 00031870 (198 KiB): RAM[0m
+[0;32mI (203) heap_init: At 3FCC0000 len 0001C710 (113 KiB): Retention RAM[0m
+[0;32mI (209) heap_init: At 3FCDC710 len 00002950 (10 KiB): Retention RAM[0m
+[0;32mI (215) heap_init: At 50000020 len 00001FC8 (7 KiB): RTCRAM[0m
+[0;32mI (221) spi_flash: detected chip: generic[0m
+[0;32mI (224) spi_flash: flash io: dio[0m
+[0;33mW (227) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;32mI (239) sleep_gpio: Configure to isolate all GPIO pins in sleep state[0m
+[0;32mI (246) sleep_gpio: Enable automatic switching of GPIO sleep configuration[0m
+[0;32mI (253) main_task: Started on CPU0[0m
+[0;32mI (256) main_task: Calling app_main()[0m
+[0;32mI (259) Hand motor module: Starting servo control application[0m
+[0;32mI (264) Hand motor module: Initializing servos...[0m
+[0;32mI (269) Servo: Initializing LEDC for 6 servos[0m
+[0;32mI (273) Servo: Timer configured[0m
+[0;32mI (275) Servo: Configuring Thumb on GPIO0, Channel 0[0m
+[0;32mI (290) Servo: Configuring Index on GPIO1, Channel 1[0m
+[0;32mI (300) Servo: Configuring Middle on GPIO2, Channel 2[0m
+[0;32mI (310) Servo: Configuring Ring on GPIO3, Channel 3[0m
+[0;32mI (320) Servo: Configuring Pinky on GPIO4, Channel 4[0m
+[0;32mI (330) Servo: Configuring Wrist on GPIO5, Channel 5[0m
+[0;32mI (340) Servo: All channels configured, setting initial positions[0m
+[0;32mI (340) Servo: Thumb -> 15.000000° (1650 us)[0m
+[0;32mI (390) Servo: Index -> 42.500000° (1500 us)[0m
+[0;32mI (440) Servo: Middle -> 45.000000° (1250 us)[0m
+[0;32mI (490) Servo: Ring -> 25.000000° (1800 us)[0m
+[0;32mI (540) Servo: Pinky -> 45.000000° (1150 us)[0m
+[0;32mI (590) Servo: Wrist -> 70.000000° (1500 us)[0m
+[0;32mI (640) Servo: All servos initialized at neutral position[0m
+[0;32mI (640) CAN_DRIVER: CAN initialized (TX=6, RX=10, 1000000 bps)[0m
+[0;32mI (1640) Hand motor module: CAN test frame queued: ID=0x123, DLC=4[0m
+[0;32mI (1640) Hand motor module: Starting CAN monitoring task[0m
+[0;32mI (1640) CAN_DRIVER: CAN error monitoring enabled[0m
+[0;32mI (1644) Hand motor module: Starting CAN rx task[0m
+[0;32mI (1648) main_task: Returned from app_main()[0m
+[0;32mI (2644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (3644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (4644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (5644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (6644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (7644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (8644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (9644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (10644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (11644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (12644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (13644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (14644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (15644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (16644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (17644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (18644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (19644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (20644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (21644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (22644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (23644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (24644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (25644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (26644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (27644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (28644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (29644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (30644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (31644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (32644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (33644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (34644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (35644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (36644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (37644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (38644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (39644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (40644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (41644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (42644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (43644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (44644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (45644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (46644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (47644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (48644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (49644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (50644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (51644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (52644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (53644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (54644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (55644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (56644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (57644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (58644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (59644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (60644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (61644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (62644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (63644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (64644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (65644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (66644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (67644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (68644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (69644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (70644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (71644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (72644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (73644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (74644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (75644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (76644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (77644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (78644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (79644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (80644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (81644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (82644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (83644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (84644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (85644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (86644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (87644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (88644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (89644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (90644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (91644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (92644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (93644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (94644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (95644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (96644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (97644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (98644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (99644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (100644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (101644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (102644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (103644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (104644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (105644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (106644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (107644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (108644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (109644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (110644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (111644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (112644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (113644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (114644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (115644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (116644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (117644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (118644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (119644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (120644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (121644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (122644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (123644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (124644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (125644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (126644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (127644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (128644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (129644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (130644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (131644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (132644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (133644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (134644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (135644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (136644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (137644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (138644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (139644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (140644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (141644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (142644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (143644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (144644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (145644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (146644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (147644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (148644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (149644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (150644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (151644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (152644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (153644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (154644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (155644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (156644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (157644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (158644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (159644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (160644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (161644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (162644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (163644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (164644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (165644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (166644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (167644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (168644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (169644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (170644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (171644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (172644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (173644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (174644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (175644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (176644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (177644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (178644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (179644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (180644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (181644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (182644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (183644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (184644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (185644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (186644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (187644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (188644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (189644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (190644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (191644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (192644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (193644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (194644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (195644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (196644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (197644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (198644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (199644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (200644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (201644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (202644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (203644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (204644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (205644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (206644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (207644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (208644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (209644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (210644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (211644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (212644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (213644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (214644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (215644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (216644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (217644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (218644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (219644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (220644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (221644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (222644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (223644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (224644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (225644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (226644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (227644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (228644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (229644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (230644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (231644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (232644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (233644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (234644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (235644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (236644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (237644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (238644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (239644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (240644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (241644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (242644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (243644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (244644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (245644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (246644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (247644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (248644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (249644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (250644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (251644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (252644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (253644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (254644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (255644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (256644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (257644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (258644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (259644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (260644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (261644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (262644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (263644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (264644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (265644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (266644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (267644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (268644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (269644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (270644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (271644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (272644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (273644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (274644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (275644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (276644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (277644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (278644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (279644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (280644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (281644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (282644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (283644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (284644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (285644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (286644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (287644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (288644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (289644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (290644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (291644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (292644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (293644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (294644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (295644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (296644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (297644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (298644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (299644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (300644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (301644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (302644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (303644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (304644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (305644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (306644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (307644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (308644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (309644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (310644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (311644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (312644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (313644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (314644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (315644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (316644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (317644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (318644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (319644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (320644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (321644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (322644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (323644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (324644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (325644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (326644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (327644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (328644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (329644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (330644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (331644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (332644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (333644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (334644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (335644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (336644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (337644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (338644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (339644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (340644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (341644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (342644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (343644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (344644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (345644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (346644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (347644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (348644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (349644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (350644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (351644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (352644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (353644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (354644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (355644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (356644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (357644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (358644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (359644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (360644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (361644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (362644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (363644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (364644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (365644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (366644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (367644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (368644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (369644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (370644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (371644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (372644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (373644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (374644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (375644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (376644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (377644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (378644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (379644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (380644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (381644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (382644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (383644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (384644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (385644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (386644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (387644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (388644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (389644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (390644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (391644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (392644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (393644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (394644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (395644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (396644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (397644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (398644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (399644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (400644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (401644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (402644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (403644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (404644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (405644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (406644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (407644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (408644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (409644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (410644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (411644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (412644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (413644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (414644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (415644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (416644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (417644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (418644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (419644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (420644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (421644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (422644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (423644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (424644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (425644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (426644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (427644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (428644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (429644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (430644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (431644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (432644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (433644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (434644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (435644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (436644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (437644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (438644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (439644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (440644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (441644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (442644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (443644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (444644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (445644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (446644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (447644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (448644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (449644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (450644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (451644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (452644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (453644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (454644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (455644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (456644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (457644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (458644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (459644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (460644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (461644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (462644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (463644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (464644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (465644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (466644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (467644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (468644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (469644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (470644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (471644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (472644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (473644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (474644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (475644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (476644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (477644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (478644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (479644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (480644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (481644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (482644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (483644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (484644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (485644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (486644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (487644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (488644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (489644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (490644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (491644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (492644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (493644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (494644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (495644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (496644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (497644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (498644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (499644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (500644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (501644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (502644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (503644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (504644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (505644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (506644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (507644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (508644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (509644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (510644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (511644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (512644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (513644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (514644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (515644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (516644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (517644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (518644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (519644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (520644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (521644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (522644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (523644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (524644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (525644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (526644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (527644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (528644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (529644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (530644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (531644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (532644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (533644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (534644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (535644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (536644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (537644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (538644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (539644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (540644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (541644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (542644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (543644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (544644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (545644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (546644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (547644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (548644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (549644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (550644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (551644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (552644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (553644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (554644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (555644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (556644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (557644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (558644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (559644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (560644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (561644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (562644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (563644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (564644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (565644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (566644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (567644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (568644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (569644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (570644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (571644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (572644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (573644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (574644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m
+[0;32mI (575644) CAN_DRIVER: CAN STATUS | state=1 | TEC=0 | REC=0 | bus_errors=0 | rx_missed=0[0m

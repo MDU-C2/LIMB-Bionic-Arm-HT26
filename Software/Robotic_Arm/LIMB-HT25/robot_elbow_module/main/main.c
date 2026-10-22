@@ -14,6 +14,7 @@
 #include "soc/gpio_num.h"
 #include "stepper.h"
 
+#define CAN_ONLY_TEST 1
 static const char* const TAG = "robot_elbow_module";
 
 enum {
@@ -89,7 +90,7 @@ static const AdcMgrChannelConfig s_adc_mgr_channel_configs[] = {
         .sample_rate = 1000,
     },
 };
-
+[[maybe_unused]]  
 static const AdcMgrConfig s_adc_mgr_config = {
     .channel_configs = s_adc_mgr_channel_configs,
     .channel_configs_len = LIMB_ARR_LEN(s_adc_mgr_channel_configs),
@@ -317,10 +318,108 @@ static void stepper_task([[maybe_unused]] void* pvParameter) {
     }
   }
 }
+#if CAN_ONLY_TEST
 
+static void can_test_rx_task(void *arg)
+{
+    uint32_t rx_id = 0;
+    uint8_t rx_data[CAN_MAX_MESSAGE_SIZE] = {0};
+    uint8_t rx_len = 0;
+
+    while (true)
+    {
+        esp_err_t err = can_receive(
+            &rx_id,
+            rx_data,
+            &rx_len,
+            portMAX_DELAY
+        );
+
+        if (err == ESP_OK)
+        {
+            ESP_LOGI(TAG,
+                     "CAN RX | ID=0x%03lX | DLC=%u",
+                     (unsigned long)rx_id,
+                     (unsigned)rx_len);
+        }
+        else
+        {
+            ESP_LOGW(TAG,
+                     "CAN RX error: %s",
+                     esp_err_to_name(err));
+        }
+    }
+}
+
+//Test function to receive CAN messages and log them. This is useful for debugging the CAN bus.
+static void can_only_test(void)
+{
+    ESP_LOGI(TAG, "Starting Elbow CAN-only test");
+
+    esp_err_t err = can_init(
+        CAN_TX_PIN,
+        CAN_RX_PIN,
+        CAN_BAUDRATE,
+        NULL
+    );
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "CAN initialization failed: %s",
+                 esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGI(TAG, "CAN initialized successfully");
+
+    BaseType_t result = xTaskCreate(
+        can_test_rx_task,
+        "CAN test RX",
+        4096,
+        NULL,
+        5,
+        NULL
+    );
+
+    if (result != pdPASS)
+    {
+        ESP_LOGE(TAG, "Failed to create CAN RX task");
+        return;
+    }
+
+    // Send one test message to Orin
+    const uint8_t test_data[4] = {
+        0x11, 0x22, 0x33, 0x44
+    };
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    err = can_send(
+        0x123,
+        test_data,
+        sizeof(test_data),
+        1000
+    );
+
+    if (err == ESP_OK)
+    {
+        ESP_LOGI(TAG, "CAN test frame queued");
+    }
+    else
+    {
+        ESP_LOGW(TAG, "CAN TX failed: %s",
+                 esp_err_to_name(err));
+    }
+}
+
+#endif
 void app_main(void) {
-  ESP_LOGI(TAG, "Robot elbow module starting...");
-
+  
+  #if CAN_ONLY_TEST
+    can_only_test();
+    return;
+  #else
+    ESP_LOGI(TAG, "Robot elbow module starting...");
   // Initialize CAN.
   {
     CanMsgFilter can_filter = {
@@ -439,4 +538,5 @@ void app_main(void) {
   }
 
   ESP_LOGI(TAG, "Tasks created, system running");
+  #endif
 }

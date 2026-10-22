@@ -329,7 +329,21 @@ void app_main() {
       abort();
     }
   }
+  // TEST: Send a CAN frame from ESP32-C3 to AGX Orin
+  /*{
+    const uint8_t test_data[] = {0x11, 0x22, 0x33, 0x44};
 
+    // Allow the CAN bus and receiving node to become ready
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    esp_err_t err = can_send(0x123, test_data, sizeof(test_data), 1000);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "CAN test frame queued: ID=0x123, DLC=4");
+    } else {
+        ESP_LOGE(TAG, "CAN test failed: %s", esp_err_to_name(err));
+    }
+  }*/
 #if CONFIG_IMU_ENABLED
   {
     BaseType_t err =

@@ -1,0 +1,3 @@
+Problem:
+Shoulder module ESP32-C3 connect/disconnect kontinuerligt vid koppling med USB-C. Trasig?
+Pressure module ser ej meddelanden från Orin, all hårdvara verkar stämma och vara korrekt kopplad, enbart försedd med USB-C som strömkälla.

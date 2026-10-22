@@ -39,6 +39,6 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/esp-idf/esp_system/port/soc/esp32c3/cmake_install.cmake")
+  include("C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/esp-idf/esp_system/port/soc/esp32c3/cmake_install.cmake")
 endif()
 

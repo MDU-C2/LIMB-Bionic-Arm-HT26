@@ -1,6 +1,6 @@
 /* Automatically generated file; DO NOT EDIT */
 /* Espressif IoT Development Framework Linker Script */
-/* Generated from: C:\Universitet\5.Projekt\LIMB-Bionic-Arm-HT26\Code\CAN_Communication\LIMB-HT25\robot_shoulder_module\build\esp-idf\esp_system\ld\sections.ld.in */
+/* Generated from: C:\Universitet\5.Projekt\LIMB-Bionic-Arm-HT26\Software\Robotic_Arm\LIMB-HT25\robot_shoulder_module\build\esp-idf\esp_system\ld\sections.ld.in */
 
 /*
  * SPDX-FileCopyrightText: 2021 Espressif Systems (Shanghai) CO LTD

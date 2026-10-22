@@ -1,4 +1,4 @@
-/* * Data converted from C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 #if !defined (__APPLE__) && !defined (__linux__)

@@ -10,18 +10,18 @@ if(NOT EXISTS "C:/esp/v5.5.5/esp-idf/components/bootloader/subproject")
   file(MAKE_DIRECTORY "C:/esp/v5.5.5/esp-idf/components/bootloader/subproject")
 endif()
 file(MAKE_DIRECTORY
-  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader"
-  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix"
-  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/tmp"
-  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp"
-  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src"
-  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp"
+  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader"
+  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix"
+  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/tmp"
+  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp"
+  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src"
+  "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp"
 )
 
 set(configSubDirs )
 foreach(subDir IN LISTS configSubDirs)
-    file(MAKE_DIRECTORY "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
+    file(MAKE_DIRECTORY "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
 endforeach()
 if(cfgdir)
-  file(MAKE_DIRECTORY "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
+  file(MAKE_DIRECTORY "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_shoulder_module/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
 endif()

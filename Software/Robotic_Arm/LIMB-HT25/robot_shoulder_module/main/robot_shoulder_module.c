@@ -14,6 +14,7 @@
 #include "soc/gpio_num.h"
 #include "stepper.h"
 
+#define CAN_ONLY_TEST 1
 static const char* const TAG = "Shoulder module";
 
 enum {
@@ -159,6 +160,7 @@ static const AdcMgrChannelConfig kAdcMgrChannelConfigs[] = {
     },
 };
 
+[[maybe_unused]]
 static const AdcMgrConfig kAdcMgrConfig = {
     .channel_configs = kAdcMgrChannelConfigs,
     .channel_configs_len = LIMB_ARR_LEN(kAdcMgrChannelConfigs),
@@ -488,112 +490,214 @@ static void reenable_can_task([[maybe_unused]] void* pvParameter) {
   }
 }
 
-void app_main(void) {
-  // CAN initialization.
-  {
-    CanMsgFilter can_filter = {
-        .id = CAN_RECIPIENT_ROBOT_SHOULDER,
-        .ignore_mask = create_filter_mask(CAN_MESSAGE_TYPE_FILTER_ANY,
-                                          CAN_RECIPIENT_FILTER_EXACT,
-                                          CAN_GENERIC_FILTER_ANY),
+//Test function to receive CAN messages and log them. This is useful for debugging the CAN bus.
+#if CAN_ONLY_TEST
+static void can_test_rx_task(void *arg)
+{
+    uint32_t can_id = 0;
+    uint8_t can_data[CAN_MAX_MESSAGE_SIZE] = {0};
+    uint8_t can_len = 0;
+
+    while (true)
+    {
+        esp_err_t err = can_receive(
+            &can_id,
+            can_data,
+            &can_len,
+            portMAX_DELAY
+        );
+
+        if (err == ESP_OK)
+        {
+            ESP_LOGI(TAG,
+                     "CAN RX | ID=0x%03lX | DLC=%u",
+                     (unsigned long)can_id,
+                     (unsigned)can_len);
+        }
+        else
+        {
+            ESP_LOGW(TAG,
+                     "CAN receive error: %s",
+                     esp_err_to_name(err));
+        }
+    }
+}
+static void can_only_test(void)
+{
+    ESP_LOGI(TAG, "Starting Shoulder CAN-only test");
+
+    esp_err_t err = can_init(
+        CAN_TX_GPIO,
+        CAN_RX_GPIO,
+        1000000,
+        NULL
+    );
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG,
+                 "CAN initialization failed: %s",
+                 esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGI(TAG, "CAN initialized successfully");
+
+    BaseType_t task_result = xTaskCreate(
+        can_test_rx_task,
+        "CAN test RX",
+        4096,
+        NULL,
+        5,
+        NULL
+    );
+
+    if (task_result != pdPASS)
+    {
+        ESP_LOGE(TAG, "Failed to create CAN RX task");
+        return;
+    }
+
+    // Send one test frame to Orin.
+    const uint8_t test_data[4] = {
+        0x11, 0x22, 0x33, 0x44
     };
 
-    esp_err_t err = can_init(CAN_TX_GPIO, CAN_RX_GPIO, 1000000, &can_filter);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling can_init: %s", esp_err_to_name(err));
-      abort();
-    }
-  }
+    vTaskDelay(pdMS_TO_TICKS(1000));
 
-  // ADC initialization.
-  {
-    esp_err_t err = adc_mgr_init(kAdcMgrConfig);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling adc_mgr_init: %s", esp_err_to_name(err));
-      abort();
-    }
-  }
+    err = can_send(
+        0x123,
+        test_data,
+        sizeof(test_data),
+        1000
+    );
 
-  // Servo and stepper initialization.
-  {
-    vTaskDelay(pdMS_TO_TICKS(10));
-    esp_err_t err = adc_mgr_read(&s_adc_read_results, 0);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling adc_mgr_read: %s", esp_err_to_name(err));
-      abort();
+    if (err == ESP_OK)
+    {
+        ESP_LOGI(TAG, "CAN test frame queued");
     }
-
-    s_latest_potentiometer_up_down_value =
-        limb_average16(s_potentiometer_up_down_buffer->data,
-                       s_potentiometer_up_down_buffer->length);
-    s_potentiometer_up_down_buffer->length = 0;
-    s_latest_potentiometer_left_right_value =
-        limb_average16(s_potentiometer_left_right_buffer->data,
-                       s_potentiometer_left_right_buffer->length);
-    s_potentiometer_left_right_buffer->length = 0;
-    s_latest_potentiometer_rotation_value =
-        limb_average16(s_potentiometer_rotation_buffer->data,
-                       s_potentiometer_rotation_buffer->length);
-    s_potentiometer_rotation_buffer->length = 0;
-
-    err = continuous_servo_init(&kUpDownServoConfig,
-                                s_latest_potentiometer_up_down_value,
-                                &s_up_down_servo_handle);
-    s_potentiometer_up_down_buffer->length = 0;
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling servos_init for up/down servo: %s",
-               esp_err_to_name(err));
-      abort();
+    else
+    {
+        ESP_LOGW(TAG,
+                 "CAN TX failed: %s",
+                 esp_err_to_name(err));
     }
-
-    err = continuous_servo_init(&kLeftRightServoConfig,
-                                s_latest_potentiometer_left_right_value,
-                                &s_left_right_servo_handle);
-    s_potentiometer_left_right_buffer->length = 0;
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling servos_init for left/right servo: %s",
-               esp_err_to_name(err));
-      abort();
-    }
-
-    err = stepper_init(&kUpperArmRotationStepperConfig,
-                       s_latest_potentiometer_rotation_value,
-                       &s_upper_arm_rotation_stepper_handle);
-    s_potentiometer_rotation_buffer->length = 0;
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG,
-               "Error calling stepper_init for upper arm rotation stepper: %s",
-               esp_err_to_name(err));
-      abort();
-    }
-  }
-
-#if CONFIG_FORCE_REENABLE_CAN_ON_BUS_OFF
-  {
-    BaseType_t err = xTaskCreate(reenable_can_task, "reenable_can_task",
-                                 1024 * 2 * 2, NULL, 6, NULL);
-    if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
-      abort();
-    }
-  }
+}
 #endif
 
-  {
-    BaseType_t err =
-        xTaskCreate(can_rx_task, "CAN rx task", 1024 * 2 * 2, NULL, 5, NULL);
-    if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
-      abort();
-    }
-  }
+void app_main(void) {
+  #if CAN_ONLY_TEST
 
-  {
-    BaseType_t err = xTaskCreate(motors_update_task, "Motors update task",
-                                 1024 * 2 * 2, NULL, 6, NULL);
-    if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
-      abort();
+    can_only_test();
+    return;
+
+  #else
+    // CAN initialization.
+    {
+      CanMsgFilter can_filter = {
+          .id = CAN_RECIPIENT_ROBOT_SHOULDER,
+          .ignore_mask = create_filter_mask(CAN_MESSAGE_TYPE_FILTER_ANY,
+                                            CAN_RECIPIENT_FILTER_EXACT,
+                                            CAN_GENERIC_FILTER_ANY),
+      };
+
+      esp_err_t err = can_init(CAN_TX_GPIO, CAN_RX_GPIO, 1000000, &can_filter);
+      if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error calling can_init: %s", esp_err_to_name(err));
+        abort();
+      }
     }
-  }
+
+    // ADC initialization.
+    {
+      esp_err_t err = adc_mgr_init(kAdcMgrConfig);
+      if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error calling adc_mgr_init: %s", esp_err_to_name(err));
+        abort();
+      }
+    }
+
+    // Servo and stepper initialization.
+    {
+      vTaskDelay(pdMS_TO_TICKS(10));
+      esp_err_t err = adc_mgr_read(&s_adc_read_results, 0);
+      if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error calling adc_mgr_read: %s", esp_err_to_name(err));
+        abort();
+      }
+
+      s_latest_potentiometer_up_down_value =
+          limb_average16(s_potentiometer_up_down_buffer->data,
+                        s_potentiometer_up_down_buffer->length);
+      s_potentiometer_up_down_buffer->length = 0;
+      s_latest_potentiometer_left_right_value =
+          limb_average16(s_potentiometer_left_right_buffer->data,
+                        s_potentiometer_left_right_buffer->length);
+      s_potentiometer_left_right_buffer->length = 0;
+      s_latest_potentiometer_rotation_value =
+          limb_average16(s_potentiometer_rotation_buffer->data,
+                        s_potentiometer_rotation_buffer->length);
+      s_potentiometer_rotation_buffer->length = 0;
+
+      err = continuous_servo_init(&kUpDownServoConfig,
+                                  s_latest_potentiometer_up_down_value,
+                                  &s_up_down_servo_handle);
+      s_potentiometer_up_down_buffer->length = 0;
+      if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error calling servos_init for up/down servo: %s",
+                esp_err_to_name(err));
+        abort();
+      }
+
+      err = continuous_servo_init(&kLeftRightServoConfig,
+                                  s_latest_potentiometer_left_right_value,
+                                  &s_left_right_servo_handle);
+      s_potentiometer_left_right_buffer->length = 0;
+      if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error calling servos_init for left/right servo: %s",
+                esp_err_to_name(err));
+        abort();
+      }
+
+      err = stepper_init(&kUpperArmRotationStepperConfig,
+                        s_latest_potentiometer_rotation_value,
+                        &s_upper_arm_rotation_stepper_handle);
+      s_potentiometer_rotation_buffer->length = 0;
+      if (err != ESP_OK) {
+        ESP_LOGE(TAG,
+                "Error calling stepper_init for upper arm rotation stepper: %s",
+                esp_err_to_name(err));
+        abort();
+      }
+    }
+
+    #if CONFIG_FORCE_REENABLE_CAN_ON_BUS_OFF
+    {
+      BaseType_t err = xTaskCreate(reenable_can_task, "reenable_can_task",
+                                  1024 * 2 * 2, NULL, 6, NULL);
+      if (err != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
+        abort();
+      }
+    }
+    #endif
+
+    {
+      BaseType_t err =
+          xTaskCreate(can_rx_task, "CAN rx task", 1024 * 2 * 2, NULL, 5, NULL);
+      if (err != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
+        abort();
+      }
+    }
+
+    {
+      BaseType_t err = xTaskCreate(motors_update_task, "Motors update task",
+                                  1024 * 2 * 2, NULL, 6, NULL);
+      if (err != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
+        abort();
+      }
+    }
+  #endif
 }

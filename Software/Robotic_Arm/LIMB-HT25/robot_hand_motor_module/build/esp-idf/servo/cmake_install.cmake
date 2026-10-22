@@ -1,4 +1,4 @@
-# Install script for directory: C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/components/servo
+# Install script for directory: C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/components/servo
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

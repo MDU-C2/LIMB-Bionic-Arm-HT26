@@ -57,7 +57,6 @@ enum {
 };
 
 void loop_control(void);
-
 [[maybe_unused]]
 static void reenable_can_task([[maybe_unused]] void* pvParameter) {
   while (true) {
@@ -215,24 +214,31 @@ void loop_control(void) {
   uint8_t can_msg_data;
   uint32_t rx_id;
   uint8_t rx_data[8];
-  uint8_t rx_len = 1;
+  uint8_t rx_len = 0;
 
   if (can_receive(&rx_id, rx_data, &rx_len, 0) == ESP_OK) {
-    bool should_close = rx_data[0];
-
-    ESP_LOGI(TAG, "CAN RECIBID: ID %X, Data: %d", rx_id, should_close);
+    // Log all received CAN messages
+    ESP_LOGI(TAG, "CAN RX | ID=0x%03lX | DLC=%u", (unsigned long)rx_id, (unsigned)rx_len);
+    // Only process hand grip commands
     if (rx_id == CAN_ID_ROBOT_HAND_SET_GRIP_STATE) {
-      if (should_close) {
-        ESP_LOGW(TAG, ">>> REMOTE START RECEIVED!");
-        current_state = E1_START;
-      } else {  // COMANDO STOP
-        ESP_LOGW(TAG, ">>> REMOTE STOP RECEIVED! Opening hand...");
-        current_state = E0_IDLE;
+      // Validate payload length before accessing data
+      if (rx_len != 1) {
+          ESP_LOGW(TAG, "Invalid grip command length: %u", (unsigned)rx_len);
+      } 
+      else {
+        bool should_close = (rx_data[0] != 0);
+        if (should_close) {
+          ESP_LOGW(TAG, ">>> REMOTE START RECEIVED!");
+          current_state = E1_START;
+        } else {  // COMANDO STOP
+          ESP_LOGW(TAG, ">>> REMOTE STOP RECEIVED! Opening hand...");
+          current_state = E0_IDLE;
 
-        servo_angle = 180;
-        uint8_t open_msg = (uint8_t)servo_angle;
-        // NOTE: We're using the thumb activation as a hack. Sorry.
-        can_send(CAN_ID_ROBOT_THUMB_ACTUATION, &open_msg, 1, 0);
+          servo_angle = 180;
+          uint8_t open_msg = (uint8_t)servo_angle;
+          // NOTE: We're using the thumb activation as a hack. Sorry.
+          can_send(CAN_ID_ROBOT_THUMB_ACTUATION, &open_msg, 1, 0);
+        }
       }
     }
   }

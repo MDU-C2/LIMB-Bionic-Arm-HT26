@@ -38,14 +38,14 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_hand_motor_module/build/esp-idf/mbedtls/mbedtls/library/libmbedcrypto.a")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_hand_motor_module/build/esp-idf/mbedtls/mbedtls/library/libmbedcrypto.a")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_hand_motor_module/build/esp-idf/mbedtls/mbedtls/library/libmbedx509.a")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_hand_motor_module/build/esp-idf/mbedtls/mbedtls/library/libmbedx509.a")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_hand_motor_module/build/esp-idf/mbedtls/mbedtls/library/libmbedtls.a")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_hand_motor_module/build/esp-idf/mbedtls/mbedtls/library/libmbedtls.a")
 endif()
 

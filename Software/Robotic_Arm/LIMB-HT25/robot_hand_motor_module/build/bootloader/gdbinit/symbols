@@ -27,4 +27,4 @@ set confirm off
 set confirm on
 
 # Load application symbols
-file C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Code/CAN_Communication/LIMB-HT25/robot_hand_motor_module/build/bootloader/bootloader.elf
+file C:/Universitet/5.Projekt/LIMB-Bionic-Arm-HT26/Software/Robotic_Arm/LIMB-HT25/robot_hand_motor_module/build/bootloader/bootloader.elf

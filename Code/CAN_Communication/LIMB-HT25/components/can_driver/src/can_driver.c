@@ -1,0 +1,224 @@
+#include "can_driver.h"
+
+#include "driver/twai.h"
+#include "esp_check.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "hal/twai_types_deprecated.h"
+#include "portmacro.h"
+
+static const char* TAG = "CAN_DRIVER";
+
+uint16_t create_filter_mask(
+    CanMessageTypeFilterMask msg_type_filter_mask,
+    CanRecipientNodeFilterMask recipient_node_filter_mask,
+    CanGenericFilterMask generic_filter_mask) {
+  return msg_type_filter_mask | recipient_node_filter_mask |
+         generic_filter_mask;
+}
+
+
+esp_err_t can_automatically_reenable_on_bus_off(void) {
+    const uint32_t alerts_to_enable = TWAI_ALERT_BUS_OFF | TWAI_ALERT_BUS_RECOVERED | TWAI_ALERT_BUS_ERROR | TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_ERR_PASS | TWAI_ALERT_ARB_LOST;
+    ESP_RETURN_ON_ERROR(
+        twai_reconfigure_alerts(alerts_to_enable, NULL), TAG, "Could not configure CAN alerts"
+    );
+
+    ESP_LOGI(TAG, "CAN error monitoring enabled");
+    while (true) {
+        uint32_t alerts = 0;
+
+        // Wait up to 1 second for CAN alerts.
+        esp_err_t ret = twai_read_alerts(&alerts, pdMS_TO_TICKS(1000));
+        if (ret != ESP_OK && ret != ESP_ERR_TIMEOUT) {
+            ESP_LOGE(TAG, "Failed to read CAN alerts: %s", esp_err_to_name(ret));
+            continue;
+        }
+
+        if (alerts & TWAI_ALERT_ABOVE_ERR_WARN) {
+            ESP_LOGW(TAG, "CAN entered ERROR-WARNING");
+        }
+        if (alerts & TWAI_ALERT_ERR_PASS) {
+            ESP_LOGW(TAG, "CAN entered ERROR-PASSIVE");
+        }
+        if (alerts & TWAI_ALERT_ARB_LOST) {
+            ESP_LOGW(TAG, "CAN arbitration lost");
+        }
+        if (alerts & TWAI_ALERT_BUS_OFF) {
+            ESP_LOGW(TAG, "CAN entered BUS-OFF");
+            ESP_ERROR_CHECK_WITHOUT_ABORT(twai_initiate_recovery());
+        }
+
+        if (alerts & TWAI_ALERT_BUS_RECOVERED) {
+            ESP_LOGW(TAG, "CAN recovered from BUS-OFF");
+            ESP_ERROR_CHECK_WITHOUT_ABORT(twai_start());
+        }
+
+        // Print diagnostic counters once per second.
+        static TickType_t last_log = 0;
+        TickType_t now = xTaskGetTickCount();
+
+        if ((now - last_log) >= pdMS_TO_TICKS(1000)) {
+            last_log = now;
+            twai_status_info_t status;
+            if (twai_get_status_info(&status) == ESP_OK) {
+                ESP_LOGI(TAG,
+                    "CAN STATUS | state=%d | TEC=%u | REC=%u | "
+                    "bus_errors=%lu | rx_missed=%lu",
+                    (int)status.state,
+                    (unsigned int)status.tx_error_counter,
+                    (unsigned int)status.rx_error_counter,
+                    (unsigned long)status.bus_error_count,
+                    (unsigned long)status.rx_missed_count
+                );
+            }
+        }
+    }
+    return ESP_OK;
+}
+
+
+/*esp_err_t can_automatically_reenable_on_bus_off(void) {
+  const uint32_t error_state_alert = TWAI_ALERT_BUS_OFF | TWAI_ALERT_BUS_RECOVERED;
+  ESP_RETURN_ON_ERROR(twai_reconfigure_alerts(error_state_alert, NULL), TAG, "Couldn't reconfigure alerts, bus won't reenable on Bus Off state");
+  ESP_LOGI(TAG, "CAN driver will now be re-enabled if a Bus Off state occurs");
+  while (true) {
+    uint32_t alerts = 0;
+    ESP_ERROR_CHECK_WITHOUT_ABORT(twai_read_alerts(&alerts, portMAX_DELAY));
+    if (alerts & TWAI_ALERT_BUS_OFF) {
+      ESP_LOGW(TAG, "ALERT: CAN bus in Bus Off state");
+      ESP_ERROR_CHECK_WITHOUT_ABORT(twai_initiate_recovery());
+    } else if (alerts & TWAI_ALERT_BUS_RECOVERED) {
+      ESP_LOGW(TAG, "ALERT: CAN bus recovered from Bus Off state");
+      ESP_ERROR_CHECK_WITHOUT_ABORT(twai_start());
+    }
+  }
+  return ESP_OK;
+}*/
+
+esp_err_t can_init(int tx_pin, int rx_pin, int baudrate,
+                   const CanMsgFilter* filter) {
+  // General configuration
+  twai_general_config_t g_config =
+      TWAI_GENERAL_CONFIG_DEFAULT(tx_pin, rx_pin, TWAI_MODE_NORMAL);
+  g_config.tx_queue_len = 5;
+  g_config.rx_queue_len = 5;
+
+  // Timing configuration based on baudrate
+  twai_timing_config_t t_config;
+  if (baudrate == 1000000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_1MBITS();
+    t_config = temp;
+  } else if (baudrate == 800000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_800KBITS();
+    t_config = temp;
+  } else if (baudrate == 500000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_500KBITS();
+    t_config = temp;
+  } else if (baudrate == 250000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_250KBITS();
+    t_config = temp;
+  } else if (baudrate == 125000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_125KBITS();
+    t_config = temp;
+  } else if (baudrate == 100000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_100KBITS();
+    t_config = temp;
+  } else if (baudrate == 50000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_50KBITS();
+    t_config = temp;
+  } else if (baudrate == 25000) {
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_25KBITS();
+    t_config = temp;
+  } else {
+    // Default to 500kbps
+    twai_timing_config_t temp = TWAI_TIMING_CONFIG_500KBITS();
+    t_config = temp;
+  }
+
+  // Filter configuration (accept all messages by default)
+  twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+  enum {
+    // The id field in the CAN frame is 11 bits wide and, in the acceptance
+    // code/mask, is located in the 11 most significant bits. By taking a
+    // value with the 11 least significant bits set and shifting it 21 bits,
+    // we get a value with the 11 most significant bits set and nothing else.
+    BITS_TO_SHIFT_ID = 21U,
+    // All bits set except for the most significant 11 bits.
+    ID_BITS_MASK = ~(0x7FFU << BITS_TO_SHIFT_ID),
+  };
+  if (filter != NULL) {
+    f_config.acceptance_code = filter->id << BITS_TO_SHIFT_ID;
+    // The ignore_mask determines which ID bits should be set or unset.
+    // However, we also want to make sure we ignore any other bits in the
+    // frame (the RTR bit and data bits) so we only filter on the ID. To
+    // do that, we have to make sure all other bits are set (ID_BITS_MASK).
+    // We then also have to shift the provided ignore mask so it covers the
+    // 11 most significant bits instead of the 11 least significant bits.
+    f_config.acceptance_mask =
+        ID_BITS_MASK | (filter->ignore_mask << BITS_TO_SHIFT_ID);
+    f_config.single_filter = true;
+  }
+
+  // Install and start TWAI driver
+  esp_err_t ret = twai_driver_install(&g_config, &t_config, &f_config);
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to install TWAI driver");
+    return ret;
+  }
+
+  ret = twai_start();
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to start TWAI driver");
+    return ret;
+  }
+
+  ESP_LOGI(TAG, "CAN initialized (TX=%d, RX=%d, %d bps)", tx_pin, rx_pin,
+           baudrate);
+  return ESP_OK;
+}
+
+esp_err_t can_send(uint32_t id, const uint8_t* data, uint8_t len, uint32_t ms_to_wait){
+  // Validate input parameters
+  if (len > CAN_MAX_MESSAGE_SIZE || (len > 0 && data == NULL)) {
+    return ESP_ERR_INVALID_ARG;
+  }
+  twai_message_t message = {
+      .identifier = id,
+      .data_length_code = len,
+      .flags = 0,  // Standard frame, data frame
+  };
+
+  for (int i = 0; i < len && i < 8; i++) {
+    message.data[i] = data[i];
+  }
+
+  return twai_transmit(&message, pdMS_TO_TICKS(ms_to_wait));
+}
+
+esp_err_t can_receive(uint32_t* id, uint8_t* data, uint8_t* len,
+                      int timeout_ms) {
+  twai_message_t message;
+  esp_err_t ret = twai_receive(&message, pdMS_TO_TICKS(timeout_ms));
+
+  if (ret == ESP_OK) {
+    *id = message.identifier;
+    *len = message.data_length_code;
+
+    // Since we don't support CAN FD, we know the maximum size of the
+    // message data is 8 bytes, meaning we can do a direct copy by
+    // treating the data buffer as an 8-byte integer.
+    // NOTE: We assume that the user has provided a buffer that's at least
+    // 8 bytes.
+    //*(uint64_t*)data = *(uint64_t*)message.data;
+    memcpy(data, message.data, CAN_MAX_MESSAGE_SIZE);
+  }
+
+  return ret;
+}
+
+void can_deinit(void) {
+  twai_stop();
+  twai_driver_uninstall();
+  ESP_LOGI(TAG, "CAN deinitialized");
+}

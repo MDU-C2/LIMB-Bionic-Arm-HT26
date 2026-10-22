@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from aurora.recording.common import enable_ctrl_break_as_interrupt
+
 
 def train(data: Path, output: Path, kind: str, epochs: int, seed: int) -> None:
     import numpy as np
@@ -89,6 +91,7 @@ def main() -> int:
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
+    enable_ctrl_break_as_interrupt()
     if args.output.exists() or not 1 <= args.epochs <= 10000:
         parser.error("Use a new model path and 1 to 10000 epochs.")
     try:

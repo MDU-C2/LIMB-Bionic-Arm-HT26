@@ -1,4 +1,15 @@
-# Movement training
+# Models and training
+
+Use **Recordings → Review EMG labels** before **Compare EMG models**. This
+compares LDA, ANN and LSTM with held-out participants and saves separate runs
+under `outputs/training/`. The [EMG guide](../../../docs/emg-learning.md) covers
+processing, evaluation, plots and explicit model selection for live use.
+
+The camera GRU below identifies movement profiles. It is separate from EMG
+phase classification. Both training workflows save `training.json`; successful
+runs use status `complete`. Matplotlib caches go under `outputs/cache/`.
+
+## Camera movement profiles
 
 New movement captures go in `outputs/recordings/movement/`, which is ignored by
 Git. Run these commands from the project environment.

@@ -8,6 +8,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -148,7 +149,7 @@ class EmgLearningTests(unittest.TestCase):
                 sequence_length=2,
                 epochs=1,
             )
-            self.assertEqual(manifest["status"], "completed")
+            self.assertEqual(manifest["status"], "complete")
             self.assertEqual(len(manifest["folds"]), 3)
             self.assertFalse(manifest["folds"][0]["calibrated_amplitude_baseline"]["available"])
             train = participant_splits(load_trials(root))[0]["train"]
@@ -165,6 +166,15 @@ class EmgLearningTests(unittest.TestCase):
             info["reviewed_for_live"] = True
             write_json(bundle / "model.json", info)
             model = EmgModel(bundle)
+            for changes in (
+                {"feature_indices": [0.5, 1]},
+                {"sequence_length": True},
+                {"artifacts": []},
+            ):
+                write_json(bundle / "model.json", {**info, **changes})
+                with self.assertRaises(ValueError):
+                    EmgModel(bundle)
+            write_json(bundle / "model.json", info)
             live = LiveEmgClassifier(bundle)
             trial = load_trials(root)[0]
             for raw in trial.raw:
@@ -191,6 +201,109 @@ class EmgLearningTests(unittest.TestCase):
         score = grip_scores([0, 0, 2, 2], [0, 1, 2, 0], records)
         self.assertEqual(score["false_closures"], 1)
         self.assertEqual(score["false_releases"], 1)
+
+    def test_event_counts_use_the_configured_step_and_ignore_new_streams(self):
+        records = [
+            {
+                "subject_id": "S01",
+                "trial_id": "T01",
+                "end_s": i * 0.3,
+                "segment_start_s": 0,
+                "stream_start_index": 0,
+            }
+            for i in range(3)
+        ]
+        score = grip_scores([0, 0, 2], [0, 1, 0], records, step_s=0.3)
+        self.assertEqual(score["false_closures"], 1)
+        self.assertEqual(score["false_releases"], 1)
+        records[1]["stream_start_index"] = records[2]["stream_start_index"] = 1000
+        score = grip_scores([0, 0, 2], [0, 1, 0], records, step_s=0.3)
+        self.assertEqual(score["false_closures"], 0)
+        self.assertEqual(score["false_releases"], 1)
+
+    def test_score_validation_rejects_invalid_or_missing_predictions(self):
+        for actual, predicted in (([], []), ([0, 1], [0]), ([0], [-1]), ([4], [0])):
+            with self.subTest(actual=actual, predicted=predicted), self.assertRaises(ValueError):
+                classification_scores(actual, predicted, 4)
+
+    def test_labels_reject_invalid_objects_sources_and_timestamps(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source, label_file = recording(Path(temporary))
+            original = json.loads(label_file.read_text(encoding="utf-8"))
+            for name in ("../emg.csv", str(source.resolve()), "folder\\emg.csv", None):
+                write_json(label_file, {**original, "source": name})
+                with self.assertRaisesRegex(ValueError, "source beside"):
+                    load_labels(label_file)
+            write_json(label_file, [])
+            with self.assertRaisesRegex(ValueError, "JSON object"):
+                load_labels(label_file)
+            source.write_text(
+                "device_time,channel,value\n1000,0,2048\n0,0,2048\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "increasing"):
+                save_labels(source, "S01", "T01", original["segments"], reviewed=True)
+
+    def test_subject_and_trial_case_aliases_do_not_enter_different_partitions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            recording(root, "S01", "T01", seed=1)
+            _source, labels = recording(root, "S01", "T02", seed=2)
+            document = json.loads(labels.read_text(encoding="utf-8"))
+            write_json(labels, {**document, "subject_id": "s01"})
+            with self.assertRaisesRegex(ValueError, "same subject ID"):
+                load_trials(root)
+            write_json(labels, {**document, "trial_id": "t01"})
+            with self.assertRaisesRegex(ValueError, "only once"):
+                load_trials(root)
+
+    def test_interrupted_training_saves_status_without_touching_sources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = [recording(root / "data", f"S0{i + 1}", seed=i)[0] for i in range(2)]
+            hashes = [digest(source) for source in sources]
+            with (
+                patch("aurora.ml.train_emg.make_dataset", side_effect=KeyboardInterrupt),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                run_experiment(
+                    root / "data",
+                    root / "run",
+                    kinds=("lda",),
+                    feature_sets=("full",),
+                    settings=EmgWindowSettings(rate_hz=1000),
+                )
+            document = json.loads((root / "run/training.json").read_text(encoding="utf-8"))
+            self.assertEqual(document["status"], "interrupted")
+            self.assertIn("finished_utc", document)
+            self.assertEqual(hashes, [digest(source) for source in sources])
+
+    def test_incomplete_model_finalisation_cannot_leave_a_complete_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for index in range(2):
+                recording(root / "data", f"S0{index + 1}", seed=index)
+
+            def save(path, document):
+                if path.name == "model.json" and "training_sha256" in document.get(
+                    "evaluation", {}
+                ):
+                    raise OSError("Disk write interrupted")
+                write_json(path, document)
+
+            with (
+                patch("aurora.ml.train_emg.write_json", side_effect=save),
+                self.assertRaises(OSError),
+            ):
+                run_experiment(
+                    root / "data",
+                    root / "run",
+                    kinds=("lda",),
+                    feature_sets=("full",),
+                    settings=EmgWindowSettings(rate_hz=1000),
+                    sequence_length=2,
+                )
+            document = json.loads((root / "run/training.json").read_text(encoding="utf-8"))
+            self.assertEqual(document["status"], "failed")
 
     def test_live_model_waits_for_prediction_and_expires_with_emg(self):
         from aurora.sensors.live_input import LiveSensorInput

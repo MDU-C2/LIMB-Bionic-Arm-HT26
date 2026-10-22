@@ -12,12 +12,13 @@ import numpy as np
 from aurora.ml.experiment import create_manifest, sha256, write_manifest
 from aurora.ml.features import FEATURE_COUNT, SEQUENCE_LENGTH, load_movement, load_sequence
 from aurora.paths import REPOSITORY_ROOT
+from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.time_utils import utc_now
 
 # Keep Matplotlib's cache inside the repository on restricted/shared machines.
 os.environ.setdefault(
     "MPLCONFIGDIR",
-    str(REPOSITORY_ROOT / "artifacts" / ".matplotlib"),
+    str(REPOSITORY_ROOT / "outputs" / "cache" / "matplotlib"),
 )
 
 import torch
@@ -233,6 +234,7 @@ def main(argv=None):
         help="New run folder for models, training.json and the metrics plot",
     )
     args = parser.parse_args(argv)
+    enable_ctrl_break_as_interrupt()
     if args.epochs < 1 or args.seed < 0 or args.seed > 2**32 - 1:
         parser.error("Use at least one epoch and a seed between 0 and 4294967295")
     random.seed(args.seed)

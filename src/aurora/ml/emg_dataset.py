@@ -34,13 +34,19 @@ def load_trials(root: Path) -> list[EmgTrial]:
     files = [root] if root.is_file() else sorted(root.rglob("*.labels.json"))
     trials = []
     keys, hashes = set(), set()
+    subjects = {}
     for path in files:
         labels, source, times, raw = load_labels(path)
         trial = EmgTrial(path, source, labels, times, raw)
         source_hash = digest(source)
-        if trial.key in keys or source_hash in hashes:
+        subject_key = trial.subject.casefold()
+        if subject_key in subjects and subjects[subject_key] != trial.subject:
+            raise ValueError("Use the same subject ID spelling and case in every trial.")
+        subjects[subject_key] = trial.subject
+        key = (subject_key, trial.key[1].casefold())
+        if key in keys or source_hash in hashes:
             raise ValueError("Each trial and raw recording may occur only once in the dataset.")
-        keys.add(trial.key)
+        keys.add(key)
         hashes.add(source_hash)
         trials.append(trial)
     if not trials:
@@ -123,6 +129,7 @@ def trial_windows(
                 "end_s": end_s,
                 "segment_start_s": segment["start_s"],
                 "sample_index": index,
+                "stream_start_index": run_start,
             }
         )
     return (

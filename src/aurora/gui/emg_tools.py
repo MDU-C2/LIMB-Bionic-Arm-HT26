@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from aurora.gui.project_support import console_python
+from aurora.json_utils import read_json_object
 
 
 class EmgToolsMixin:
@@ -117,10 +117,10 @@ class EmgToolsMixin:
             model = EmgModel(Path(filename).parent, require_review=False)
             evaluation = model.manifest["evaluation"]
             training_path = (model.directory / evaluation["training_file"]).resolve()
-            training = json.loads(training_path.read_text(encoding="utf-8"))
-            if training.get("status") != "completed" or evaluation.get("training_sha256") != digest(
-                training_path
-            ):
+            training = read_json_object(training_path)
+            if training.get("status") not in ("complete", "completed") or evaluation.get(
+                "training_sha256"
+            ) != digest(training_path):
                 raise ValueError("The model needs a matching completed participant evaluation.")
             candidate = evaluation["candidate"]
             summary = [
@@ -135,7 +135,7 @@ class EmgToolsMixin:
             ]
             summary += [
                 "",
-                "Check confusion matrices, missed transitions and delays in training.json.",
+                "Check confusion matrices, unmatched phases and state delays in training.json.",
                 "These offline scores do not establish live control accuracy.",
                 "Live use still requires relaxed and strong-grip calibration.",
             ]

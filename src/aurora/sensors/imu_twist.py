@@ -33,8 +33,10 @@ class ImuTwistEstimator:
         self.bias: dict[str, tuple[float, float, float]] = {}
         self.baseline_time: dict[str, float] = {}
         self.baseline_sum: dict[str, tuple[float, float, float]] = {}
-        self.shoulder_home = max(-60.0, min(60.0, shoulder_angle))
-        self.wrist_home = max(0.0, min(140.0, wrist_angle))
+        if not math.isfinite(shoulder_angle) or not math.isfinite(wrist_angle):
+            raise ValueError("Twist reference angles must be finite.")
+        self.shoulder_home = float(shoulder_angle)
+        self.wrist_home = float(wrist_angle)
         self.shoulder_angle = self.shoulder_home
         self.wrist_angle = self.wrist_home
         self.dual_ready = False
@@ -91,7 +93,7 @@ class ImuTwistEstimator:
             shoulder_rate = rates.get("shoulder", (0.0, 0.0, 0.0))[1]
             if abs(shoulder_rate) <= self.deadzone_dps:
                 shoulder_rate = 0.0
-            self.shoulder_angle = max(-60.0, min(60.0, self.shoulder_angle + shoulder_rate * dt))
+            self.shoulder_angle += shoulder_rate * dt
             # The camera's medial-positive proxy has the opposite left-CAD sign.
             result["shoulder_rotation_proxy"] = -self.shoulder_angle
         dual_ready = all(role in self.bias for role in self.axes)
@@ -107,8 +109,7 @@ class ImuTwistEstimator:
                 relative_rate = forearm_gyro[1] - shared_rate
                 if abs(relative_rate) <= self.deadzone_dps:
                     relative_rate = 0.0
-                # Clamp the stored command too, so reversing at a stop works immediately.
-                self.wrist_angle = max(0.0, min(140.0, self.wrist_angle + relative_rate * dt))
+                self.wrist_angle += relative_rate * dt
             else:
                 self.wrist_angle = self.wrist_home
             result["wrist_rotation"] = self.wrist_angle
@@ -122,7 +123,7 @@ class ImuTwistEstimator:
         weight = max(0.0, min(1.0, weight))
         if weight <= 0.0:
             return False
-        target = max(-60.0, min(60.0, -camera_proxy))
+        target = -camera_proxy
         if not self.camera_aligned:
             # Match the first observed pose when IMU calibration finishes.
             self.shoulder_angle = target

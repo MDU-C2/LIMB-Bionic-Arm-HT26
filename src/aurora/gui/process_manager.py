@@ -232,11 +232,7 @@ class ProcessManagerMixin:
                         if return_code == 0
                         else "Recording stopped. Check the error in Activity."
                     )
-                if (
-                    return_code
-                    and not stopped
-                    and managed.kind in ("simulation", "recording", "plot", "processing")
-                ):
+                if return_code and not stopped:
                     self._show_process_failure(managed, return_code)
                 active = self._active_processes()
                 if active:

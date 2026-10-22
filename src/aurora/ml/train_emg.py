@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
-import json
 import platform
 import subprocess
 import sys
@@ -14,11 +13,12 @@ from pathlib import Path
 
 import numpy as np
 
-from aurora.json_utils import write_json
+from aurora.json_utils import read_json_object, write_json
 from aurora.ml.emg_dataset import load_trials, make_dataset, participant_splits
 from aurora.ml.emg_metrics import classification_scores, grip_scores
 from aurora.ml.emg_model import EmgModel, fit_lda
 from aurora.paths import CHECKOUT_DIRECTORY, REPOSITORY_ROOT
+from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.recording.emg_features import PHASE_NAMES
 from aurora.recording.emg_labels import digest
 from aurora.sensors.emg_protocol import EmgActivationEstimator
@@ -115,10 +115,30 @@ def amplitude_baseline(trials, records, rate_hz: float) -> dict:
         metadata = trial.source.parent.parent / "trial.json"
         if not metadata.is_file():
             return {"available": False, "reason": "No saved pre-trial calibration."}
-        profile = json.loads(metadata.read_text(encoding="utf-8")).get("calibration", {})
+        profile = read_json_object(metadata).get("calibration", {})
         required = ("emg_baseline_adc", "emg_rest", "emg_reference", "emg_strong")
-        if any(profile.get(key) is None for key in required):
+        if not isinstance(profile, dict) or any(profile.get(key) is None for key in required):
             return {"available": False, "reason": "Saved rest/strong calibration is incomplete."}
+        values = [profile[key] for key in required]
+        if (
+            not all(
+                isinstance(value, (int, float)) and not isinstance(value, bool) for value in values
+            )
+            or not np.isfinite(values).all()
+            or not 0 <= values[0] <= 4095
+            or values[1] < 0
+            or values[2] <= 0
+            or values[3] <= 0
+        ):
+            return {"available": False, "reason": "Saved EMG calibration contains invalid values."}
+        period = profile.get("emg_period", 1 / rate_hz)
+        if (
+            not isinstance(period, (int, float))
+            or isinstance(period, bool)
+            or not np.isfinite(period)
+            or not np.isclose(period, 1 / rate_hz)
+        ):
+            return {"available": False, "reason": "Calibration and recording sample rates differ."}
         estimator = EmgActivationEstimator()
         estimator.baseline, estimator.rest_envelope = profile[required[0]], profile[required[1]]
         estimator.reference, estimator.strong_envelope = profile[required[2]], profile[required[3]]
@@ -128,8 +148,10 @@ def amplitude_baseline(trials, records, rate_hz: float) -> dict:
             r["sample_index"] for r in records if (r["subject_id"], r["trial_id"]) == trial.key
         }
         for index, raw in enumerate(trial.raw):
-            if index and not np.isclose(
-                trial.times[index] - trial.times[index - 1], 1e6 / rate_hz, rtol=0.01, atol=1
+            if (
+                index
+                and abs(trial.times[index] - trial.times[index - 1] - 1e6 / rate_hz)
+                > 1 + 1e4 / rate_hz
             ):
                 estimator.sample_gap()
             value = estimator.update(raw, 1 / rate_hz)
@@ -170,13 +192,25 @@ def code_info() -> dict:
         except (OSError, subprocess.CalledProcessError):
             pass
     from aurora.ml import emg_dataset, emg_metrics, emg_model, emg_network
-    from aurora.sensors import emg_filter, emg_window
+    from aurora.recording import emg_features, emg_labels, sensor_csv
+    from aurora.sensors import emg_filter, emg_protocol, emg_window
 
     modules = (
         Path(__file__),
         *(
             Path(m.__file__)
-            for m in (emg_dataset, emg_metrics, emg_model, emg_network, emg_filter, emg_window)
+            for m in (
+                emg_dataset,
+                emg_metrics,
+                emg_model,
+                emg_network,
+                emg_features,
+                emg_labels,
+                sensor_csv,
+                emg_filter,
+                emg_protocol,
+                emg_window,
+            )
         ),
     )
     return {
@@ -224,6 +258,10 @@ def run_experiment(
         raise ValueError("Choose LDA, ANN or LSTM and 1 to 10000 training epochs.")
     if not feature_sets or not set(feature_sets) <= {"basic", "full"}:
         raise ValueError("Feature sets are basic and full.")
+    if len(set(kinds)) != len(kinds) or len(set(feature_sets)) != len(feature_sets):
+        raise ValueError("Choose each model and feature set only once.")
+    if not 1 <= sequence_length <= 20:
+        raise ValueError("Sequence length must be between 1 and 20 windows.")
     trials = load_trials(data)
     folds = participant_splits(trials, calibration_trials)
     output.mkdir(parents=True, exist_ok=False)
@@ -289,7 +327,11 @@ def run_experiment(
             baseline = amplitude_baseline(fold["test"], records, settings.rate_hz)
             if baseline["available"]:
                 baseline["grip"] = grip_scores(
-                    test_y, baseline.pop("predictions"), records, binary=True
+                    test_y,
+                    baseline.pop("predictions"),
+                    records,
+                    binary=True,
+                    step_s=settings.step / settings.rate_hz,
                 )
             result["calibrated_amplitude_baseline"] = baseline
             for feature_set in feature_sets:
@@ -311,7 +353,9 @@ def run_experiment(
                     predicted = np.argmax(model.predict(test_x), axis=1)
                     result["models"][name] = {
                         "phase": classification_scores(test_y, predicted, 4),
-                        "grip": grip_scores(test_y, predicted, records),
+                        "grip": grip_scores(
+                            test_y, predicted, records, step_s=settings.step / settings.rate_hz
+                        ),
                     }
             manifest["folds"].append(result)
             write_json(output / "training.json", manifest)
@@ -343,18 +387,23 @@ def run_experiment(
                     "fit": "all_reviewed_trials",
                 }
                 write_json(model.directory / "model.json", model.manifest)
-        manifest["status"] = "completed"
-        manifest["completed_utc"] = utc_now()
+        manifest["status"] = "complete"
+        manifest["finished_utc"] = utc_now()
+        write_json(output / "training.json", manifest)
+        report_hash = digest(output / "training.json")
+        for name in names:
+            model_file = output / "bundles" / name / "model.json"
+            document = read_json_object(model_file)
+            document["evaluation"]["training_sha256"] = report_hash
+            write_json(model_file, document)
+    except KeyboardInterrupt:
+        manifest.update(status="interrupted", finished_utc=utc_now())
+        raise
     except Exception as error:
-        manifest["status"], manifest["error"] = "failed", str(error)
+        manifest.update(status="failed", error=str(error), finished_utc=utc_now())
         raise
     finally:
         write_json(output / "training.json", manifest)
-    for name in names:
-        model_file = output / "bundles" / name / "model.json"
-        document = json.loads(model_file.read_text(encoding="utf-8"))
-        document["evaluation"]["training_sha256"] = digest(output / "training.json")
-        write_json(model_file, document)
     print(f"Results: {output / 'training.json'}", flush=True)
     return manifest
 
@@ -380,6 +429,7 @@ def main() -> int:
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
+    enable_ctrl_break_as_interrupt()
     from datetime import datetime
 
     output = args.output or REPOSITORY_ROOT / "outputs/training" / datetime.now().strftime(
@@ -399,6 +449,8 @@ def main() -> int:
             epochs=args.epochs,
             seed=args.seed,
         )
+    except KeyboardInterrupt:
+        parser.exit(130, f"EMG training interrupted. Run files kept in {output}\n")
     except (OSError, ValueError, ImportError, KeyError, RuntimeError) as error:
         parser.exit(1, f"EMG training: {error}\n")
     return 0

@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
+from aurora.json_utils import read_json_object
 from aurora.recording.sensor_csv import iter_recording, load_recording
 from aurora.sensors.serial_protocol import AXES
 
@@ -37,10 +37,7 @@ class SavedSignals:
 
 
 def read_json(path: Path) -> dict:
-    value = json.loads(path.read_text(encoding="utf-8-sig"))
-    if not isinstance(value, dict):
-        raise ValueError(f"Expected a JSON object in {path}")
-    return value
+    return read_json_object(path)
 
 
 def source_files(path: Path) -> tuple[list[Path], dict]:

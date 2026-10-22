@@ -40,11 +40,11 @@ The main folders are:
 - [`src/aurora/sensors/`](src/aurora/sensors/README.md): sensor input, camera tracking and fusion.
 - [`src/aurora/recording/`](src/aurora/recording/README.md): sensor and camera recording, grip trials and EMG processing.
 - [`src/aurora/simulation/`](src/aurora/simulation/README.md): the arm simulation and playback.
-- [`src/aurora/ml/`](src/aurora/ml/README.md): movement training and recognition.
+- [`src/aurora/ml/`](src/aurora/ml/README.md): movement profiles and EMG classifiers.
 - [`firmware/`](firmware/README.md): programs running on the ESP32-C3.
 - [`data/`](data/README.md): inherited movement recordings, kept separately.
 - [`docs/`](docs/README.md): setup, recording and simulation guides.
 - [`tests/`](tests/README.md): software checks.
 
-Models are stored in `artifacts/models/`. New recordings and generated files
-go in `outputs/`, which is ignored by Git.
+Bundled models are in `artifacts/models/`. New recordings, training runs and
+generated files go in `outputs/`, which is ignored by Git.

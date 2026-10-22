@@ -4,6 +4,8 @@
 - [Troubleshooting](troubleshooting-guide.md): connection, calibration and live simulation problems.
 - [Recording](recording-guide.md): check signals, record a session and run a grip trial.
 - [Signal inspection](signal-inspection.md): plot raw recordings before processing.
+- [EMG learning](emg-learning.md): review labels, compare classifiers and select a model.
+- [Fusion comparison](fusion-comparison.md): offline filter checks with a known reference.
 - [Cup transfer protocol](cup-transfer-protocol.md): instructions to read to subjects.
 - [Live control](live-control.md): guided calibration, fusion and recorded replay.
 - [Simulation](simulation-guide.md): arm controls and live input.

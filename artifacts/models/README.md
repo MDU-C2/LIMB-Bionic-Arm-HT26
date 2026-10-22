@@ -5,6 +5,10 @@ from LIMB1. `movement_gru.json` records its hash and input format. Its exact
 original training split and evaluation results are unavailable. New training
 runs save those details in `training.json`.
 
+New EMG bundles also stay under `outputs/training/`. Select them through the
+live settings after reviewing participant results; do not copy them over these
+camera models. See [EMG learning](../../docs/emg-learning.md).
+
 `cup_yolo11n.onnx` is Ultralytics YOLO11n, pretrained on COCO. It runs locally
 through ONNX Runtime and keeps the `cup` class. Detection scores and boxes are
 saved with camera observations. Missing or hidden objects can still be missed.

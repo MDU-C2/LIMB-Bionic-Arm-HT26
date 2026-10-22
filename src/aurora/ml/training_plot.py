@@ -10,7 +10,7 @@ from pathlib import Path
 
 from aurora.paths import REPOSITORY_ROOT
 
-os.environ.setdefault("MPLCONFIGDIR", str(REPOSITORY_ROOT / "artifacts" / ".matplotlib"))
+os.environ.setdefault("MPLCONFIGDIR", str(REPOSITORY_ROOT / "outputs" / "cache" / "matplotlib"))
 
 
 def main() -> None:

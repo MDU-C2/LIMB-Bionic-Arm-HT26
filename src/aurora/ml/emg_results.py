@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import numpy as np
+
+from aurora.json_utils import read_json_object
 
 
 def main() -> int:
@@ -21,13 +22,15 @@ def main() -> int:
     parser.add_argument("--show", action="store_true")
     args = parser.parse_args()
     try:
-        document = json.loads(args.training.read_text(encoding="utf-8"))
-        if (
-            document.get("task") != "emg_phase_classification"
-            or document.get("status") != "completed"
+        document = read_json_object(args.training)
+        if document.get("task") != "emg_phase_classification" or document.get("status") not in (
+            "complete",
+            "completed",
         ):
             raise ValueError("Choose a completed EMG training run.")
         folds = document["folds"]
+        if not isinstance(folds, list) or not folds:
+            raise ValueError("The training run has no participant evaluation results.")
         candidates = list(folds[0]["models"])
         import matplotlib
 
@@ -80,7 +83,7 @@ def main() -> int:
             plt.show()
         plt.close(figure)
         print(f"Saved {output}")
-    except (OSError, ValueError, KeyError, IndexError) as error:
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
         parser.exit(1, f"EMG results: {error}\n")
     return 0
 

@@ -54,6 +54,8 @@ starting at 95° elbow flexion and extending to 85° produces a 10° change even
 though the robot can only bend through 60°. Robot limits apply after alignment,
 when converting the fused angles to the left-arm joint commands. This is pose
 retargeting, so the robot's available range can still limit the reproduced motion.
+The same rule applies to integrated shoulder and forearm twist: their state
+can exceed robot travel, while the mapped commands stay within joint limits.
 
 The distance between IMUs is not needed for these joint angles. Their mounting
 orientation and alignment to the arm are needed. Camera points can estimate

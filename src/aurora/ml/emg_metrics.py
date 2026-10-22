@@ -8,6 +8,16 @@ import numpy as np
 
 def classification_scores(actual, predicted, classes: int) -> dict:
     actual, predicted = np.asarray(actual), np.asarray(predicted)
+    if (
+        actual.ndim != 1
+        or actual.shape != predicted.shape
+        or not len(actual)
+        or not np.issubdtype(actual.dtype, np.integer)
+        or not np.issubdtype(predicted.dtype, np.integer)
+        or np.any((actual < 0) | (actual >= classes))
+        or np.any((predicted < 0) | (predicted >= classes))
+    ):
+        raise ValueError("Scores need matching non-empty arrays of valid class indices.")
     matrix = np.zeros((classes, classes), dtype=int)
     np.add.at(matrix, (actual, predicted), 1)
     true_positive = np.diag(matrix)
@@ -27,7 +37,11 @@ def classification_scores(actual, predicted, classes: int) -> dict:
     }
 
 
-def grip_scores(actual, predicted, records: list[dict], *, binary: bool = False) -> dict:
+def grip_scores(
+    actual, predicted, records: list[dict], *, binary: bool = False, step_s: float = 0.15
+) -> dict:
+    if len(records) != len(actual) or not np.isfinite(step_s) or step_s <= 0:
+        raise ValueError("Grip scores need aligned records and a positive window step.")
     expected = np.isin(actual, (1, 2))
     closed = np.asarray(predicted, dtype=bool) if binary else np.isin(predicted, (1, 2))
     result = classification_scores(expected.astype(int), closed.astype(int), 2)
@@ -42,7 +56,10 @@ def grip_scores(actual, predicted, records: list[dict], *, binary: bool = False)
             previous["trial_id"],
         ):
             continue
-        if current["end_s"] - previous["end_s"] > 0.2:
+        if (
+            current.get("stream_start_index") != previous.get("stream_start_index")
+            or not 0 < current["end_s"] - previous["end_s"] <= step_s * 1.5
+        ):
             continue
         false_closures += int(closed[index] and not closed[index - 1] and not expected[index])
         false_releases += int(not closed[index] and closed[index - 1] and expected[index])
@@ -62,6 +79,6 @@ def grip_scores(actual, predicted, records: list[dict], *, binary: bool = False)
             misses[phase] += 1
         else:
             delays[phase].append(records[found]["end_s"] - key[-2])
-    result["response_delay_s"] = delays
-    result["missed_transitions"] = misses
+    result["first_matching_state_delay_s"] = delays
+    result["unmatched_phases"] = misses
     return result

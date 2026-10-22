@@ -27,7 +27,7 @@ after the countdown. Use duration 0 to let the BLE trial finish on its own.
 If the camera is also recording with duration 0, stop it after the trial.
 
 The BLE folder contains raw samples, `emg_trial.json` cue times and
-`emg_trial_features.csv` with RMS and mean absolute value. `meta.json` includes
+`emg_trial_features.csv` with six time-domain features. `meta.json` includes
 the rest and hold levels. Labels describe the cues; check them against the signal
 before training. Keep whole recording sessions separate for training and testing.
 
@@ -43,10 +43,15 @@ python -m aurora.recording.emg_processing --file outputs/recordings/SESSION/emg.
 ```
 
 This removes the offset, applies a 20-450 Hz band-pass and a 50 Hz notch, then
-calculates RMS and mean absolute value in 200 ms windows. The source stays intact.
+calculates RMS, MAV, waveform length, zero crossings, slope-sign changes and
+sample variance in 200 ms windows. The source stays intact.
 Samples must be regularly spaced. Gaps need checking before processing.
 
-To correct grip labels, edit the phase start/end seconds in `emg_trial.json`, then run:
+Use **Review EMG labels** to save checked intervals in `emg.labels.json`, then
+**Compare EMG models** for participant evaluation. Raw files and original cues
+stay unchanged. See [EMG learning](../../../docs/emg-learning.md).
+
+To rebuild features from the original grip cues, run:
 
 ```powershell
 python -m aurora.recording.emg_processing --file outputs/recordings/SESSION/emg.csv --labels outputs/recordings/SESSION/emg_trial.json
@@ -58,6 +63,7 @@ python -m aurora.recording.emg_processing --file outputs/recordings/SESSION/emg.
 - `cup_trials.py`, `record_cup_trials.py`: repeated camera and BLE cup trials.
 - Shared BLE decoding and clock mapping are in `../sensors/`.
 - `emg_trials.py`: guided trials and labelled features.
+- `emg_labels.py`: reviewed intervals and source validation.
 - `emg_processing.py`: saved EMG processing command.
 - `emg_features.py`: offline filtering, window features and labelled exports.
 - `sensor_csv.py`, `saved_signals.py`: saved samples, time bases and plot data.

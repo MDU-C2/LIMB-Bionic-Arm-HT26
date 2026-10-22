@@ -58,7 +58,7 @@ class EmgNeuralTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             document = json.loads((root / "run/training.json").read_text(encoding="utf-8"))
-            self.assertEqual(document["status"], "completed")
+            self.assertEqual(document["status"], "complete")
             self.assertEqual(len(document["folds"][0]["models"]), 6)
 
     def test_ann_and_lstm_export_round_trip(self):

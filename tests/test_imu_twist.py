@@ -124,7 +124,7 @@ class ImuTwistTests(unittest.TestCase):
         self.assertEqual(angles["shoulder_rotation_proxy"], 0.0)
         self.assertEqual(angles["wrist_rotation"], 0.0)
 
-    def test_reversing_at_a_limit_moves_immediately(self):
+    def test_measured_twist_stays_unclipped_until_robot_mapping(self):
         estimator = DualImuArmEstimator()
         sensors = resting_sensors()
         calibrate(estimator, sensors)
@@ -132,13 +132,29 @@ class ImuTwistTests(unittest.TestCase):
         sensors["wrist"]["gyro_dps"]["y"] = 400.0
         for _ in range(30):
             angles = estimator.update(sensors, 0.1)
-        self.assertEqual(angles["shoulder_rotation_proxy"], -60.0)
-        self.assertEqual(angles["wrist_rotation"], 140.0)
+        self.assertAlmostEqual(angles["shoulder_rotation_proxy"], -600.0)
+        self.assertAlmostEqual(angles["wrist_rotation"], 600.0)
+        targets = interactive_control_targets(angles)
+        self.assertEqual(targets["shoulder_x"], 60.0)
+        self.assertEqual(targets["wrist_rotation"], 140.0)
         sensors["shoulder"]["gyro_dps"]["y"] = -30.0
         sensors["wrist"]["gyro_dps"]["y"] = -60.0
         angles = estimator.update(sensors, 0.1)
-        self.assertAlmostEqual(angles["shoulder_rotation_proxy"], -57.0)
-        self.assertAlmostEqual(angles["wrist_rotation"], 137.0)
+        self.assertAlmostEqual(angles["shoulder_rotation_proxy"], -597.0)
+        self.assertAlmostEqual(angles["wrist_rotation"], 597.0)
+
+    def test_alignment_and_camera_correction_keep_human_reference_angles(self):
+        estimator = DualImuArmEstimator()
+        estimator.reset_calibration({"shoulder_rotation_proxy": -100, "wrist_rotation": 165})
+        sensors = resting_sensors()
+        angles = calibrate(estimator, sensors)
+        self.assertEqual(angles["shoulder_rotation_proxy"], -100)
+        self.assertEqual(angles["wrist_rotation"], 165)
+        self.assertEqual(estimator.correct_rotation(-110, 0.25), -110)
+        self.assertEqual(estimator.correct_rotation(-100, 0.25), -107.5)
+        targets = interactive_control_targets(estimator.update(sensors, 0.01))
+        self.assertEqual(targets["shoulder_x"], 60)
+        self.assertEqual(targets["wrist_rotation"], 140)
 
     def test_twist_is_independent_of_packet_rate(self):
         results = []

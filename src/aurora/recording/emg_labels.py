@@ -4,21 +4,26 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 import numpy as np
 
-from aurora.json_utils import write_json
+from aurora.json_utils import read_json_object, write_json
 from aurora.recording.emg_features import PHASE_NAMES, load_emg
 from aurora.time_utils import utc_now
 
 
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    checksum = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            checksum.update(block)
+    return checksum.hexdigest()
 
 
 def validate_segments(segments: list, duration: float) -> list[dict]:
+    if not np.isfinite(duration) or duration <= 0:
+        raise ValueError("Labels need a recording with increasing finite device timestamps.")
     if not isinstance(segments, list) or not segments:
         raise ValueError("Add at least one reviewed interval.")
     result = []
@@ -52,6 +57,8 @@ def save_labels(
     destination: Path | None = None,
 ) -> Path:
     times, _raw = load_emg(source)
+    if len(times) < 2 or not np.all(np.diff(times) > 0):
+        raise ValueError("Labels need increasing device timestamps.")
     if not subject.strip() or not trial.strip():
         raise ValueError("Subject and trial IDs are required.")
     duration = (times[-1] - times[0]) / 1e6
@@ -79,7 +86,7 @@ def save_labels(
 
 
 def load_labels(path: Path) -> tuple[dict, Path, np.ndarray, np.ndarray]:
-    labels = json.loads(path.read_text(encoding="utf-8"))
+    labels = read_json_object(path)
     if (
         labels.get("format_version") != 1
         or labels.get("task") != "emg_phase_labels"
@@ -87,17 +94,29 @@ def load_labels(path: Path) -> tuple[dict, Path, np.ndarray, np.ndarray]:
         or labels.get("time_reference") != "seconds_from_first_emg_sample"
     ):
         raise ValueError(f"Review and save the EMG labels first: {path.name}")
-    source = path.parent / labels["source"]
+    name = labels.get("source")
     if (
-        source.parent.resolve() != path.parent.resolve()
-        or digest(source) != labels["source_sha256"]
+        not isinstance(name, str)
+        or not name
+        or Path(name).name != name
+        or "/" in name
+        or "\\" in name
+    ):
+        raise ValueError("Labels must name a raw source beside the label file.")
+    source = path.parent / name
+    if source.parent.resolve() != path.parent.resolve() or digest(source) != labels.get(
+        "source_sha256"
     ):
         raise ValueError("The reviewed labels do not match the raw source.")
     times, raw = load_emg(source)
-    if labels["origin_device_us"] != times[0]:
+    if len(times) < 2 or not np.all(np.diff(times) > 0):
+        raise ValueError("Labels need increasing device timestamps.")
+    if labels.get("origin_device_us") != times[0]:
         raise ValueError("The label clock does not match the raw source.")
-    labels["segments"] = validate_segments(labels["segments"], (times[-1] - times[0]) / 1e6)
+    labels["segments"] = validate_segments(labels.get("segments"), (times[-1] - times[0]) / 1e6)
     for key in ("subject_id", "trial_id"):
         if not isinstance(labels.get(key), str) or not labels[key].strip():
             raise ValueError(f"Labels need a {key}.")
+        if labels[key] != labels[key].strip():
+            raise ValueError(f"Remove surrounding spaces from {key}.")
     return labels, source, times, raw

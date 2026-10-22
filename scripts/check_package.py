@@ -72,7 +72,7 @@ def main() -> int:
             cwd=work,
         )
         code = r"""
-import hashlib, json, pathlib, re, runpy, sys, urllib.parse
+import hashlib, importlib, json, pathlib, re, runpy, sys, urllib.parse
 sys.path.insert(0, sys.argv[1])
 from aurora.paths import CHECKOUT_DIRECTORY, MODEL_DIRECTORY, PACKAGE_DIRECTORY, REPOSITORY_ROOT, RESOURCE_DIRECTORY
 from aurora.gui.project_support import discover_recording_programs, discover_firmware_projects, DOCUMENTATION_FILE
@@ -84,6 +84,11 @@ assert (RESOURCE_DIRECTORY / 'README.md').is_file()
 assert (RESOURCE_DIRECTORY / 'examples/simulation/demo/angles.npz').is_file()
 assert len(discover_recording_programs()) >= 4
 assert len(discover_firmware_projects()) == 1
+for name in ('aurora.ml.train_emg', 'aurora.ml.emg_model', 'aurora.ml.emg_network',
+             'aurora.ml.emg_results', 'aurora.gui.emg_review',
+             'aurora.recording.emg_labels', 'aurora.sensors.fusion_comparison'):
+    module = importlib.import_module(name)
+    assert pathlib.Path(module.__file__).is_relative_to(PACKAGE_DIRECTORY), name
 expected = json.loads(sys.argv[2])
 for name, digest in expected.items():
     assert hashlib.sha256((MODEL_DIRECTORY / name).read_bytes()).hexdigest() == digest

@@ -31,6 +31,8 @@ Defaults compare LDA, ANN and LSTM with RMS/MAV and all six features. New runs
 go in `outputs/training/` with `training.json`, participant splits, raw/label
 hashes, code hashes, package versions, scores and model bundles. Setup supplies
 PyTorch/ONNX for training; live inference uses NumPy or ONNX Runtime.
+Successful runs use status `complete`. Older `completed` reports remain readable.
+Interrupted or failed runs keep their files and save that status.
 
 | Setting | Default |
 | --- | --- |
@@ -70,9 +72,11 @@ separate from unseen-subject scores.
 Results include four-class confusion matrices, support and macro F1, plus binary
 open/closed scores. Absent classes have zero F1 and explicit zero support. False
 closures/releases count changes between adjacent scored windows, not physical
-robot failures. Delay runs from reviewed grip/release onset to the first matching
-binary prediction within that phase; misses are counted. Gaps and phases with
-no eligible windows cannot establish response delay or task success.
+robot failures. `first_matching_state_delay_s` runs from reviewed grip/release
+onset to the first matching binary prediction within that phase. It does not
+prove a new state transition occurred at that time. `unmatched_phases` counts
+phases without a match. Gaps and phases with no eligible windows cannot
+establish response delay or task success.
 `test_label_coverage` lists every reviewed interval, including those with no
 eligible window, so short phases are visible in the report.
 

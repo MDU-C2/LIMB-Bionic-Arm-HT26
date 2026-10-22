@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from pathlib import Path
 
 import numpy as np
 
+from aurora.json_utils import read_json_object
 from aurora.recording.emg_features import PHASE_NAMES, load_emg
 from aurora.recording.emg_labels import save_labels
-from aurora.recording.saved_signals import emg_file
+from aurora.recording.saved_signals import Trace, emg_file, with_gaps
 
 
 class EmgReview:
@@ -26,6 +26,8 @@ class EmgReview:
         self.tk, self.ttk, self.messagebox = tk, ttk, messagebox
         self.source = emg_file(source)
         self.times, self.raw = load_emg(self.source)
+        if len(self.times) < 2 or not np.all(np.diff(self.times) > 0):
+            raise ValueError("Label review needs increasing device timestamps.")
         self.seconds = (self.times - self.times[0]) / 1e6
         self.capture = None
         self.camera_start = None
@@ -37,7 +39,7 @@ class EmgReview:
             if np.all(host > 0) and np.all(np.diff(host) > 0):
                 self.host = host
         trial_file = self.source.parent.parent / "trial.json"
-        trial = json.loads(trial_file.read_text(encoding="utf-8")) if trial_file.is_file() else {}
+        trial = read_json_object(trial_file) if trial_file.is_file() else {}
         self.window = tk.Tk()
         self.window.title("AURORA | Review EMG labels")
         self.window.geometry("1220x830")
@@ -109,7 +111,7 @@ class EmgReview:
         if labels.is_file():
             from aurora.recording.emg_labels import digest, validate_segments
 
-            document = json.loads(labels.read_text(encoding="utf-8"))
+            document = read_json_object(labels)
             if document.get("source_sha256") != digest(self.source):
                 raise ValueError("Saved labels belong to a different raw recording.")
             self.segments = validate_segments(document["segments"], self.seconds[-1])
@@ -121,7 +123,7 @@ class EmgReview:
     def _open_video(self, directory: Path):
         if self.host is None or not (directory / "meta.json").is_file():
             return
-        metadata = json.loads((directory / "meta.json").read_text(encoding="utf-8"))
+        metadata = read_json_object(directory / "meta.json")
         self.camera_start = metadata.get("started_host_monotonic_ns")
         if not isinstance(self.camera_start, int) or not (directory / "video.mp4").is_file():
             return
@@ -143,11 +145,13 @@ class EmgReview:
         index = min(len(self.host) - 1, int(np.searchsorted(self.seconds, float(seconds))))
         video_s = (int(self.host[index]) - self.camera_start) / 1e9
         if video_s < 0:
+            self.video_label.configure(image="", text="No saved frame at this time.")
             self.video_status.configure(text="This interval is before the saved video.")
             return
         self.capture.set(self.cv2.CAP_PROP_POS_MSEC, video_s * 1000)
         ok, frame = self.capture.read()
         if not ok:
+            self.video_label.configure(image="", text="No saved frame at this time.")
             self.video_status.configure(text="No saved frame at this time.")
             return
         image = Image.fromarray(self.cv2.cvtColor(frame, self.cv2.COLOR_BGR2RGB))
@@ -209,16 +213,32 @@ class EmgReview:
         if self.segments:
             self.status.set("Remove existing intervals before importing cue suggestions.")
             return
-        document = json.loads(path.read_text(encoding="utf-8"))
-        origin = document["start_host_monotonic_ns"]
-        for segment in document["segments"]:
-            start_ns = origin + round(segment["start_s"] * 1e9)
-            end_ns = origin + round(segment["end_s"] * 1e9)
-            start, end = np.interp([start_ns, end_ns], self.host, self.seconds)
-            if start < end:
-                self.segments.append(
-                    {"start_s": float(start), "end_s": float(end), "phase": segment["phase"]}
-                )
+        from aurora.recording.emg_labels import validate_segments
+
+        try:
+            document = read_json_object(path)
+            origin = document["start_host_monotonic_ns"]
+            if (
+                type(origin) is not int
+                or origin <= 0
+                or not isinstance(document.get("segments"), list)
+            ):
+                raise ValueError("Grip cues need a positive host start time and phase intervals.")
+            proposed = []
+            for segment in document["segments"]:
+                start_ns = origin + round(float(segment["start_s"]) * 1e9)
+                end_ns = origin + round(float(segment["end_s"]) * 1e9)
+                start, end = np.interp([start_ns, end_ns], self.host, self.seconds)
+                if start < end:
+                    proposed.append(
+                        {"start_s": float(start), "end_s": float(end), "phase": segment["phase"]}
+                    )
+            self.segments = validate_segments(proposed, self.seconds[-1])
+        except (OSError, KeyError, TypeError, ValueError, OverflowError) as error:
+            self.messagebox.showerror(
+                "Could not load cue suggestions", str(error), parent=self.window
+            )
+            return
         self.status.set(
             "Cue suggestions loaded. Check every boundary; these are not reviewed labels yet."
         )
@@ -232,7 +252,9 @@ class EmgReview:
         self.tree.delete(*self.tree.get_children())
         limits = self.axis.get_xlim() if self.axis.has_data() else None
         self.axis.clear()
-        self.axis.plot(self.seconds, self.raw, linewidth=0.5, color="0.25")
+        self.axis.plot(
+            *with_gaps(Trace("Raw EMG", self.seconds, self.raw)), linewidth=0.5, color="0.25"
+        )
         colors = dict(
             zip(PHASE_NAMES, ("tab:blue", "tab:green", "tab:orange", "tab:red"), strict=True)
         )

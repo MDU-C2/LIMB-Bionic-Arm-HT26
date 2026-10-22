@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-import json
 from collections import deque
 from pathlib import Path
 
 import numpy as np
 
+from aurora.json_utils import read_json_object
 from aurora.recording.emg_features import PHASE_NAMES
 from aurora.recording.emg_labels import digest
 from aurora.sensors.emg_window import EmgWindowSettings, EmgWindowStream, preprocessing
@@ -36,7 +36,7 @@ def probabilities(logits: np.ndarray) -> np.ndarray:
 class EmgModel:
     def __init__(self, directory: Path, *, require_review: bool = True):
         self.directory = Path(directory)
-        self.manifest = json.loads((self.directory / "model.json").read_text(encoding="utf-8"))
+        self.manifest = read_json_object(self.directory / "model.json")
         info = self.manifest
         if (
             info.get("format_version") != 1
@@ -45,23 +45,32 @@ class EmgModel:
             or (require_review and info.get("reviewed_for_live") is not True)
         ):
             raise ValueError("Select a reviewed EMG model bundle with the four phase labels.")
-        self.settings = EmgWindowSettings(**info["preprocessing"]["settings"])
+        try:
+            self.settings = EmgWindowSettings(**info["preprocessing"]["settings"])
+        except (KeyError, TypeError) as error:
+            raise ValueError("Model bundle needs valid preprocessing settings.") from error
         if info["preprocessing"] != preprocessing(self.settings):
             raise ValueError("Model preprocessing is incompatible with this version.")
-        for name, expected in info["artifacts"].items():
+        artifacts = info.get("artifacts")
+        if not isinstance(artifacts, dict) or "weights.npz" not in artifacts:
+            raise ValueError("Model bundle needs hashed scaling weights.")
+        for name, expected in artifacts.items():
+            if not isinstance(name, str) or Path(name).name != name or "/" in name or "\\" in name:
+                raise ValueError("Model artifacts must be files inside the bundle.")
             path = self.directory / name
             if path.parent.resolve() != self.directory.resolve() or digest(path) != expected:
                 raise ValueError("Model artifact hash does not match model.json.")
-        self.sequence_length = info["sequence_length"]
-        self.feature_indices = np.asarray(info["feature_indices"], dtype=int)
+        self.sequence_length = info.get("sequence_length")
+        feature_indices = info.get("feature_indices")
         if (
-            not isinstance(self.sequence_length, int)
+            type(self.sequence_length) is not int
             or not 1 <= self.sequence_length <= 20
-            or self.feature_indices.tolist() not in [[0, 1], list(range(6))]
+            or not isinstance(feature_indices, list)
+            or not all(type(index) is int for index in feature_indices)
+            or feature_indices not in [[0, 1], list(range(6))]
         ):
             raise ValueError("Invalid model feature or sequence settings.")
-        if "weights.npz" not in info["artifacts"]:
-            raise ValueError("Model bundle needs frozen scaling weights.")
+        self.feature_indices = np.asarray(feature_indices, dtype=int)
         with np.load(self.directory / "weights.npz", allow_pickle=False) as weights:
             self.mean, self.scale = weights["mean"], weights["scale"]
             if (
@@ -72,7 +81,7 @@ class EmgModel:
                 or np.any(self.scale <= 0)
             ):
                 raise ValueError("Invalid model scaling weights.")
-            self.kind = info["kind"]
+            self.kind = info.get("kind")
             if self.kind == "lda":
                 self.weights, self.bias = weights["weights"], weights["bias"]
                 if (
@@ -88,23 +97,43 @@ class EmgModel:
                 options = ort.SessionOptions()
                 options.intra_op_num_threads = 1
                 options.inter_op_num_threads = 1
-                self.session = ort.InferenceSession(
-                    str(self.directory / "model.onnx"),
-                    sess_options=options,
-                    providers=["CPUExecutionProvider"],
-                )
+                try:
+                    self.session = ort.InferenceSession(
+                        str(self.directory / "model.onnx"),
+                        sess_options=options,
+                        providers=["CPUExecutionProvider"],
+                    )
+                except Exception as error:
+                    raise ValueError(f"Could not load the EMG ONNX model: {error}") from error
+                inputs, outputs = self.session.get_inputs(), self.session.get_outputs()
+                if (
+                    len(inputs) != 1
+                    or inputs[0].name != "features"
+                    or inputs[0].type != "tensor(float)"
+                    or inputs[0].shape[1:] != [self.sequence_length, len(self.mean)]
+                    or len(outputs) != 1
+                    or outputs[0].shape[1:] != [4]
+                ):
+                    raise ValueError("ONNX input/output shapes do not match the EMG bundle.")
             else:
                 raise ValueError("Unknown EMG model kind or missing model.onnx.")
 
     def predict(self, windows: np.ndarray) -> np.ndarray:
         x = np.asarray(windows, dtype=np.float64)
-        if x.ndim != 3 or x.shape[1:] != (self.sequence_length, 6) or not np.isfinite(x).all():
+        if (
+            x.ndim != 3
+            or not len(x)
+            or x.shape[1:] != (self.sequence_length, 6)
+            or not np.isfinite(x).all()
+        ):
             raise ValueError("Prediction needs complete finite causal feature sequences.")
         scaled = (x[:, :, self.feature_indices] - self.mean) / self.scale
         if self.kind == "lda":
             logits = scaled[:, -1] @ self.weights.T + self.bias
         else:
             logits = self.session.run(None, {"features": scaled.astype(np.float32)})[0]
+        if logits.shape != (len(x), 4) or not np.isfinite(logits).all():
+            raise ValueError("EMG model returned invalid phase scores.")
         return probabilities(logits)
 
 
@@ -133,6 +162,7 @@ class LiveEmgClassifier:
             return
         self.history.append(vector)
         if len(self.history) == self.model.sequence_length:
+            self.phase = self.confidence = None
             scores = self.model.predict(np.asarray([self.history]))[0]
             self.phase = PHASE_NAMES[int(np.argmax(scores))]
             self.confidence = float(np.max(scores))

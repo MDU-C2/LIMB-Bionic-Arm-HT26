@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import io
+import json
 import os
+import queue
 import sys
 import tempfile
 import types
@@ -32,6 +34,84 @@ from aurora.sensors.live_input import installed_pose_model_complexity
 
 
 class RecordingBatchTests(unittest.TestCase):
+    def test_label_review_clears_video_outside_the_saved_time_range(self):
+        import numpy as np
+
+        from aurora.gui.emg_review import EmgReview
+
+        review = EmgReview.__new__(EmgReview)
+        review.capture = Mock()
+        review.capture.read.return_value = False, None
+        review.host = np.asarray([2_000_000_000, 3_000_000_000])
+        review.seconds = np.asarray([0.0, 1.0])
+        review.video_label, review.video_status, review.cv2 = Mock(), Mock(), Mock()
+        for start in (1_000_000_000, 4_000_000_000):
+            with self.subTest(camera_start=start):
+                review.camera_start = start
+                review.video_label.reset_mock()
+                review._seek(0)
+                review.video_label.configure.assert_called_once_with(
+                    image="", text="No saved frame at this time."
+                )
+
+    def test_bad_cues_cannot_leave_partially_imported_review_labels(self):
+        import numpy as np
+
+        from aurora.gui.emg_review import EmgReview
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)
+            (path / "emg_trial.json").write_text(
+                json.dumps(
+                    {
+                        "start_host_monotonic_ns": 1000,
+                        "segments": [
+                            {"start_s": 0, "end_s": 0.5, "phase": "rest"},
+                            {"start_s": 0.5, "end_s": "invalid", "phase": "grip"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            review = EmgReview.__new__(EmgReview)
+            review.source = path / "emg.csv"
+            review.host = np.asarray([1000, 1_000_001_000])
+            review.seconds = np.asarray([0, 1])
+            review.segments = []
+            review.messagebox, review.window, review.status, review._redraw = (
+                Mock(),
+                Mock(),
+                Mock(),
+                Mock(),
+            )
+            review._load_cues()
+            self.assertEqual(review.segments, [])
+            review.messagebox.showerror.assert_called_once()
+            review._redraw.assert_not_called()
+
+    def test_review_and_training_failures_are_reported_to_the_operator(self):
+        for kind in ("training", "review", "motion_ai"):
+            with self.subTest(kind=kind):
+                child = Mock()
+                managed = ManagedProcess("test:worker", "Saved data tool", kind, child)
+                events = queue.Queue()
+                events.put(("exit", (managed.key, child, managed.name, 1)))
+                manager = types.SimpleNamespace(
+                    log_queue=events,
+                    processes={managed.key: managed},
+                    _append_log=Mock(),
+                    _show_process_failure=Mock(),
+                    _active_processes=lambda: [],
+                    _set_status=Mock(),
+                    _update_controls=Mock(),
+                    _refresh_recordings=Mock(),
+                    _refresh_info=Mock(),
+                    after=Mock(),
+                    _drain_log_queue=Mock(),
+                )
+                ProcessManagerMixin._drain_log_queue(manager)
+                manager._show_process_failure.assert_called_once_with(managed, 1)
+
     def test_grip_options_only_reach_the_ble_recorder(self):
         self.assertEqual(
             batch_arguments("record_ble_sensors.py", [], "", ("emg",), True, 3),

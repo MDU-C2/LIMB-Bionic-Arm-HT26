@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import math
 from pathlib import Path
 
 import numpy as np
 
-from aurora.json_utils import write_json
+from aurora.json_utils import read_json_object, write_json
 from aurora.paths import REPOSITORY_ROOT
 from aurora.recording.emg_labels import digest
 from aurora.time_utils import utc_now
@@ -206,7 +205,7 @@ def main() -> int:
                 "frame": "calibrated_planar_sensor_axis",
             }
         else:
-            metadata = json.loads(args.file.with_suffix(".json").read_text(encoding="utf-8"))
+            metadata = read_json_object(args.file.with_suffix(".json"))
             if (
                 metadata.get("independent_reference") is not True
                 or not metadata.get("reference_source")

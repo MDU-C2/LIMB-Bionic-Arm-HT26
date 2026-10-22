@@ -25,17 +25,24 @@ These studies do not establish accuracy or rehabilitation outcomes for our setup
 Live grip control uses EMG amplitude with rest and strong-grip calibration.
 IMU and camera estimates supply joint angles. The existing
 [GRU](../src/aurora/ml/train_gru.py) learns camera movement profiles grouped by `subject_id` (older files use `user_id`).
-An EMG classifier is not implemented yet.
+The [EMG comparison](../docs/emg-learning.md) trains LDA, ANN and LSTM from
+reviewed raw recordings. It saves participant splits, scaling and settings.
+Models need explicit review and selection before live use.
 
-The [guided trial](../src/aurora/recording/emg_trials.py) saves cue times and RMS/MAV
+The [guided trial](../src/aurora/recording/emg_trials.py) saves cue times and six time-domain
 features. Cue times need checking against the actual movement. Offline export
 uses forward-backward filtering; live control uses a causal filter. A deployed
-classifier needs the same processing during training and live use.
+classifier therefore uses one shared causal pipeline for training and live use.
+
+The [fusion comparison](../docs/fusion-comparison.md) tests weighted,
+complementary, camera Kalman and planar EKF baselines offline. It requires
+synthetic motion or a described independent reference. Live fusion keeps its
+current correction until measured comparisons support a change.
 
 Filter settings, calibration thresholds and fusion weights still need evaluation.
 See the [sensor guide](../docs/sensor-data.md) for the current settings.
 
-## Checks for future EMG models
+## Evaluation checks
 
 - Keep raw recordings, reviewed labels, participant IDs and session details.
 - Split by participant before making windows when testing generalisation to new

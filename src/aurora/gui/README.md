@@ -7,7 +7,7 @@ To launch directly, select the project Python and run `python -m aurora.gui.app`
 | --- | --- |
 | Simulation | Keyboard or live sensor control of the arm |
 | Recording | Calibrate once and record repeated cup transfers per subject |
-| Recordings | Browse and plot saved files |
+| Recordings | Browse/plot signals, review EMG labels and compare classifiers |
 | Motion AI | Play saved poses or compare movements |
 | Firmware | Build, flash and monitor the ESP32 |
 | Info | Check installed tools and project files |
@@ -41,6 +41,7 @@ See the [recording guide](../../../docs/recording-guide.md) and
 - `recording_tab.py`, `recording_views.py`, `recording_settings.py`: recording setup.
 - `cup_recording.py`: subject calibration and repeated cup trials.
 - `recording_browser.py`: saved files and plots.
+- `emg_review.py`, `emg_tools.py`: label review, classifier comparison and selection.
 - `ble_dashboard.py`, `serial_dashboard.py`, `sensor_window.py`, `sensor_graphs.py`: sensor monitors.
 - `sensor_plot.py`: drawing shared by the live graphs and standalone preview.
 - `simulation_tabs.py`: keyboard and live simulation setup.
@@ -53,3 +54,5 @@ shows its error and log path in the app.
 
 In Recordings, select a trial or CSV and press **Plot signals** to inspect it.
 Use **Process EMG** afterward; the raw files stay unchanged.
+Use **Review EMG labels** before **Compare EMG models**. The
+[EMG guide](../../../docs/emg-learning.md) covers participant splits and model selection.

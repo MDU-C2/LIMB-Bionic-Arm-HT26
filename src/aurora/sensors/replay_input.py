@@ -44,6 +44,7 @@ class RecordedSensorInput(LiveSensorInput):
             shoulder_twist_axis=axes.get("shoulder", "y"),
             wrist_twist_axis=axes.get("wrist", "y"),
             clock=self.clock,
+            emg_model=self.emg_model,
         )
         self.reader.status, self.reader.error = "Recorded data", ""
         imu = self.reader.imu_estimator

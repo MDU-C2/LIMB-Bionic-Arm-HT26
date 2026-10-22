@@ -153,6 +153,7 @@ class InteractiveSimulator(
                 device=self.args.device,
                 address=self.args.address,
                 grip_source=self.args.grip_source,
+                emg_model=getattr(self.args, "emg_model", None),
                 shoulder_twist_axis=self.args.shoulder_twist_axis,
                 wrist_twist_axis=self.args.wrist_twist_axis,
             )

@@ -36,7 +36,9 @@ they do not establish signal quality or grip accuracy by themselves.
 
 After inspecting the raw data, use **Process EMG**. The default offline pipeline
 removes the offset, applies a fourth-order 20-450 Hz Butterworth band-pass and
-a 50 Hz notch, then exports RMS/MAV in 200 ms windows with 50 ms overlap.
+a 50 Hz notch, then exports RMS, MAV, waveform length, zero crossings,
+slope-sign changes and sample variance in 200 ms windows with 50 ms overlap.
+The ZC/SSC threshold defaults to 5 ADC counts (`--noise-threshold`).
 It requires regular sample times and a sampling rate above twice the high cutoff.
 The USB diagnostic stream is 400 Hz, so it cannot use the default 450 Hz cutoff.
 Use the command line to choose a lower cutoff for that stream:
@@ -50,7 +52,8 @@ Filtered samples, features and settings are saved as separate files. Processing
 metadata includes the source filename and SHA-256 hash. With `--labels`, the same
 filter and window options apply, and the cue file hash is saved too. Keep the
 originals. Offline forward-backward filtering uses future samples and differs
-from the causal live filter; training a live classifier needs matched processing.
+from the causal live filter. [EMG learning](emg-learning.md) uses a separate,
+shared causal pipeline for training and live prediction.
 
 The earlier HT25 `src/emg/emg_processing_utils.py` provides the offset removal,
 band-pass/notch and RMS/MAV baseline. The earlier EMG3 report by Folkesson et al.

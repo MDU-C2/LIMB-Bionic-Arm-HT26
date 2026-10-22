@@ -142,6 +142,7 @@ class LiveSensorInput:
         synchronize_clock: bool = False,
         show_monitor: bool = True,
         pose_model_complexity: int | None = None,
+        emg_model: Path | None = None,
         clock=None,
     ) -> None:
         self.port = port
@@ -156,6 +157,11 @@ class LiveSensorInput:
         if grip_source not in ("auto", "camera", "emg"):
             raise ValueError("Grip source must be auto, camera, or emg")
         self.grip_source = grip_source
+        if emg_model is not None and (self.transport != "ble" or grip_source != "emg"):
+            raise ValueError("An EMG model requires BLE transport and the EMG grip source.")
+        self.emg_model = emg_model
+        self.model_grip = None
+        self.emg_phase = None
         self.shoulder_twist_axis = shoulder_twist_axis
         self.wrist_twist_axis = wrist_twist_axis
         self.synchronize_clock = synchronize_clock
@@ -226,6 +232,7 @@ class LiveSensorInput:
                 self.shoulder_twist_axis,
                 self.wrist_twist_axis,
                 synchronize_clock=self.synchronize_clock,
+                emg_model=self.emg_model,
                 clock=self.clock,
             )
         else:
@@ -369,6 +376,8 @@ class LiveSensorInput:
             self.emg_raw = packet["emg_raw"]
             self.emg_activation = packet["emg_activation"]
             self.emg_time = packet["emg_time"]
+            self.model_grip = packet.get("emg_model_grip")
+            self.emg_phase = packet.get("emg_phase")
         elif packet is not None:
             self.sensors = extract_imus(packet)
             self.imu_mode, self.imu_roles = imu_configuration(packet)
@@ -392,7 +401,12 @@ class LiveSensorInput:
         recent_camera = self.camera_angles if now - self.camera_time <= 0.5 else None
         recent_hand_curl = self.hand_curl if now - self.hand_time <= 0.5 else None
         recent_emg = self.emg_activation if now - self.emg_time <= 0.5 else None
-        grip, grip_source = select_grip_source(recent_emg, recent_hand_curl, self.grip_source)
+        control_emg = (
+            self.model_grip if self.emg_model is not None and recent_emg is not None else recent_emg
+        )
+        grip, grip_source = select_grip_source(control_emg, recent_hand_curl, self.grip_source)
+        if self.emg_model is not None:
+            grip_source = f"EMG model: {self.emg_phase or 'warming up'}"
         imu_connected = self.imu_mode != "none" and now - self.imu_packet_time <= 0.5
         fused = fuse_control_angles(
             recent_imu, recent_camera, self.camera_weight, camera_corrected=True

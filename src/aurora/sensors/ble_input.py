@@ -35,6 +35,7 @@ class BleSensorReader:
         wrist_twist_axis: str = DEFAULT_TWIST_AXIS,
         *,
         synchronize_clock: bool = False,
+        emg_model: Path | None = None,
         clock=None,
     ) -> None:
         self.device = device
@@ -58,6 +59,11 @@ class BleSensorReader:
             shoulder_twist_axis=shoulder_twist_axis, wrist_twist_axis=wrist_twist_axis
         )
         self.emg_estimator = EmgActivationEstimator()
+        self.emg_classifier = None
+        if emg_model is not None:
+            from aurora.ml.emg_model import LiveEmgClassifier
+
+            self.emg_classifier = LiveEmgClassifier(emg_model)
         self._emg_period = 0.01
         self._imu_device_time: int | None = None
         self._previous_imu_time: int | None = None
@@ -78,6 +84,8 @@ class BleSensorReader:
         self._previous_imu_sequence = None
         self.imu_estimator.reset_calibration()
         self.emg_estimator.reset()
+        if self.emg_classifier is not None:
+            self.emg_classifier.reset()
 
     def start(self) -> None:
         # Fail clearly if Bluetooth support is missing before opening the camera.
@@ -112,6 +120,8 @@ class BleSensorReader:
             if reset_emg:
                 self.emg_estimator.reset()
                 self.activation = None
+                if self.emg_classifier is not None:
+                    self.emg_classifier.reset()
             self.angles = None
 
     def latest(self) -> dict:
@@ -127,6 +137,10 @@ class BleSensorReader:
                 "emg_time": self.emg_time,
                 "emg_raw": self.emg_raw,
                 "emg_activation": self.activation,
+                "emg_phase": self.emg_classifier.phase if self.emg_classifier else None,
+                "emg_model_grip": self.emg_classifier.grip(self.activation)
+                if self.emg_classifier
+                else None,
             }
 
     def correct_angles(self, camera_angles: object, weight: float) -> dict | None:
@@ -152,6 +166,8 @@ class BleSensorReader:
         with self._lock:
             self.emg_estimator.reset()
             self.activation = None
+            if self.emg_classifier is not None:
+                self.emg_classifier.reset()
 
     def notification(self, sensor: str, data: bytes | bytearray) -> None:
         """Decode each packet and save it when a trial is active."""
@@ -174,6 +190,8 @@ class BleSensorReader:
                     # Keep the existing half-second rest calibration at the sample rate.
                     self.emg_estimator = EmgActivationEstimator(max(2, round(0.5 / period)))
                     self.activation = None
+                    if self.emg_classifier is not None:
+                        self.emg_classifier.reset()
         elif sensor == "imu":
             self._imu_device_time = None
             if len(data) == HIGH_RATE_IMU_PACKET.size:
@@ -203,6 +221,11 @@ class BleSensorReader:
             estimator = self.imu_estimator
             return {
                 "emg_baseline_adc": self.emg_estimator.baseline,
+                "emg_rest": self.emg_estimator.rest_envelope,
+                "emg_reference": self.emg_estimator.reference,
+                "emg_strong": self.emg_estimator.strong_envelope,
+                "emg_period": self._emg_period,
+                "emg_model": self.emg_classifier.model.manifest if self.emg_classifier else None,
                 "imu_tilt_offsets": dict(estimator.tilt_offsets),
                 "imu_gyro_bias_z": dict(estimator.gyro_bias_z),
                 "imu_elbow_zero": estimator.elbow_zero,
@@ -254,6 +277,9 @@ class BleSensorReader:
                 "emg_reference": self.emg_estimator.reference,
                 "emg_strong": self.emg_estimator.strong_envelope,
                 "emg_threshold": self.emg_estimator.activation_threshold,
+                "emg_phase": self.emg_classifier.phase
+                if self.emg_classifier and emg_fresh
+                else None,
                 "imus": {
                     role: list(samples) if imu_fresh else []
                     for role, samples in self._imu_history.items()
@@ -273,14 +299,30 @@ class BleSensorReader:
                         return  # Duplicate/reordered data is not a new muscle sample.
                     if difference > 1:
                         self.emg_estimator.sample_gap()
+                        if self.emg_classifier is not None:
+                            self.emg_classifier.reset()
                 self._previous_emg_sequence = _sequence
                 values = channels[0] if channels else []
                 if not values:
                     self.emg_time = 0.0
                     self.activation = None
+                    if self.emg_classifier is not None:
+                        self.emg_classifier.reset()
+                    return
+                if (
+                    self.emg_classifier is not None
+                    and not abs(self._emg_period * self.emg_classifier.model.settings.rate_hz - 1)
+                    < 0.01
+                ):
+                    self.emg_classifier.reset()
+                    self.error = "EMG model sample rate differs from the BLE stream"
+                    self.activation = None
+                    self.emg_time = 0.0
                     return
                 for value in values:
                     self.activation = self.emg_estimator.update(value, self._emg_period)
+                    if self.emg_classifier is not None:
+                        self.emg_classifier.update(value)
                 self._emg_history.extend(values)
                 self.emg_raw = int(values[-1])
                 self.emg_time = now

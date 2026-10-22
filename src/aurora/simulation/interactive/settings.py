@@ -65,6 +65,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="EMG grip by default; Camera and Auto are also available",
     )
     parser.add_argument("--depth", action="store_true", help="Use OAK-D stereo depth")
+    parser.add_argument("--emg-model", type=Path, help="Explicitly selected, reviewed EMG bundle")
     parser.add_argument("--replay", type=Path, help="Replay a recorded cup trial without hardware")
     parser.add_argument("--table-width-cm", type=float, default=60)
     parser.add_argument("--table-depth-cm", type=float, default=60)
@@ -76,6 +77,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if (args.telemetry_out is not None or args.torque_out is not None) and not dynamic_mode:
         parser.error("--telemetry-out and --torque-out require --mode dynamic")
     args.transport = args.transport or ("serial" if args.port else "ble")
+    if args.emg_model is not None and (
+        args.control != "camera-imu" or args.transport != "ble" or args.grip_source != "emg"
+    ):
+        parser.error("--emg-model requires camera-imu control, BLE transport and EMG grip.")
     if args.control == "camera-imu" and args.transport == "serial" and not args.port:
         parser.error("--port is required for serial live control")
     if args.baud <= 0:

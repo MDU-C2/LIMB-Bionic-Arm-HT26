@@ -62,6 +62,11 @@ depth. Integrating acceleration twice is not used to recover hand position.
 
 ## Check without hardware
 
+The [offline fusion comparison](fusion-comparison.md) checks experimental
+baselines with synthetic or independently referenced planar motion. It does
+not change live fusion. Optional [EMG models](emg-learning.md) can be selected
+in the advanced live settings after reviewing participant results.
+
 Choose **Replay a recorded cup trial**, select its `trial.json`, then press
 **Play recording**. Replay decodes the raw BLE packets with the saved calibration
 and feeds the saved camera observations through the same alignment and fusion.

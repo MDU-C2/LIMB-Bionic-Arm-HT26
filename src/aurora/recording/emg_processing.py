@@ -1,22 +1,23 @@
 # Johan Sandred, Majd
-"""Filter recorded EMG and calculate RMS and mean absolute value."""
+"""Filter saved EMG and export six time-domain features."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import hashlib
-import json
 from pathlib import Path
 
 from aurora.json_utils import write_json
 from aurora.recording.emg_features import (
     export_features,
+    full_window_features,
     load_emg,
     preprocess_emg,
     sample_rate,
-    window_features,
 )
+from aurora.recording.emg_features import window_features as window_features
+from aurora.sensors.emg_window import FEATURE_NAMES
 from aurora.time_utils import utc_now
 
 
@@ -38,7 +39,12 @@ def main() -> int:
     parser.add_argument("--window-ms", type=float, default=200.0)
     parser.add_argument("--overlap-ms", type=float, default=50.0)
     parser.add_argument(
-        "--labels", type=Path, help="Rebuild grip features from edited trial labels."
+        "--noise-threshold", type=float, default=5.0, help="ZC/SSC threshold in ADC counts"
+    )
+    parser.add_argument(
+        "--labels",
+        type=Path,
+        help="Guided emg_trial.json cues; reviewed .labels.json files are for training.",
     )
     args = parser.parse_args()
     try:
@@ -51,6 +57,7 @@ def main() -> int:
                 notch_hz=args.notch,
                 window_ms=args.window_ms,
                 overlap_ms=args.overlap_ms,
+                noise_threshold_adc=args.noise_threshold,
             )
             write_json(
                 args.file.with_suffix(".processing.json"),
@@ -61,18 +68,14 @@ def main() -> int:
                     **summary,
                 },
             )
-            metadata_file = args.file.with_name("meta.json")
-            if metadata_file.is_file():
-                metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-                if isinstance(metadata.get("grip_trial"), dict):
-                    metadata["grip_trial"].update(summary)
-                    write_json(metadata_file, metadata)
             print(f"Saved {summary['features']}: {summary['windows_by_phase']}")
             return 0
         times, raw = load_emg(args.file)
         rate_hz = sample_rate(times)
         filtered = preprocess_emg(raw, rate_hz, args.lowcut, args.highcut, args.notch)
-        starts, rms, mav = window_features(filtered, rate_hz, args.window_ms, args.overlap_ms)
+        starts, vectors = full_window_features(
+            filtered, rate_hz, args.window_ms, args.overlap_ms, args.noise_threshold
+        )
         filtered_path = args.file.with_suffix(".filtered.csv")
         features_path = args.file.with_suffix(".features.csv")
         metadata_path = args.file.with_suffix(".processing.json")
@@ -83,8 +86,10 @@ def main() -> int:
             writer.writerows(zip(times, raw, filtered, strict=True))
         with features_path.open("w", newline="", encoding="utf-8") as output:
             writer = csv.writer(output)
-            writer.writerow(("timestamp_us", "rms", "mav"))
-            writer.writerows(zip(times[starts], rms, mav, strict=True))
+            writer.writerow(("timestamp_us", *FEATURE_NAMES))
+            writer.writerows(
+                (time, *vector) for time, vector in zip(times[starts], vectors, strict=True)
+            )
         write_json(
             metadata_path,
             {
@@ -98,6 +103,7 @@ def main() -> int:
                 "notch_quality": 30,
                 "window_ms": args.window_ms,
                 "overlap_ms": args.overlap_ms,
+                "noise_threshold_adc": args.noise_threshold,
                 "samples": len(raw),
                 "windows": len(starts),
             },

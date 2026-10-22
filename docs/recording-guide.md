@@ -92,10 +92,14 @@ that source alone. Missing samples break the lines. Operator marker times are
 shown when the saved clocks can be aligned.
 
 Check the relaxed level, contraction changes, clipping and gaps before applying
-filters. Press **Process EMG** to save filtered samples, RMS/MAV windows and
+filters. Press **Process EMG** to save filtered samples, six-feature windows and
 processing settings beside the source. Refresh the list and select the generated
 CSV to plot it. Raw files stay unchanged. See [signal inspection](signal-inspection.md)
 for the spectrum and filter settings.
+
+Use **Review EMG labels** to check phase boundaries against the raw signal and
+video, then **Compare EMG models** for participant evaluation. See
+[EMG learning](emg-learning.md) for labels, model settings and selection.
 
 ## Advanced recordings
 
@@ -108,7 +112,7 @@ and set duration to `0`. Five repeats take about 38 seconds. Follow the relax,
 close, hold and open cues. Stop a separate camera recorder afterward.
 
 The BLE folder adds `emg_trial.json` cue times and `emg_trial_features.csv`
-with RMS and mean absolute value. Cue times are labels to review against the
+with six time-domain features. Cue times are labels to review against the
 actual movement. Cup transfers have a trial-level task name; grasp and release
 phases are not automatically labelled.
 
@@ -122,9 +126,10 @@ Process a saved EMG file from the project environment:
 python -m aurora.recording.emg_processing --file outputs/recordings/S01/TRIAL/ble/emg.csv
 ```
 
-This preserves the raw file and exports filtered RMS/MAV features. Samples
-must be regularly spaced; review gaps before processing. For corrected grip
-labels, add `--labels PATH/emg_trial.json`.
+This preserves the raw file and exports six filtered-signal features. Samples
+must be regularly spaced; review gaps before processing. To rebuild cue-derived
+features, add `--labels PATH/emg_trial.json`. Use **Review EMG labels** for
+separate reviewed training labels.
 
 Finish recording before starting live simulation. It uses the same camera and
 BLE device. See [troubleshooting](troubleshooting-guide.md) for connection problems

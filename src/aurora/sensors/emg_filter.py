@@ -37,7 +37,7 @@ class Biquad:
 
 
 class RawEmgFilter:
-    """20–450 Hz fourth-order band-pass and a 50 Hz, Q=30 mains notch."""
+    """Fourth-order 20 Hz high-pass and 450 Hz low-pass, then a 50 Hz Q=30 notch."""
 
     def __init__(self, rate: float) -> None:
         self.stages = [

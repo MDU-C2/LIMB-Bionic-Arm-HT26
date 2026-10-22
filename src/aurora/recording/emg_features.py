@@ -12,6 +12,7 @@ import numpy as np
 from scipy.signal import butter, filtfilt, iirnotch
 
 from aurora.recording.sensor_csv import iter_recording
+from aurora.sensors.emg_window import FEATURE_NAMES, features
 
 PHASE_NAMES = ("rest", "grip", "hold", "release")
 
@@ -115,6 +116,7 @@ def export_features(
     notch_hz: float = 50.0,
     window_ms: float = 200.0,
     overlap_ms: float = 50.0,
+    noise_threshold_adc: float = 5.0,
 ) -> dict:
     """Keep complete windows inside one phase and preserve their amplitude."""
     labels = json.loads(labels_file.read_text(encoding="utf-8"))
@@ -151,7 +153,10 @@ def export_features(
     if np.any(host_times <= 0) or np.any(np.diff(host_times) <= 0):
         raise ValueError("Synced sample times must increase.")
     filtered = preprocess_emg(raw, rate, lowcut_hz, highcut_hz, notch_hz)
-    starts, rms, mav = window_features(filtered, rate, window_ms, overlap_ms)
+    starts, vectors = full_window_features(
+        filtered, rate, window_ms, overlap_ms, noise_threshold_adc
+    )
+    rms = vectors[:, 0]
     size = int(rate * window_ms / 1000)
     output = emg_file.with_name("emg_trial_features.csv")
     counts = dict.fromkeys(PHASE_NAMES, 0)
@@ -172,8 +177,7 @@ def export_features(
                     segment["trial"],
                     phase,
                     device_times[starts[index]],
-                    rms[index],
-                    mav[index],
+                    *vectors[index],
                 )
             )
             counts[phase] += 1
@@ -182,7 +186,7 @@ def export_features(
         raise ValueError("Not enough recorded samples inside the labelled phases.")
     with output.open("w", newline="", encoding="utf-8") as destination:
         writer = csv.writer(destination)
-        writer.writerow(("session", "trial", "phase", "timestamp_us", "rms", "mav"))
+        writer.writerow(("session", "trial", "phase", "timestamp_us", *FEATURE_NAMES))
         writer.writerows(rows)
     medians = {
         phase: float(np.median(values)) if values else None for phase, values in levels.items()
@@ -203,9 +207,24 @@ def export_features(
             "notch_quality": 30,
             "window_ms": window_ms,
             "overlap_ms": overlap_ms,
+            "noise_threshold_adc": noise_threshold_adc,
         },
         "adc_clipped_fraction": float(np.mean((raw <= 2) | (raw >= 4093))),
         "windows_by_phase": counts,
         "median_rms_adc": medians,
         "hold_rest_ratio": hold / rest if hold is not None and rest else None,
     }
+
+
+def full_window_features(
+    filtered, rate_hz, window_ms=200.0, overlap_ms=50.0, noise_threshold_adc=5.0
+):
+    if not np.isfinite(noise_threshold_adc) or noise_threshold_adc < 0:
+        raise ValueError("Feature noise threshold must be finite and non-negative.")
+    starts, _rms, _mav = window_features(filtered, rate_hz, window_ms, overlap_ms)
+    size = int(rate_hz * window_ms / 1000)
+    if size < 3:
+        raise ValueError("The six EMG features need at least three samples per window.")
+    return starts, np.asarray(
+        [features(filtered[start : start + size], noise_threshold_adc) for start in starts]
+    )

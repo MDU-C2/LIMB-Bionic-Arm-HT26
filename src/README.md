@@ -8,6 +8,7 @@ The Python package is `aurora/`:
 - `sensors/`: shared BLE, IMU, EMG, camera tracking and fusion.
 - `recording/`: sensor recording, signal processing and grip trials.
 - `simulation/`: the arm, task scene and movement playback.
-- `ml/`: movement preprocessing, training and recognition.
+- `ml/`: camera movement profiles and EMG training/evaluation.
 
-Recordings go in `outputs/recordings/`. Models go in `artifacts/models/`.
+Recordings go in `outputs/recordings/`. New model runs go in `outputs/training/`;
+bundled models stay in `artifacts/models/`.

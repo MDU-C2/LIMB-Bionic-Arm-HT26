@@ -167,6 +167,16 @@ class SimulationTabsMixin(MotionToolsMixin):
             variable=self.fusion_depth,
             style="Card.TCheckbutton",
         ).grid(row=7, column=2, sticky="w", pady=(10, 0))
+        self.emg_model_label = ttk.Label(
+            fusion_settings, text="EMG model: calibrated amplitude (default)", style="Card.TLabel"
+        )
+        self.emg_model_label.grid(row=8, column=0, columnspan=4, sticky="w", pady=(10, 0))
+        ttk.Button(
+            fusion_settings, text="Select reviewed EMG model", command=self._select_emg_model
+        ).grid(row=9, column=0, columnspan=2, sticky="w", pady=6)
+        ttk.Button(
+            fusion_settings, text="Use calibrated amplitude", command=self._use_amplitude_emg
+        ).grid(row=9, column=2, columnspan=2, sticky="w", pady=6)
 
         self.replay_button = ttk.Button(
             fusion,
@@ -309,6 +319,13 @@ class SimulationTabsMixin(MotionToolsMixin):
         command += table_arguments
         if self.fusion_depth.get():
             command.append("--depth")
+        if getattr(self, "emg_model_path", None) is not None:
+            if self.fusion_grip_source.get().lower() != "emg":
+                messagebox.showerror(
+                    "EMG source required", "Choose EMG grip or use calibrated amplitude."
+                )
+                return
+            command += ["--emg-model", str(self.emg_model_path)]
         if self.dynamic_simulation.get() and self.save_simulation_torque.get():
             output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S}.csv"
             torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name

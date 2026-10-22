@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
         "--grip-source", choices=("camera", "emg", "auto"), default=DEFAULT_GRIP_SOURCE
     )
     parser.add_argument("--depth", action="store_true")
+    parser.add_argument("--emg-model", type=Path, help="Reviewed EMG bundle folder")
     parser.add_argument("--table-width-cm", type=float, default=60)
     parser.add_argument("--table-depth-cm", type=float, default=60)
     parser.add_argument("--mode", choices=("kinematic", "dynamic"), default="kinematic")
@@ -72,6 +73,8 @@ def main() -> int:
         command += ["--port", args.port]
     if args.depth:
         command.append("--depth")
+    if args.emg_model is not None:
+        command += ["--emg-model", str(args.emg_model)]
     return subprocess.call(command)
 
 

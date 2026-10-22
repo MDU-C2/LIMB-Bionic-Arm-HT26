@@ -85,6 +85,9 @@ class GripTrialTests(unittest.TestCase):
                     for index, value in enumerate(raw)
                 )
             original = source.read_bytes()
+            metadata_file = session / "meta.json"
+            original_metadata = '{"grip_trial": {"original": true}}'
+            metadata_file.write_text(original_metadata, encoding="utf-8")
             result = export_features(source, labels_file)
             self.assertAlmostEqual(result["hold_rest_ratio"], 10, delta=0.05)
             with (session / result["features"]).open() as output:
@@ -104,6 +107,7 @@ class GripTrialTests(unittest.TestCase):
             ):
                 self.assertEqual(main(), 0)
             self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(metadata_file.read_text(encoding="utf-8"), original_metadata)
             labels = json.loads(labels_file.read_text())
             labels["segments"][1]["start_s"] = 1.5
             labels_file.write_text(json.dumps(labels))

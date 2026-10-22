@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from aurora.gui.emg_tools import EmgToolsMixin
 from aurora.gui.project_support import (
     RECORDING_EXTENSIONS,
     REPOSITORY_ROOT,
@@ -17,7 +18,7 @@ from aurora.gui.project_support import (
 )
 
 
-class RecordingBrowserMixin:
+class RecordingBrowserMixin(EmgToolsMixin):
     """Browse, filter, and open saved recordings."""
 
     def _build_recordings_tab(self, tab: ttk.Frame) -> None:
@@ -90,6 +91,12 @@ class RecordingBrowserMixin:
         ).grid(row=0, column=3, padx=(8, 0))
         ttk.Button(bottom, text="Process EMG", command=self._process_selected_emg).grid(
             row=1, column=2, pady=(8, 0)
+        )
+        ttk.Button(bottom, text="Review EMG labels", command=self._review_selected_emg).grid(
+            row=1, column=3, padx=(8, 0), pady=(8, 0)
+        )
+        ttk.Button(bottom, text="Compare EMG models", command=self._train_emg_dialog).grid(
+            row=2, column=3, padx=(8, 0), pady=(8, 0)
         )
         ttk.Label(
             bottom,

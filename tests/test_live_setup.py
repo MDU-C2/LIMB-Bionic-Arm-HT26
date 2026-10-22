@@ -66,6 +66,13 @@ class LiveSetupTests(unittest.TestCase):
         self.guide.update(snapshot(), 13)
         self.live.calibrate.assert_not_called()
 
+    def test_repeated_shortcut_does_not_restart_a_pending_step(self):
+        self.guide.action()
+        self.guide.update(snapshot(), 10)
+        self.guide.action()
+        self.guide.update(snapshot(), 12.1)
+        self.live.calibrate.assert_called_once_with({"elbow_flexion": 45})
+
     def test_baseline_and_grip_require_separate_user_actions(self):
         self.guide.stage, self.guide.pending = "imu", True
         self.live.reader.latest.return_value = {"imu_calibrated": True}

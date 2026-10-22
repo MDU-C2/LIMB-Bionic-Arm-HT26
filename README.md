@@ -40,7 +40,7 @@ The main folders are:
 - [`src/simulation/`](src/simulation/README.md): the arm simulation and live sensor input.
 - [`src/ml/`](src/ml/README.md): movement capture and model training.
 - [`firmware/`](firmware/README.md): programs running on the ESP32-C3.
-- [`data/`](data/README.md): movement recordings used for training.
+- [`data/`](data/README.md): inherited movement recordings, kept separately.
 - [`docs/`](docs/README.md): setup, recording and simulation guides.
 - [`tests/`](tests/README.md): software checks.
 

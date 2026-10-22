@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 
@@ -61,7 +62,8 @@ class CameraSession:
         )
         if not writer.isOpened():
             writer.release()
-            self.session.rmdir()
+            with contextlib.suppress(OSError):
+                self.session.rmdir()
             self.session = None
             raise RuntimeError("Could not open video.mp4 in the selected output folder")
         self.writer = writer

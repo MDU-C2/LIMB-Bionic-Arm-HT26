@@ -122,7 +122,7 @@ class SimulationTabsMixin:
         ).grid(row=3, column=0, sticky="w", pady=(4, 0))
         ttk.Label(
             fusion_settings,
-            text="EMG: use the live graphs to calibrate rest, then a strong grip.",
+            text="EMG: follow relaxed muscle and firm grip in the live setup window.",
             style="Card.TLabel",
         ).grid(row=3, column=1, columnspan=3, sticky="w", padx=(12, 0))
 

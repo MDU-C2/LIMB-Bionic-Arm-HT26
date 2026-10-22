@@ -34,7 +34,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--control",
         choices=("keyboard", "camera-imu"),
         default="keyboard",
-        help="Use keyboard controls or live OAK-D plus one/two-IMU control",
+        help="Use keyboard controls or guided OAK-D and dual-IMU BLE control",
     )
     parser.add_argument("--port", help="Dual-IMU/EMG ESP32 serial port for live control")
     parser.add_argument(
@@ -70,6 +70,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.replay is not None:
         args.control = "camera-imu"
+        args.transport = "ble"
     dynamic_mode = args.mode == "dynamic"
     if (args.telemetry_out is not None or args.torque_out is not None) and not dynamic_mode:
         parser.error("--telemetry-out and --torque-out require --mode dynamic")

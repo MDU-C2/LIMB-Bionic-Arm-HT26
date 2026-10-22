@@ -2,6 +2,8 @@
 
 Tested on the connected ESP32-C3 at COM5 and OAK-D Lite on the Windows host.
 This verifies this setup; AGX ORIN delivery has not been tested.
+This page records that check. Use the [live control guide](LIVE_CONTROL.md) for
+the current defaults and calibration steps.
 
 ## Changes verified
 
@@ -69,7 +71,7 @@ then reconnected automatically. Those temporary smoke-test files were removed.
 
 The live-control audit also compared the final HT25 actuator firmware and
 DMP-arm's camera kinematics. Offline checks reproduce an active resting EMG
-stream alongside camera hand opening/closing. The GUI now defaults to Camera
+stream alongside camera hand opening/closing. At that check, the GUI defaulted to Camera
 grip, with explicit EMG and Auto selection, so incoming samples from unattached
 electrodes do not suppress camera grip. Live grip respects the old finger-servo
 speeds. Real headless PyBullet checks verify open/closed finger poses against

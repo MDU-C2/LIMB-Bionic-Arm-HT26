@@ -51,8 +51,11 @@ it is not a measurement from the physical actuators. The
 estimate adds a 0.1 kg point payload while grasping. Motor requests are capped
 by the URDF effort and speed fields.
 
-The grasp closes at a limited speed and requires contact on at least two of the
-five fingertip links. It preserves the cup's pose at the moment of contact.
+In physics mode, live grip closes at the configured servo speed and requires
+contact on at least two of the five fingertip links. The direct live preview
+follows the bounded grip target without the motor speed limit. Keyboard F and
+Space retain their assisted proximity-based grasp. Securing a cup preserves its
+pose relative to the hand at that moment.
 The dashboard's fingertip values are virtual haptic signals: Physics mode uses
 normal contact force, while Direct mode estimates a signal from collision
 penetration. They are useful for control logic and visualization but are not

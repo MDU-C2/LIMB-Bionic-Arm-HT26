@@ -18,6 +18,8 @@ class LiveSetup:
         self.message = "Sit upright. Rest your open hand at marker 1, thumb up, elbow about 90°."
 
     def action(self) -> bool:
+        if self.pending:
+            return False
         if self.stage == "align":
             self.pending = True
             self.still_since = self.previous_angles = None

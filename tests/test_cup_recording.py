@@ -194,6 +194,24 @@ class CupRecordingTests(unittest.TestCase):
             manifest = json.loads((trials.path / "trial.json").read_text())
             self.assertFalse(manifest["complete"])
 
+    def test_video_start_failure_keeps_the_error_when_an_empty_file_was_created(self):
+        reader = prepared_reader()
+        cv2 = Mock()
+        writer = Mock()
+        writer.isOpened.return_value = False
+
+        def failed_writer(filename, *_args):
+            Path(filename).touch()
+            return writer
+
+        cv2.VideoWriter.side_effect = failed_writer
+        with tempfile.TemporaryDirectory() as temporary:
+            trials = CupTrialSession(Path(temporary), "S01", "left", reader, cv2)
+            with self.assertRaisesRegex(RuntimeError, "Could not open video.mp4"):
+                trials.start()
+            self.assertIsNone(reader._recording)
+            self.assertFalse(trials.active)
+
     def test_duplicate_start_does_not_replace_a_trial(self):
         reader = prepared_reader()
         with tempfile.TemporaryDirectory() as temporary:

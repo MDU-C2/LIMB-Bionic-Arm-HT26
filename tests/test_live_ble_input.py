@@ -41,6 +41,16 @@ def imu_packet(
 
 
 class LiveBleTests(unittest.TestCase):
+    def test_axial_correction_uses_the_readers_clock(self):
+        clock = [1000.0]
+        reader = BleSensorReader(clock=lambda: clock[0])
+        for index in range(50):
+            reader.notification("imu", imu_packet(timestamp=1_000_000 + index * 10_000))
+        with patch("ble_sensor_input.time.monotonic", return_value=999999.0):
+            self.assertIsNotNone(reader.correct_rotation(-20, 1.0))
+            clock[0] += 0.6
+            self.assertIsNone(reader.correct_rotation(-30, 1.0))
+
     def test_camera_corrects_twist_once_and_gyro_continues_between_frames(self):
         reader = BleSensorReader()
         with patch("ble_sensor_input.time.monotonic", return_value=100.0):

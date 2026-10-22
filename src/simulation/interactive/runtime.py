@@ -167,12 +167,19 @@ class InteractiveSimulator(
                         "Recorded calibration loaded. Press Play recording. Camera and BLE are not used."
                     )
                     self.setup_button.configure(text="Play recording", state="normal")
-                else:
+                elif self.args.transport == "ble":
                     self.live_setup = LiveSetup(
                         self.live_sensor_input,
                         anatomical_reference_angles(get_angles_deg(self.arm)),
                     )
                     self.setup_button.configure(state="normal")
+                else:
+                    self.live_setup = None
+                    self.setup_text.set(
+                        "Legacy USB control: match the tabletop pose, then align and start. "
+                        "Use BLE for the guided IMU and EMG setup."
+                    )
+                    self.setup_button.configure(text="Align and start USB control", state="normal")
                 self.notice_text = (
                     "Complete Live control setup in the sensor window before moving the arm"
                 )
@@ -202,6 +209,17 @@ class InteractiveSimulator(
         if getattr(self, "live_setup", None) is not None and self.live_setup.action():
             self.live_feedback_active = True
             self.live_snapshot = None
+        elif self.args.transport == "serial":
+            snapshot = self.live_snapshot
+            if snapshot is not None and (snapshot.camera_ready or snapshot.imu_ready):
+                self.live_sensor_input.calibrate(
+                    anatomical_reference_angles(get_angles_deg(self.arm))
+                )
+                self.live_feedback_active = True
+                self.live_snapshot = None
+                self.setup_text.set("USB control active. Press R to pause and reset.")
+            else:
+                self.setup_text.set("Wait for camera or IMU tracking before starting USB control.")
 
     def pause_live_control(self) -> None:
         self.live_feedback_active = False
@@ -228,16 +246,26 @@ class InteractiveSimulator(
 
     def calibrate_live_emg(self) -> None:
         if self.live_sensor_input is not None:
+            guide = getattr(self, "live_setup", None)
+            if guide is not None and (guide.pending or guide.stage in ("align", "imu")):
+                guide.message = "Finish the current setup step before calibrating relaxed EMG."
+                return
             self.live_sensor_input.calibrate_emg()
-            if getattr(self, "live_setup", None) is not None:
+            if guide is not None:
                 self.live_feedback_active = False
                 self.live_setup.stage, self.live_setup.pending = "rest", True
                 self.live_setup.message = "Relax the muscle while the rest baseline is measured."
 
     def calibrate_live_emg_strength(self) -> bool:
         if self.live_sensor_input is not None:
+            guide = getattr(self, "live_setup", None)
+            if guide is not None and (
+                guide.pending or guide.stage not in ("grip", "ready", "running")
+            ):
+                guide.message = "Finish alignment and relaxed EMG before calibrating firm grip."
+                return False
             started = self.live_sensor_input.calibrate_emg_strength()
-            if getattr(self, "live_setup", None) is not None:
+            if guide is not None:
                 self.live_feedback_active = False
                 self.live_setup.stage, self.live_setup.pending = "grip", started
                 self.live_setup.message = "Hold a firm grip for 3 seconds, then relax."

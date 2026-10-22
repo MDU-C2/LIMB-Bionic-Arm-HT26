@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import shlex
 import sys
@@ -149,8 +150,8 @@ class RecordingTabMixin(
             return None
         try:
             duration = float(self.recording_duration.get().strip())
-            if duration < 0:
-                raise ValueError("Duration cannot be negative.")
+            if not math.isfinite(duration) or duration < 0:
+                raise ValueError("Duration must be finite and 0 or more seconds.")
             if self.recording_grip_trial.get():
                 if (
                     "record_ble_sensors.py" not in filenames

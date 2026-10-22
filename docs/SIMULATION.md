@@ -33,8 +33,8 @@ mounted to the left of the centered table. See [Joint limits](JOINT_LIMITS.md)
 for the source of every movement range and the camera-to-CAD zero conversion.
 
 **Connect + open live setup** opens the scene paused, the camera view and a
-step-by-step calibration panel. Follow **Align starting pose ? Relaxed EMG ?
-Firm grip ? Start interactive control**. The [live control guide](LIVE_CONTROL.md)
+step-by-step calibration panel. Follow **Align starting pose → Relaxed EMG →
+Firm grip → Start interactive control**. The [live control guide](LIVE_CONTROL.md)
 explains arm placement, fusion and offline replay.
 
 Live preview follows bounded pose targets directly. **Physics mode** keeps
@@ -100,7 +100,9 @@ python src/simulation/ai/live_sensor_fusion.py --device LIMBServer
 each option accepts `x`, `y`, `z`, `-x`, `-y`, or `-z`.
 `--grip-source emg` selects EMG grip; `--grip-source auto` selects EMG-first
 fallback. `--address` can select a known BLE address. Older `--port COM5` commands retain
-serial control for firmware explicitly built with USB transport. BLE packet
+legacy serial control for firmware explicitly built with USB transport. That path
+uses **Align and start USB control** and does not use the guided BLE calibration.
+BLE packet
 decoding, fusion, and connection cleanup are checked offline; ESP32/OAK-D live
 operation passed a short connected check; muscle signals and tracked-arm accuracy
 still need validation. See [Hardware validation](HARDWARE_VALIDATION.md).

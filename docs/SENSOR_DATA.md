@@ -74,7 +74,8 @@ Choose **Open camera monitor** in the header, Recording page, or Simulation
 page to see the OAK-D image, pose landmarks, arm angles, and hand tracking
 without starting a recording.
 
-The program accepts either one or two connected IMUs. The IMU strapped over
+The decoder and monitors accept either one or two connected IMUs. Guided live
+setup and cup recording require both. The IMU strapped over
 the brachialis/upper arm is the **shoulder** sensor (`0x6B`); it drives shoulder
 elevation and left/right motion while the camera supplies the
 elbow and axial-rotation channels. With both sensors, their relative mounted
@@ -84,8 +85,8 @@ is treated as the upper-arm sensor, matching HT25's original placement.
 
 ## Live camera/IMU/EMG simulation control
 
-Open **Simulation ? Connect + open live setup**. Follow **Align starting pose ?
-Relaxed EMG ? Firm grip ? Start interactive control**. Keep the open hand at
+Open **Simulation → Connect + open live setup**. Follow **Align starting pose →
+Relaxed EMG → Firm grip → Start interactive control**. Keep the open hand at
 marker 1, thumb up and elbow comfortably bent during starting-pose alignment.
 See [Live control](LIVE_CONTROL.md) for mounting, theory and offline replay.
 
@@ -102,9 +103,10 @@ gravity and contact. Reconnecting Bluetooth requires guided calibration again.
 
 ## Record synchronized sources
 
-The Recording page selects **OAK-D camera** and **ESP32 sensors (Bluetooth)** by default.
-Both processes share a session ID and write separate folders below
-`outputs/recordings/`. BLE recording uses an active time-sync exchange to map
+Cup transfers keep BLE and camera files together under each subject and trial.
+The advanced recorder selects **OAK-D camera** and **ESP32 sensors (Bluetooth)**
+by default; those processes share a session ID and write separate source folders
+below `outputs/recordings/`. BLE recording uses an active time-sync exchange to map
 ESP32 sample times onto the camera's host monotonic clock. Use the BLE CSV's
 `synced_host_monotonic_ns` field for alignment. The firmware defaults to BLE
 sensor transport, with 4 kHz EMG and approximately 100 Hz IMU readings.

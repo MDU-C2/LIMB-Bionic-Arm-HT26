@@ -1,4 +1,5 @@
 # Majd, Christian
+import argparse
 import json
 import os
 import random
@@ -273,11 +274,18 @@ def compute_top1_accuracy(model, dataset, device):
     return correct / total if total > 0 else 0.0
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Train the camera movement-profile GRU.")
+    parser.add_argument(
+        "--data",
+        default=os.path.join(REPOSITORY_ROOT, "outputs", "recordings", "movement"),
+        help="Folder containing reviewed camera movement JSON files",
+    )
+    args = parser.parse_args(argv)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
-    folder = os.path.join(REPOSITORY_ROOT, "data", "movement", "training")
+    folder = os.path.abspath(args.data)
     if not os.path.exists(folder):
         print(f"Error: Folder not found -> {folder}")
         return 1

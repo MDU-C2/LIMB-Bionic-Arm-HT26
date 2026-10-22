@@ -8,10 +8,10 @@ The table is 60 x 60 cm and centered in front of the torso. The left shoulder
 sits outside its left edge. Lift beside the table, turn inward, pick up the cup
 and carry it to the green disc on the right.
 
-For live control, use BLE with the device name `LIMBServer`. Match the displayed
-pose and press L. Press R to pause and reset, or K to recalibrate at the current
-pose. Select Camera or EMG for grip. Calibrate EMG at rest and during a strong
-grip before using it.
+For live control, use BLE with the device name `LIMBServer` and both IMUs.
+Follow the setup panel: align at marker 1, calibrate relaxed EMG, calibrate firm
+grip, then start control. Press R to pause and reset. K and L advance the current
+step. The app defaults to EMG grip; Camera and Auto are also available.
 
 Run directly from the project environment:
 

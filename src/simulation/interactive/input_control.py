@@ -32,9 +32,7 @@ class InputMixin:
 
     def prepare_frame(self) -> bool:
         """Read current positions and the latest camera/BLE control state."""
-        # MediaPipe currently processes about 20-25 frames/s on the lab machine.
-        # Use real elapsed time so a nominal 10 deg/s actuator does not silently
-        # slow to 3-4 deg/s when camera inference takes longer than one 60 Hz tick.
+        # Keep motor speed tied to elapsed time when rendering slows down.
         previous_loop_ms = self.clock.get_time()
         self.loop_dt_s = (
             previous_loop_ms / 1000.0 if previous_loop_ms > 0 else 1.0 / SIMULATION_FREQUENCY_HZ
@@ -226,6 +224,8 @@ class InputMixin:
 
             if self.live_sensor_input is not None:
                 self.live_feedback_active = False
+                if getattr(self.args, "replay", None):
+                    self.pause_live_control()
                 set_live_alignment_pose(self.arm)
                 if getattr(self, "live_setup", None) is not None:
                     from .live_setup import LiveSetup
@@ -233,6 +233,10 @@ class InputMixin:
                     self.live_setup = LiveSetup(
                         self.live_sensor_input,
                         anatomical_reference_angles(get_angles_deg(self.arm)),
+                    )
+                elif self.args.transport == "serial":
+                    self.setup_text.set(
+                        "USB control paused. Match the tabletop pose, then align and start."
                     )
             else:
                 set_ready_pose(self.arm)

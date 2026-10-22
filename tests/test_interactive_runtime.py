@@ -23,6 +23,7 @@ import pygame
 from ai.live_sensor_input import LiveFusionSnapshot
 from ai.sensor_fusion import anatomical_reference_angles
 from interactive.arm_control import get_angles_deg
+from interactive.live_setup import LiveSetup
 from interactive.runtime import InteractiveSimulator
 from interactive.settings import LEFT_ARM_LIMITS_DEG, parse_args
 from sim.joint_limits import FINGER_LIMITS_DEG, finger_joint_angles_rad
@@ -124,6 +125,69 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertEqual(get_angles_deg(simulator.arm), READY_POSE_DEG)
         self.assertFalse(simulator.live_feedback_active)
         self.assertFalse(p.getClosestPoints(simulator.robot_body, simulator.table_body, -0.001))
+
+    def test_replay_reset_pauses_playback(self):
+        simulator = self.simulator
+        simulator.args.replay = Path("trial.json")
+        simulator.args.control = "camera-imu"
+        simulator.live_sensor_input = Mock()
+        simulator.live_sensor_input.poll.return_value = LiveFusionSnapshot(
+            None, {}, False, False, "recorded"
+        )
+        simulator.setup_text = Mock()
+        simulator.setup_button = Mock()
+        simulator.live_sensor_input.ended = False
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
+        self.frame()
+        simulator.live_sensor_input.pause.assert_called_once()
+        self.assertFalse(simulator.live_feedback_active)
+
+    def test_graph_calibration_cannot_skip_alignment_or_rest(self):
+        simulator = self.simulator
+        live = simulator.live_sensor_input = Mock(grip_source="emg")
+        simulator.live_setup = LiveSetup(live, {})
+        simulator.calibrate_live_emg()
+        self.assertFalse(simulator.calibrate_live_emg_strength())
+        live.calibrate_emg.assert_not_called()
+        live.calibrate_emg_strength.assert_not_called()
+        self.assertEqual(simulator.live_setup.stage, "align")
+        simulator.live_setup.stage = "rest"
+        self.assertFalse(simulator.calibrate_live_emg_strength())
+        live.calibrate_emg_strength.assert_not_called()
+        simulator.calibrate_live_emg()
+        live.calibrate_emg.assert_called_once()
+
+    def test_legacy_serial_control_does_not_enter_the_ble_guide(self):
+        simulator = self.simulator
+        simulator.args = parse_args(["--control", "camera-imu", "--port", "COM5"])
+        simulator.setup_text = Mock()
+        simulator.setup_button = Mock()
+        live = Mock(reader=SimpleNamespace())
+        with patch("interactive.runtime.LiveSensorInput", return_value=live):
+            simulator.start_live_input()
+        self.assertIsNone(simulator.live_setup)
+        simulator.live_snapshot = LiveFusionSnapshot({"elbow_flexion": 90}, {}, True, False, "USB")
+        simulator.advance_live_setup()
+        live.calibrate.assert_called_once()
+        self.assertTrue(simulator.live_feedback_active)
+
+    def test_camera_playback_fingers_stay_inside_the_loaded_joint_limits(self):
+        from ai.pose_recording_sim import FINGER_JOINTS, apply_finger_commands
+        from sim.limb_sim import joint_index
+
+        robot = self.simulator.robot_body
+        joints = {
+            finger: tuple(joint_index(robot, name) for name in names)
+            for finger, names in FINGER_JOINTS.items()
+        }
+        for curl in (0.0, 0.5, 1.0):
+            apply_finger_commands(robot, joints, dict.fromkeys(FINGER_JOINTS, curl))
+            for finger_joints in joints.values():
+                for joint in finger_joints:
+                    info = p.getJointInfo(robot, joint)
+                    angle = p.getJointState(robot, joint)[0]
+                    self.assertGreaterEqual(angle, info[8])
+                    self.assertLessEqual(angle, info[9])
 
     def test_left_shoulder_cup_and_destination_follow_the_torso_centerline(self):
         from interactive.kinematics import is_reachable

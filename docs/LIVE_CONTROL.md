@@ -17,6 +17,9 @@ Open **Simulation → Connect + open live setup**. Movement starts paused.
 4. Press **Calibrate firm grip**, hold for three seconds, then relax.
 5. Return to marker 1 and press **Start interactive control**.
 
+Camera grip skips the two EMG calibration steps. Both IMUs are still required
+by the guided setup.
+
 First bend the elbow without lifting the upper arm, then raise the arm, move
 it sideways and turn the forearm. Check each direction. If a sensor axis is
 wrong, pause and correct its signed-axis setting before calibrating again.

@@ -136,7 +136,7 @@ class BleSensorReader:
     def correct_rotation(self, camera_proxy: float, weight: float) -> dict | None:
         """Correct axial drift while the acquisition thread keeps processing packets."""
         with self._lock:
-            if self.imu_time <= 0 or time.monotonic() - self.imu_time > 0.5:
+            if self.imu_time <= 0 or self.clock() - self.imu_time > 0.5:
                 return None
             corrected = self.imu_estimator.correct_rotation(camera_proxy, weight)
             if corrected is not None and self.angles is not None:

@@ -24,9 +24,10 @@ Use **Guided grip trial** under Advanced recording options to collect repeated r
 hold and release phases. Follow the cues on that page. Saved cue times can
 be corrected before generating labelled features.
 
-Live simulation uses the Bluetooth name `LIMBServer`. Match the displayed
-reference pose and press L. Press R to reset and K to recalibrate at the current
-pose. EMG needs a rest calibration and a strong-grip calibration in that session.
+Live simulation uses the Bluetooth name `LIMBServer`. Follow the setup panel:
+align the starting pose, calibrate relaxed EMG, calibrate firm grip, then start
+control. Keep the open hand at marker 1 with the thumb up and elbow about 90°.
+Press R to pause and reset. K and L advance the current setup step.
 
 The table is 60 x 60 cm. The arm is mounted on the left, with the cup to its
 right. The green disc marks the placement area farther right.

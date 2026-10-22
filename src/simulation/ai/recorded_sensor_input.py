@@ -21,6 +21,7 @@ class RecordedSensorInput(LiveSensorInput):
         self.manifest = json.loads((self.directory / "trial.json").read_text(encoding="utf-8"))
         self.replay_time = 1000.0
         kwargs.pop("clock", None)
+        kwargs["transport"] = "ble"
         kwargs["side"] = self.manifest["side"]
         super().__init__(clock=lambda: self.replay_time, **kwargs)
         self.events = []

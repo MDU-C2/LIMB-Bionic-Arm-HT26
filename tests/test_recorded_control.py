@@ -96,6 +96,20 @@ def make_trial(root):
 
 
 class RecordedControlTests(unittest.TestCase):
+    def test_saved_ble_replay_ignores_legacy_serial_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            make_trial(root)
+            replay = RecordedSensorInput(root, show_monitor=False, transport="serial", port="COM5")
+            try:
+                replay.start()
+                result = replay.advance_to(0.5)
+                self.assertTrue(result.imu_ready)
+                self.assertEqual(set(result.sensors), {"shoulder", "wrist"})
+                self.assertEqual(replay.transport, "ble")
+            finally:
+                replay.close()
+
     def test_replay_uses_saved_packets_and_calibration_without_hardware(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

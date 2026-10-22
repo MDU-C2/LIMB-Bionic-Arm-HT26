@@ -27,6 +27,7 @@ from pose_mapping import (
     MotionSmoother,
     estimate_finger_curls,
 )
+from sim.joint_limits import finger_joint_angles_rad
 from sim.limb_sim import JOINT_MAPPING, joint_index
 
 FINGER_JOINTS = {
@@ -65,6 +66,14 @@ def wrist_from_hand(hand: object) -> list[object] | None:
         if is_wrist:
             return [point.get("x"), point.get("y"), point.get("depth_m")]
     return None
+
+
+def apply_finger_commands(robot: int, finger_joints: dict, commands: dict) -> None:
+    """Use the same CAD finger poses as the interactive simulator."""
+    for name, joints in finger_joints.items():
+        angles = finger_joint_angles_rad(commands[name] * FINGER_MODEL_RANGE_RAD)
+        for number, joint in enumerate(joints, start=1):
+            p.resetJointState(robot, joint, angles[f"{name}_{number}"])
 
 
 def load_robot(headless: bool) -> tuple[int, list[int], dict[str, tuple[int, ...]]]:
@@ -106,8 +115,8 @@ def main() -> None:
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--headless", action="store_true")
     args = parser.parse_args()
-    if args.fps <= 0:
-        parser.error("--fps must be positive")
+    if not math.isfinite(args.fps) or args.fps <= 0:
+        parser.error("--fps must be finite and positive")
     if args.loop and args.headless:
         parser.error("--loop and --headless cannot be combined")
 
@@ -144,13 +153,7 @@ def main() -> None:
 
                 finger_targets = estimate_finger_curls(frame.get("hand"))
                 finger_commands = finger_limiter.step(finger_targets, dt)
-                for name, joints in finger_joints.items():
-                    for joint in joints:
-                        p.resetJointState(
-                            robot,
-                            joint,
-                            finger_commands[name] * FINGER_MODEL_RANGE_RAD,
-                        )
+                apply_finger_commands(robot, finger_joints, finger_commands)
                 p.stepSimulation()
                 if not args.headless:
                     time.sleep(dt)

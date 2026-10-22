@@ -28,7 +28,7 @@ they understand the recording and have agreed to take part.
 2. Seat the subject upright. Their hand rests open at 1, thumb up, elbow
    bent to about 90 degrees and shoulder relaxed. They do not need to copy an exact angle.
 3. Enter the subject ID and arm. Press **Connect camera + BLE**.
-4. Say: “Keep your arm and body still.” Press **Align IMUs** and wait until
+4. Say: “Keep your arm and body still.” Press **Hold still at 1: align IMUs** and wait until
    the app enables relaxed EMG calibration.
 5. Say: “Keep your hand open and relax the muscle.” Press **Relaxed EMG**.
 6. Say: “When I press this, make a firm grip for three seconds, then relax.”

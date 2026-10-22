@@ -33,9 +33,10 @@ See the [signal check](EMG_SIGNAL_CHECK.md) for the measured limitations.
 
 ## Arm movement does not match
 
-Check which IMU is mounted on the upper arm and which is on the forearm. Match
-the displayed reference pose, press L and hold still for half a second. Follow
-the mounting and axis checks in the [simulation guide](SIMULATION.md).
+Check which IMU is mounted on the upper arm and which is on the forearm. Pause
+and follow the live setup panel again: hold still at marker 1 for alignment,
+calibrate relaxed EMG, then firm grip, and return to marker 1 before starting.
+Follow the mounting and axis checks in the [simulation guide](SIMULATION.md).
 
 ## Diagnostic commands
 

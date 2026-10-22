@@ -11,8 +11,8 @@ The ESP32 can use a separate USB power source.
    Leave trial duration at `0` to stop each trial manually, or enter seconds.
 3. Press **Connect camera + BLE**. The app releases its standalone previews.
    Wait for both IMUs and EMG. Use **Signals** to inspect the graphs.
-4. Press **Calibrate IMUs** and keep the arm still in its starting pose for half
-   a second. Press **Relaxed EMG** while relaxed, then **Strong grip (3 s)**
+4. Press **Hold still at 1: align IMUs** and keep the arm still in its starting pose for half
+   a second. Press **Relaxed EMG** while relaxed, then **Firm grip (3 s)**
    and follow the countdown. Wait for `Grip calibrated`.
 5. Press **Record T001**, move the coffee cup, then press **Stop and save**.
    Repeat with **Record T002** and the following trials. Camera and BLE stay

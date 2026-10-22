@@ -28,9 +28,10 @@ This corrects normal ESP32 oscillator drift during longer trials. Each BLE node
 has an independent mapping, but all results use the computer's
 `time.monotonic_ns()` clock. OAK-D pose/observation frames now save that same
 absolute `host_monotonic_ns`, so camera and sensor rows can be compared even
-when notifications arrive late or in bursts. Camera timestamps are currently
-taken after tracking, rather than at exposure. This shared clock does not by
-itself establish precise physical camera/sensor alignment.
+when notifications arrive late or in bursts. Cup trials timestamp the frame on
+the host before tracking; the standalone camera recorder timestamps after tracking.
+Neither is the exposure time. This shared clock does not by itself establish
+precise physical camera/sensor alignment.
 
 ## Recorded fields
 

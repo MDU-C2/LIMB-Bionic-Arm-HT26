@@ -72,8 +72,10 @@ anchor the cup to the world and, during a physics grasp, attach it to the hand.
 Each HT25 finger has one servo, while the CAD hand has multiple revolute joints.
 The simulation retains a shared open-to-grip pose rather than claiming measured
 independent finger or tendon motion. Its joint poses stay within the URDF limits.
-Live grip progress is limited by the slowest normalized servo travel: 90 degrees
-at 40 degrees/s gives 2.25 seconds for a full close/open. Thumb, index, middle and
+In physics mode, live grip progress is limited by the slowest normalized servo
+travel: 90 degrees at 40 degrees/s gives 2.25 seconds for a full close/open.
+The kinematic live preview follows the bounded grip target directly.
+Thumb, index, middle and
 ring use 40 degrees/s; pinky uses 120 degrees/s. These speeds come from the same
 hand firmware as the ranges. Keyboard and assisted cup-grasp animation retain
 their existing rates.

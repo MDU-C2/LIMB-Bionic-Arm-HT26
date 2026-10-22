@@ -9,7 +9,6 @@ import io
 import json
 import os
 import struct
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -19,12 +18,11 @@ from unittest.mock import patch
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
-
-from ble_packets import HIGH_RATE_EMG_HEADER, SENSOR_UUIDS
-from clock_sync import SYNC_RESPONSE
-from emg_trials import GripTrial, export_features
-from record_ble_sensors import record
+from aurora.recording.emg_features import export_features
+from aurora.recording.emg_trials import GripTrial
+from aurora.recording.record_ble_sensors import record
+from aurora.sensors.ble_protocol import HIGH_RATE_EMG_HEADER, SENSOR_UUIDS
+from aurora.sensors.clock_sync import SYNC_RESPONSE
 
 
 class GripTrialTests(unittest.TestCase):
@@ -59,7 +57,7 @@ class GripTrialTests(unittest.TestCase):
         self.assertEqual(labels["segments"][0]["end_s"], 1)
 
     def test_features_keep_amplitude_and_exclude_mixed_phase_windows(self):
-        from emg_processing import main
+        from aurora.recording.emg_processing import main
 
         with tempfile.TemporaryDirectory() as temporary:
             session = Path(temporary)
@@ -136,7 +134,7 @@ class GripRecordingTests(unittest.IsolatedAsyncioTestCase):
             {"duration": 2},
         ):
             args = dict(
-                device="LIMBServer",
+                device="AURORA",
                 address="test",
                 scan_timeout=1,
                 subject="S01",
@@ -205,7 +203,7 @@ class GripRecordingTests(unittest.IsolatedAsyncioTestCase):
             monotonic=lambda: now, monotonic_ns=lambda: origin + round(now * 1e9)
         )
         args = argparse.Namespace(
-            device="LIMBServer",
+            device="AURORA",
             address="test",
             scan_timeout=1,
             subject="S01",
@@ -219,9 +217,9 @@ class GripRecordingTests(unittest.IsolatedAsyncioTestCase):
             with (
                 patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}),
                 patch("bleak.BleakClient", lambda _: FakeClient()),
-                patch("record_ble_sensors.BleClockSyncClient", FakeSync),
-                patch("record_ble_sensors.time", clock),
-                patch("record_ble_sensors.asyncio.sleep", sleep),
+                patch("aurora.recording.record_ble_sensors.BleClockSyncClient", FakeSync),
+                patch("aurora.recording.record_ble_sensors.time", clock),
+                patch("aurora.recording.record_ble_sensors.asyncio.sleep", sleep),
             ):
                 result = await record(args)
             session = next(Path(temporary).iterdir())

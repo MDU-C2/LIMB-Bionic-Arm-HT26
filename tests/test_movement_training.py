@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,12 +12,16 @@ from types import SimpleNamespace
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "ml"))
-
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 if TORCH_AVAILABLE:
     import torch
-    from train_gru import BATCH_SIZE, MovementDataset, TripletDataset, compute_top1_accuracy
+
+    from aurora.ml.train_gru import (
+        BATCH_SIZE,
+        MovementDataset,
+        TripletDataset,
+        compute_top1_accuracy,
+    )
 
 
 @unittest.skipUnless(TORCH_AVAILABLE, "Install ML dependencies to check GRU training")

@@ -1,8 +1,8 @@
 # Resources
 
 References for the software and hardware used in AURORA and the earlier LIMB
-project. See [hardware checks](HARDWARE_VALIDATION.md) for measurements on the
-current setup and [motors](MOTORS.md) for the arm's motor assignments.
+project. See [hardware checks](hardware-validation.md) for measurements on the
+current setup and [motors](motor-settings.md) for the arm's motor assignments.
 
 ## Software and communication
 
@@ -10,6 +10,8 @@ current setup and [motors](MOTORS.md) for the arm's motor assignments.
 | --- | --- |
 | [LIMB-HT25](https://github.com/MDU-C2/LIMB-HT25) | Earlier software, firmware and hardware designs |
 | [Python](https://docs.python.org/3/) | Language and standard library |
+| [Python Packaging User Guide](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/) | Source package and editable installation |
+| [MediaPipe Hands output](https://chuoling.github.io/mediapipe/solutions/hands.html#output) | Relative landmark z and estimated world coordinates |
 | [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/get-started/index.html) | ESP32-C3 setup and drivers |
 | [TWAI](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-reference/peripherals/twai.html) | ESP32 CAN driver |
 | [CAN in Automation](https://www.can-cia.org/can-knowledge/) | CAN bus fundamentals |

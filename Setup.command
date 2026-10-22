@@ -58,7 +58,7 @@ fi
 echo 'Installing Python, GUI, simulation, camera, and sensor dependencies...'
 operation=create
 if [[ -f "$prefix/conda-meta/history" ]]; then operation=install; fi
-"$micromamba" --no-rc "$operation" -y -p "$prefix" -f src/simulation/environment.yml
+"$micromamba" --no-rc "$operation" -y -p "$prefix" -f environment.yml
 arguments=(--install)
 if $launch; then arguments+=(--launch); fi
 "$micromamba" --no-rc run -p "$prefix" python scripts/setup_project.py "${arguments[@]}"

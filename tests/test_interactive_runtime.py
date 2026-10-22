@@ -6,7 +6,6 @@ from __future__ import annotations
 import csv
 import io
 import os
-import sys
 import tempfile
 import unittest
 from collections import defaultdict
@@ -16,17 +15,17 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/simulation"))
 
 import pybullet as p
 import pygame
-from ai.live_sensor_input import LiveFusionSnapshot
-from ai.sensor_fusion import anatomical_reference_angles
-from interactive.arm_control import get_angles_deg
-from interactive.live_setup import LiveSetup
-from interactive.runtime import InteractiveSimulator
-from interactive.settings import LEFT_ARM_LIMITS_DEG, parse_args
-from sim.joint_limits import FINGER_LIMITS_DEG, finger_joint_angles_rad
+
+from aurora.sensors.fusion import anatomical_reference_angles
+from aurora.sensors.live_input import LiveFusionSnapshot
+from aurora.simulation.interactive.arm_control import get_angles_deg
+from aurora.simulation.interactive.live_setup import LiveSetup
+from aurora.simulation.interactive.runtime import InteractiveSimulator
+from aurora.simulation.interactive.settings import LEFT_ARM_LIMITS_DEG, parse_args
+from aurora.simulation.model.joint_limits import FINGER_LIMITS_DEG, finger_joint_angles_rad
 
 
 class InteractiveRuntimeTests(unittest.TestCase):
@@ -45,7 +44,10 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.simulator = InteractiveSimulator(parse_args([]))
         self.addCleanup(self.simulator.close)
         connect = p.connect
-        with patch("interactive.scene.p.connect", side_effect=lambda _mode: connect(p.DIRECT)):
+        with patch(
+            "aurora.simulation.interactive.scene.p.connect",
+            side_effect=lambda _mode: connect(p.DIRECT),
+        ):
             self.simulator.initialize_scene()
         self.simulator.initialize_arm()
         self.simulator.initialize_hud()
@@ -79,8 +81,12 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.simulator.sensor_window.update.assert_called()
 
     def test_table_dimensions_cup_and_neutral_pose_clear_the_lift_path(self):
-        from interactive.arm_control import set_shoulder, sync_to_pybullet
-        from interactive.settings import READY_POSE_DEG, TABLE_TOP_HEIGHT_M, TARGET_HEIGHT_M
+        from aurora.simulation.interactive.arm_control import set_shoulder, sync_to_pybullet
+        from aurora.simulation.interactive.settings import (
+            READY_POSE_DEG,
+            TABLE_TOP_HEIGHT_M,
+            TARGET_HEIGHT_M,
+        )
 
         simulator = self.simulator
         lower, upper = simulator.table_bounds
@@ -108,7 +114,7 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertGreater(simulator.dynamics.end_effector_state()["position_m"][2], initial_height)
 
     def test_live_reset_uses_same_tabletop_pose_as_keyboard_reset(self):
-        from interactive.settings import READY_POSE_DEG
+        from aurora.simulation.interactive.settings import READY_POSE_DEG
 
         simulator = self.simulator
         simulator.args.control = "camera-imu"
@@ -163,7 +169,7 @@ class InteractiveRuntimeTests(unittest.TestCase):
         simulator.setup_text = Mock()
         simulator.setup_button = Mock()
         live = Mock(reader=SimpleNamespace())
-        with patch("interactive.runtime.LiveSensorInput", return_value=live):
+        with patch("aurora.simulation.interactive.runtime.LiveSensorInput", return_value=live):
             simulator.start_live_input()
         self.assertIsNone(simulator.live_setup)
         simulator.live_snapshot = LiveFusionSnapshot({"elbow_flexion": 90}, {}, True, False, "USB")
@@ -172,8 +178,8 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertTrue(simulator.live_feedback_active)
 
     def test_camera_playback_fingers_stay_inside_the_loaded_joint_limits(self):
-        from ai.pose_recording_sim import FINGER_JOINTS, apply_finger_commands
-        from sim.limb_sim import joint_index
+        from aurora.simulation.pose_playback import FINGER_JOINTS, apply_finger_commands
+        from aurora.simulation.trajectory_playback import joint_index
 
         robot = self.simulator.robot_body
         joints = {
@@ -190,8 +196,8 @@ class InteractiveRuntimeTests(unittest.TestCase):
                     self.assertLessEqual(angle, info[9])
 
     def test_left_shoulder_cup_and_destination_follow_the_torso_centerline(self):
-        from interactive.kinematics import is_reachable
-        from interactive.settings import TARGET_RADIUS_M
+        from aurora.simulation.interactive.kinematics import is_reachable
+        from aurora.simulation.interactive.settings import TARGET_RADIUS_M
 
         simulator = self.simulator
         lower, upper = simulator.table_bounds
@@ -212,7 +218,11 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertTrue(is_reachable(simulator.target_relative_position)[0])
 
     def test_forward_lift_from_lowered_arm_clears_table_with_straight_or_bent_elbow(self):
-        from interactive.arm_control import set_elbow, set_shoulder, sync_to_pybullet
+        from aurora.simulation.interactive.arm_control import (
+            set_elbow,
+            set_shoulder,
+            sync_to_pybullet,
+        )
 
         simulator = self.simulator
         for elbow in (0, 30, 60):
@@ -238,8 +248,8 @@ class InteractiveRuntimeTests(unittest.TestCase):
     def test_cup_can_be_lifted_carried_right_and_released_on_table(self):
         import math
 
-        from interactive.arm_control import set_elbow, set_shoulder
-        from interactive.kinematics import calculate_ik_angles
+        from aurora.simulation.interactive.arm_control import set_elbow, set_shoulder
+        from aurora.simulation.interactive.kinematics import calculate_ik_angles
 
         simulator = self.simulator
         relative_x, relative_y, relative_z = simulator.target_relative_position
@@ -278,7 +288,7 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertTrue(p.getContactPoints(simulator.target_body, simulator.table_body))
 
     def test_motor_driven_raise_clears_the_60_cm_table(self):
-        from interactive.arm_control import set_shoulder
+        from aurora.simulation.interactive.arm_control import set_shoulder
 
         simulator = self.simulator
         simulator.dynamic_mode = True
@@ -293,7 +303,7 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertGreater(simulator.hand_position[2], initial_height + 0.2)
 
     def test_motor_driven_approach_grasp_and_rightward_transfer_clear_table(self):
-        from interactive.arm_control import set_elbow, set_shoulder, set_wrist
+        from aurora.simulation.interactive.arm_control import set_elbow, set_shoulder, set_wrist
 
         simulator = self.simulator
         simulator.dynamic_mode = True
@@ -513,9 +523,9 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertIsNone(simulator.grasp_transform)
 
     def test_ble_twist_reaches_real_upper_arm_and_wrist_joints(self):
-        from ai.ble_sensor_input import BleSensorReader
-        from ai.live_sensor_input import LiveSensorInput
-        from ble_packets import HIGH_RATE_IMU_PACKET
+        from aurora.sensors.ble_input import BleSensorReader
+        from aurora.sensors.ble_protocol import HIGH_RATE_IMU_PACKET
+        from aurora.sensors.live_input import LiveSensorInput
 
         reader = BleSensorReader()
         for sample in range(150):

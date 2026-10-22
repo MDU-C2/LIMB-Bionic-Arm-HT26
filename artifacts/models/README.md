@@ -1,6 +1,9 @@
 # Models
 
-`movement_gru.onnx` is the camera movement-profile model.
+`movement_gru.onnx` is the unchanged camera movement-profile model inherited
+from LIMB1. `movement_gru.json` records its hash and input format. Its exact
+original training split and evaluation results are unavailable. New training
+runs save those details in `training.json`.
 
 `cup_yolo11n.onnx` is Ultralytics YOLO11n, pretrained on COCO. It runs locally
 through ONNX Runtime and keeps the `cup` class. Detection scores and boxes are

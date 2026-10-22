@@ -3,20 +3,13 @@
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
 import numpy as np
 import pybullet as p
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "simulation"))
-
-from sim.dynamics import ArmDynamics
-from sim.robot_model import (
-    RIGHT_GRIP_OFFSET_M,
-    load_right_arm,
-)
+from aurora.simulation.model.dynamics import ArmDynamics
+from aurora.simulation.model.robot_model import RIGHT_GRIP_OFFSET_M, load_right_arm
 
 
 class SimulationPhysicsCase(unittest.TestCase):

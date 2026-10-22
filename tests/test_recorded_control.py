@@ -6,16 +6,13 @@ from __future__ import annotations
 import base64
 import json
 import struct
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/simulation"))
-
-from ai.recorded_sensor_input import RecordedSensorInput
-from ble_packets import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET
+from aurora.sensors.ble_protocol import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET
+from aurora.sensors.replay_input import RecordedSensorInput
 
 
 def make_trial(root):
@@ -116,7 +113,8 @@ class RecordedControlTests(unittest.TestCase):
             make_trial(root)
             replay = RecordedSensorInput(root, show_monitor=False, grip_source="emg")
             with patch(
-                "ble_sensor_input.BleSensorReader.start", side_effect=AssertionError("hardware")
+                "aurora.sensors.ble_input.BleSensorReader.start",
+                side_effect=AssertionError("hardware"),
             ):
                 try:
                     replay.start()
@@ -142,7 +140,8 @@ class RecordedControlTests(unittest.TestCase):
                 replay.start()
                 initial = replay.elapsed
                 with patch(
-                    "ai.recorded_sensor_input.time.monotonic", return_value=replay.wall_started + 10
+                    "aurora.sensors.replay_input.time.monotonic",
+                    return_value=replay.wall_started + 10,
                 ):
                     replay.poll()
                 self.assertEqual(replay.elapsed, initial)

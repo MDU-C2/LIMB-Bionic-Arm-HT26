@@ -70,7 +70,7 @@ try {
     }
 
     Write-Host 'Installing Python, GUI, simulation, camera, and sensor dependencies...'
-    Copy-Item -LiteralPath (Join-Path $repository 'src\simulation\environment.yml') -Destination $environmentFile -Force
+    Copy-Item -LiteralPath (Join-Path $repository 'environment.yml') -Destination $environmentFile -Force
     $operation = 'create'
     if (Test-Path -LiteralPath (Join-Path $prefix 'conda-meta\history')) { $operation = 'install' }
     & $micromamba --no-rc $operation -y -p $prefix -f $environmentFile

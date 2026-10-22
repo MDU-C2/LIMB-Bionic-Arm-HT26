@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,11 +12,14 @@ from unittest.mock import Mock
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/recording"))
-
-from cup_detection import CupDetector, add_cup_tracking, decode_cups, prepare_frame
-from hand_tracking import ArmHandTracker, restore_hand_coordinates, wrist_crop
-from oak_tracking import analyze_frame
+from aurora.sensors.camera.cup_detection import (
+    CupDetector,
+    add_cup_tracking,
+    decode_cups,
+    prepare_frame,
+)
+from aurora.sensors.camera.hand_tracking import ArmHandTracker, restore_hand_coordinates, wrist_crop
+from aurora.sensors.camera.oak_tracking import analyze_frame
 
 
 class VisionTrackingTests(unittest.TestCase):

@@ -4,20 +4,18 @@
 from __future__ import annotations
 
 import math
-import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
 import pybullet as p
+from simulation_fixture import SimulationPhysicsCase
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "simulation"))
-
-from ai.sensor_fusion import interactive_control_targets
-from interactive.settings import READY_POSE_DEG
-from sim.dynamics import ArmDynamics
-from sim.joint_limits import LEFT_ARM_LIMITS_DEG, RIGHT_ARM_LIMITS_DEG
-from sim.robot_model import (
+from aurora.sensors.fusion import interactive_control_targets
+from aurora.simulation.interactive.settings import READY_POSE_DEG
+from aurora.simulation.model.dynamics import ArmDynamics
+from aurora.simulation.model.joint_limits import LEFT_ARM_LIMITS_DEG, RIGHT_ARM_LIMITS_DEG
+from aurora.simulation.model.robot_model import (
     LEFT_ARM_JOINTS,
     LEFT_GRIP_OFFSET_M,
     LEFT_HAND_LINK,
@@ -27,7 +25,6 @@ from sim.robot_model import (
     link_name_index,
     load_left_arm,
 )
-from simulation_fixture import SimulationPhysicsCase
 
 
 class UrdfGeometryTests(SimulationPhysicsCase):
@@ -229,8 +226,9 @@ class UrdfGeometryTests(SimulationPhysicsCase):
         urdf = (
             Path(__file__).resolve().parents[1]
             / "src"
+            / "aurora"
             / "simulation"
-            / "sim"
+            / "model"
             / "arm"
             / "left_arm.urdf"
         )
@@ -249,7 +247,9 @@ class UrdfGeometryTests(SimulationPhysicsCase):
         self.assertEqual(material_for_mesh["r_hand.stl"], "dark")
 
     def test_shoulder_base_and_shell_share_the_elevation_stage(self) -> None:
-        arm_directory = Path(__file__).resolve().parents[1] / "src" / "simulation" / "sim" / "arm"
+        arm_directory = (
+            Path(__file__).resolve().parents[1] / "src" / "aurora" / "simulation" / "model" / "arm"
+        )
         for filename, shoulder_link in (
             ("right_arm.urdf", "right_shoulder_roty"),
             ("left_arm.urdf", "left_shoulder_roty"),

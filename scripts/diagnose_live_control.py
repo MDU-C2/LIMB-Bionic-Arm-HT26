@@ -12,7 +12,6 @@ import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src/simulation"))
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 if os.name == "nt":
     native_bin = Path(sys.prefix) / "Library" / "bin"
@@ -31,8 +30,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.seconds <= 0:
         parser.error("--seconds must be positive")
-    from interactive.runtime import InteractiveSimulator
-    from interactive.settings import parse_args
+    from aurora.simulation.interactive.runtime import InteractiveSimulator
+    from aurora.simulation.interactive.settings import parse_args
 
     simulator = InteractiveSimulator(
         parse_args(

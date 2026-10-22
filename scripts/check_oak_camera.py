@@ -4,13 +4,8 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "recording"))
-
-from record_oak_pose import configure_depthai_runtime
+from aurora.recording.record_oak_pose import configure_depthai_runtime
 
 
 def parse_args() -> argparse.Namespace:

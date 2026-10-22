@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import sys
 import tempfile
@@ -13,10 +14,15 @@ from unittest.mock import patch
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
-
-from emg_processing import load_emg, main, preprocess_emg, sample_rate, window_features
-from plot_sensor_recording import main as plot_main
+from aurora.recording.emg_processing import (
+    load_emg,
+    main,
+    preprocess_emg,
+    sample_rate,
+    window_features,
+)
+from aurora.recording.plot_sensor_recording import main as plot_main
+from aurora.recording.plot_sensor_recording import make_figure
 
 
 class EmgProcessingTests(unittest.TestCase):
@@ -96,6 +102,63 @@ class EmgProcessingTests(unittest.TestCase):
             self.assertEqual(float(features[0]["rms"]), 0.0)
             metadata = json.loads(path.with_suffix(".processing.json").read_text(encoding="utf-8"))
             self.assertEqual(metadata["sample_rate_hz"], 4000)
+            self.assertEqual(metadata["source"], "emg.csv")
+            self.assertEqual(
+                metadata["source_sha256"], hashlib.sha256(path.read_bytes()).hexdigest()
+            )
+
+    def test_labelled_processing_honours_filter_and_window_options(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            source = folder / "emg.csv"
+            labels = folder / "emg_trial.json"
+            origin = 1_000_000_000
+            labels.write_text(
+                json.dumps(
+                    {
+                        "start_host_monotonic_ns": origin,
+                        "complete": False,
+                        "segments": [{"trial": 1, "phase": "rest", "start_s": 0, "end_s": 2}],
+                    }
+                )
+            )
+            samples = 2048 + 20 * np.sin(2 * np.pi * 100 * np.arange(800) / 400)
+            with source.open("w", newline="") as output:
+                writer = csv.writer(output)
+                writer.writerow(("device_time", "value", "synced_host_monotonic_ns"))
+                writer.writerows(
+                    (index * 2500, value, origin + index * 2_500_000)
+                    for index, value in enumerate(samples)
+                )
+            original = source.read_bytes()
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "emg_processing",
+                    "--file",
+                    str(source),
+                    "--labels",
+                    str(labels),
+                    "--highcut",
+                    "150",
+                    "--window-ms",
+                    "100",
+                    "--overlap-ms",
+                    "20",
+                ],
+            ):
+                self.assertEqual(main(), 0)
+            metadata = json.loads(source.with_suffix(".processing.json").read_text())
+            self.assertEqual(metadata["processing"]["highcut_hz"], 150)
+            self.assertEqual(metadata["processing"]["window_ms"], 100)
+            self.assertEqual(metadata["processing"]["overlap_ms"], 20)
+            self.assertEqual(metadata["sample_rate_hz"], 400)
+            self.assertEqual(
+                metadata["labels_sha256"], hashlib.sha256(labels.read_bytes()).hexdigest()
+            )
+            self.assertGreater(metadata["windows_by_phase"]["rest"], 15)
+            self.assertEqual(source.read_bytes(), original)
 
     def test_processed_samples_and_features_can_be_plotted_without_hardware(self) -> None:
         import matplotlib
@@ -118,9 +181,10 @@ class EmgProcessingTests(unittest.TestCase):
                 ):
                     self.assertEqual(plot_main(), 0)
                 self.assertGreater(image.stat().st_size, 0)
-                self.assertEqual(len(plt.gcf().axes), len(titles))
-                for axis, title in zip(plt.gcf().axes, titles, strict=True):
-                    self.assertIn(title, axis.get_title())
+                figure = make_figure(path)
+                self.assertEqual(len(figure.axes), len(titles))
+                for axis, title in zip(figure.axes, titles, strict=True):
+                    self.assertIn(title, axis.get_title().lower())
                 plt.close("all")
 
 

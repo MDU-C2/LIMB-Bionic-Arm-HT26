@@ -10,17 +10,19 @@ import io
 import json
 import os
 import struct
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
-
-from ble_dataset import LabeledBleCapture
-from record_ble_sensors import CURRENT_EMG_PACKET, SENSOR_UUIDS, BleRecorder, record
+from aurora.recording.ble_dataset import LabeledBleCapture
+from aurora.recording.record_ble_sensors import (
+    CURRENT_EMG_PACKET,
+    SENSOR_UUIDS,
+    BleRecorder,
+    record,
+)
 
 
 class LabeledBleCaptureTests(unittest.TestCase):
@@ -189,14 +191,14 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
 
         class FakeScanner:
             @staticmethod
-            async def find_device_by_name(_name, timeout):
-                return "mock-limb-server"
+            async def find_device_by_filter(_filter, timeout):
+                return "mock-aurora-server"
 
         async def no_wait(_seconds):
             return None
 
         args = argparse.Namespace(
-            device="LIMBServer",
+            device="AURORA",
             address="",
             scan_timeout=1.0,
             subject="S01",
@@ -210,7 +212,7 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
                 patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}),
                 patch("bleak.BleakClient", FakeClient),
                 patch("bleak.BleakScanner", FakeScanner),
-                patch("record_ble_sensors.asyncio.sleep", no_wait),
+                patch("aurora.recording.record_ble_sensors.asyncio.sleep", no_wait),
             ):
                 result = await record(args)
             self.assertEqual(result, 0)
@@ -239,8 +241,8 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
 
         class FakeScanner:
             @staticmethod
-            async def find_device_by_name(_name, timeout):
-                return "mock-limb-server"
+            async def find_device_by_filter(_filter, timeout):
+                return "mock-aurora-server"
 
         client = None
         sleep_calls = 0
@@ -266,7 +268,7 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
             return client
 
         args = argparse.Namespace(
-            device="LIMBServer",
+            device="AURORA",
             address="",
             scan_timeout=1.0,
             subject="S01",
@@ -278,7 +280,7 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
                 patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}),
                 patch("bleak.BleakClient", create_client),
                 patch("bleak.BleakScanner", FakeScanner),
-                patch("record_ble_sensors.asyncio.sleep", fake_sleep),
+                patch("aurora.recording.record_ble_sensors.asyncio.sleep", fake_sleep),
             ):
                 result = await record(args)
             self.assertEqual(result, 0)

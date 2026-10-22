@@ -7,23 +7,23 @@ import asyncio
 import csv
 import json
 import struct
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "gui"))
-
-from ble_dataset import LabeledBleCapture
-from firmware_workspace import source_files
-from high_rate_serial import merge_samples, parse_sensor_line, save_csv
-from imu_protocol import ImuStreamDecoder
-from plot_sensor_recording import load_recording
-from record_ble_sensors import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET, BleRecorder
-from record_ble_sensors import record as record_ble
+from aurora.gui.firmware_workspace import source_files
+from aurora.recording.ble_dataset import LabeledBleCapture
+from aurora.recording.plot_sensor_recording import load_recording
+from aurora.recording.record_ble_sensors import (
+    HIGH_RATE_EMG_HEADER,
+    HIGH_RATE_IMU_PACKET,
+    BleRecorder,
+)
+from aurora.recording.record_ble_sensors import record as record_ble
+from aurora.sensors.imu_protocol import ImuStreamDecoder
+from aurora.sensors.serial_protocol import merge_samples, parse_sensor_line, save_csv
 
 
 class HighRateIntegrationTests(unittest.TestCase):
@@ -45,7 +45,7 @@ class HighRateIntegrationTests(unittest.TestCase):
             duration=0.0,
             scan_timeout=1.0,
             dataset_label="",
-            device="LIMBServer",
+            device="AURORA",
             address="test-device",
             subject="test",
         )
@@ -53,9 +53,12 @@ class HighRateIntegrationTests(unittest.TestCase):
             session = Path(temporary)
             with (
                 patch("bleak.BleakClient", return_value=context),
-                patch("record_ble_sensors.BleClockSyncClient", return_value=sync),
-                patch("record_ble_sensors.create_session_directory", return_value=session),
-                patch("record_ble_sensors.asyncio.sleep", side_effect=disconnect),
+                patch("aurora.recording.record_ble_sensors.BleClockSyncClient", return_value=sync),
+                patch(
+                    "aurora.recording.record_ble_sensors.create_session_directory",
+                    return_value=session,
+                ),
+                patch("aurora.recording.record_ble_sensors.asyncio.sleep", side_effect=disconnect),
                 self.assertRaisesRegex(RuntimeError, "BLE disconnected"),
             ):
                 asyncio.run(record_ble(args))
@@ -89,7 +92,7 @@ class HighRateIntegrationTests(unittest.TestCase):
             duration=2.0,
             scan_timeout=1.0,
             dataset_label="",
-            device="LIMBServer",
+            device="AURORA",
             address="test-device",
             subject="test",
         )
@@ -98,10 +101,18 @@ class HighRateIntegrationTests(unittest.TestCase):
             session = Path(temporary)
             with (
                 patch("bleak.BleakClient", return_value=Client()),
-                patch("record_ble_sensors.BleClockSyncClient", return_value=sync),
-                patch("record_ble_sensors.create_session_directory", return_value=session),
-                patch("record_ble_sensors.time.monotonic", side_effect=lambda: elapsed[0]),
-                patch("record_ble_sensors.asyncio.sleep", side_effect=wait) as sleeps,
+                patch("aurora.recording.record_ble_sensors.BleClockSyncClient", return_value=sync),
+                patch(
+                    "aurora.recording.record_ble_sensors.create_session_directory",
+                    return_value=session,
+                ),
+                patch(
+                    "aurora.recording.record_ble_sensors.time.monotonic",
+                    side_effect=lambda: elapsed[0],
+                ),
+                patch(
+                    "aurora.recording.record_ble_sensors.asyncio.sleep", side_effect=wait
+                ) as sleeps,
             ):
                 self.assertEqual(asyncio.run(record_ble(args)), 0)
             metadata = json.loads((session / "meta.json").read_text(encoding="utf-8"))

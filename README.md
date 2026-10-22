@@ -19,14 +19,15 @@ On Windows, run `Setup.bat` for the first setup, then use `Start.bat` to open
 the app. Setup installs Python and the required packages. See the
 [setup notes](scripts/README.md) for direct launching and the macOS/Linux scripts.
 
-Power the ESP32 and connect to `LIMBServer` through the app. The ESP32 can use
-a separate USB power source while sending data over BLE.
+Power the ESP32 and connect to `AURORA` through the app. The ESP32 can use
+a separate USB power source while sending data over BLE. Earlier LIMB firmware
+advertising `LIMBServer` is also supported.
 
 The Recording tab saves EMG, IMU and camera data and includes guided grip
 trials. The Simulation tab runs the arm with keyboard or live sensor control.
 The Firmware tab builds and flashes the ESP32. See the
-[recording guide](docs/RECORDING_GUIDE.md) and
-[simulation guide](docs/SIMULATION.md) for the controls and calibration steps.
+[recording guide](docs/recording-guide.md) and
+[simulation guide](docs/simulation-guide.md) for the controls and calibration steps.
 
 Live EMG grip control is still being developed and tested.
 
@@ -35,10 +36,11 @@ Live EMG grip control is still being developed and tested.
 The main folders are:
 
 - [`scripts/`](scripts/README.md): setup and sensor checks.
-- [`src/gui/`](src/gui/README.md): the desktop app.
-- [`src/recording/`](src/recording/README.md): sensor and camera recording, grip trials and EMG processing.
-- [`src/simulation/`](src/simulation/README.md): the arm simulation and live sensor input.
-- [`src/ml/`](src/ml/README.md): movement capture and model training.
+- [`src/aurora/gui/`](src/aurora/gui/README.md): the desktop app.
+- [`src/aurora/sensors/`](src/aurora/sensors/README.md): sensor input, camera tracking and fusion.
+- [`src/aurora/recording/`](src/aurora/recording/README.md): sensor and camera recording, grip trials and EMG processing.
+- [`src/aurora/simulation/`](src/aurora/simulation/README.md): the arm simulation and playback.
+- [`src/aurora/ml/`](src/aurora/ml/README.md): movement training and recognition.
 - [`firmware/`](firmware/README.md): programs running on the ESP32-C3.
 - [`data/`](data/README.md): inherited movement recordings, kept separately.
 - [`docs/`](docs/README.md): setup, recording and simulation guides.

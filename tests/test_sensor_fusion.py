@@ -1,24 +1,13 @@
 # Majd, Christian
-"""Test GUI planning and repository discovery without creating Tk windows."""
+"""Check sensor normalization, calibration, fusion and grip control."""
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "gui"))
-sys.path.insert(0, str(ROOT / "src" / "recording"))
-sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
-
-from emg_protocol import EmgActivationEstimator, extract_emg, select_grip_source
-from imu_protocol import (
-    ImuStreamDecoder,
-    extract_imus,
-    imu_configuration,
-)
-from sensor_fusion import (
+from aurora.gui.serial_sensor import decode_sensor_packet
+from aurora.sensors.emg_protocol import EmgActivationEstimator, extract_emg, select_grip_source
+from aurora.sensors.fusion import (
     ControlAngleSmoother,
     DualImuArmEstimator,
     camera_control_angles,
@@ -26,7 +15,7 @@ from sensor_fusion import (
     fuse_control_angles,
     interactive_control_targets,
 )
-from serial_sensor import decode_sensor_packet
+from aurora.sensors.imu_protocol import ImuStreamDecoder, extract_imus, imu_configuration
 
 
 class SensorFusionTests(unittest.TestCase):

@@ -18,11 +18,14 @@ READY = STATE / "ready.json"
 # A separate exit status lets Start distinguish stale setup from an app failure.
 NEEDS_SETUP = 10
 INPUTS = (
-    "src/simulation/environment.yml",
-    "src/ml/requirements.txt",
+    "pyproject.toml",
+    "environment.yml",
+    "requirements-training.txt",
+    "requirements-firmware.txt",
     "requirements-setup.txt",
     "firmware/high_rate_emg_imu/platformio.ini",
     "scripts/setup_project.py",
+    "scripts/build_package.py",
     "scripts/setup.ps1",
     "Setup.command",
 )
@@ -104,7 +107,7 @@ def verify() -> None:
         "'MediaPipe legacy solutions required by camera tracking are missing'",
     )
     run_python("-m", "compileall", "-q", "src")
-    run_python("src/simulation/sim/limb_sim.py", "--headless")
+    run_python("-m", "aurora.simulation.trajectory_playback", "--headless")
 
 
 def install() -> None:
@@ -129,7 +132,7 @@ def install() -> None:
     # Reuse the GUI's build folder for checkout paths containing spaces.
     # Always build via the installed PlatformIO rather than a machine's old IDF.
     run_python(
-        "src/gui/firmware_workspace.py",
+        "src/aurora/gui/firmware_workspace.py",
         "--project",
         str(ROOT / "firmware" / "high_rate_emg_imu"),
         "--",
@@ -167,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             if not is_ready():
                 print("First-time or updated dependencies detected. Running setup...", flush=True)
                 return NEEDS_SETUP
-            return subprocess.call([sys.executable, str(ROOT / "src/gui/app.py")], cwd=ROOT)
+            return subprocess.call([sys.executable, "-m", "aurora.gui.app"], cwd=ROOT)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(
             f"Setup failed: {error}\nRetry Setup after resolving the error above.", file=sys.stderr

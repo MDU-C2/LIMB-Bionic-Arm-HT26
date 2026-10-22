@@ -12,17 +12,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-ROOT = Path(__file__).resolve().parents[1]
-for directory in ("recording", "simulation/ai", "gui"):
-    sys.path.insert(0, str(ROOT / "src" / directory))
-
-from ble_sensor_input import BleSensorReader
-from emg_protocol import EmgActivationEstimator
-from live_sensor_fusion import main as launch_live
-from live_sensor_input import LiveSensorInput
-from record_ble_sensors import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET, SENSOR_UUIDS
-from sensor_fusion import DualImuArmEstimator, interactive_control_targets
-from simulation_tabs import SimulationTabsMixin
+from aurora.gui.simulation_tabs import SimulationTabsMixin
+from aurora.recording.record_ble_sensors import (
+    HIGH_RATE_EMG_HEADER,
+    HIGH_RATE_IMU_PACKET,
+    SENSOR_UUIDS,
+)
+from aurora.sensors.ble_input import BleSensorReader
+from aurora.sensors.emg_protocol import EmgActivationEstimator
+from aurora.sensors.fusion import DualImuArmEstimator, interactive_control_targets
+from aurora.sensors.live_input import LiveSensorInput
+from aurora.simulation.live_control import main as launch_live
 
 
 def emg_packet(values, sequence=0, period_us=250):
@@ -36,8 +36,13 @@ def imu_packet(
     timestamp=1_000_000,
     wrist=(0, 0, 1000, 0, 0, 0),
     shoulder=(0, 0, 1000, 0, 0, 0),
+    sequence=None,
 ):
-    return HIGH_RATE_IMU_PACKET.pack(0x100 | mask, 1, timestamp, timestamp, *shoulder, *wrist)
+    if sequence is None:
+        sequence = timestamp // 10_000
+    return HIGH_RATE_IMU_PACKET.pack(
+        0x100 | mask, sequence, timestamp, timestamp, *shoulder, *wrist
+    )
 
 
 class LiveBleTests(unittest.TestCase):
@@ -46,14 +51,14 @@ class LiveBleTests(unittest.TestCase):
         reader = BleSensorReader(clock=lambda: clock[0])
         for index in range(50):
             reader.notification("imu", imu_packet(timestamp=1_000_000 + index * 10_000))
-        with patch("ble_sensor_input.time.monotonic", return_value=999999.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=999999.0):
             self.assertIsNotNone(reader.correct_rotation(-20, 1.0))
             clock[0] += 0.6
             self.assertIsNone(reader.correct_rotation(-30, 1.0))
 
     def test_camera_corrects_twist_once_and_gyro_continues_between_frames(self):
         reader = BleSensorReader()
-        with patch("ble_sensor_input.time.monotonic", return_value=100.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.0):
             for sample in range(50):
                 reader.notification("imu", imu_packet(timestamp=1_000_000 + sample * 10_000))
             controller = LiveSensorInput()
@@ -67,15 +72,16 @@ class LiveBleTests(unittest.TestCase):
         observation = {"angles_deg": {"shoulder_rotation_proxy": -20.0}}
         with (
             patch(
-                "live_sensor_input.analyze_frame", return_value=(object(), "OK", None, observation)
+                "aurora.sensors.live_input.analyze_frame",
+                return_value=(object(), "OK", None, observation),
             ),
-            patch("live_sensor_input._draw_overlay", return_value=object()),
+            patch("aurora.sensors.live_input._draw_overlay", return_value=object()),
         ):
-            with patch("live_sensor_input.time.monotonic", return_value=100.01):
+            with patch("aurora.sensors.live_input.time.monotonic", return_value=100.01):
                 snapshot = controller.poll()
                 self.assertAlmostEqual(snapshot.angles["shoulder_rotation_proxy"], -20.0)
                 self.assertEqual(snapshot.rotation_source, "IMU + camera")
-            with patch("live_sensor_input.time.monotonic", return_value=100.02):
+            with patch("aurora.sensors.live_input.time.monotonic", return_value=100.02):
                 reader.notification(
                     "imu",
                     imu_packet(
@@ -87,11 +93,11 @@ class LiveBleTests(unittest.TestCase):
                 snapshot = controller.poll()
                 self.assertAlmostEqual(snapshot.angles["shoulder_rotation_proxy"], -20.3)
                 self.assertEqual(snapshot.angles["wrist_rotation"], 0.0)
-            with patch("live_sensor_input.time.monotonic", return_value=100.03):
+            with patch("aurora.sensors.live_input.time.monotonic", return_value=100.03):
                 snapshot = controller.poll()
                 self.assertGreater(snapshot.angles["shoulder_rotation_proxy"], -20.3)
                 self.assertLess(snapshot.angles["shoulder_rotation_proxy"], -20.0)
-            with patch("live_sensor_input.time.monotonic", return_value=100.6):
+            with patch("aurora.sensors.live_input.time.monotonic", return_value=100.6):
                 reader.notification(
                     "imu",
                     imu_packet(
@@ -111,7 +117,7 @@ class LiveBleTests(unittest.TestCase):
     def test_binary_packets_reach_simulator_arm_and_grip(self):
         reader = BleSensorReader()
         reader.imu_estimator = DualImuArmEstimator(alpha=0)
-        with patch("ble_sensor_input.time.monotonic", return_value=100.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.0):
             reader.notification("imu", imu_packet())
             reader.notification("imu", imu_packet(timestamp=1_010_000, wrist=(0, 1000, 0, 0, 0, 0)))
             for sequence in range(50):
@@ -147,7 +153,7 @@ class LiveBleTests(unittest.TestCase):
 
     def test_camera_grip_reaches_control_with_an_active_resting_emg_stream(self):
         reader = BleSensorReader()
-        with patch("ble_sensor_input.time.monotonic", return_value=100.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.0):
             for sequence in range(50):
                 reader.notification("emg", emg_packet([8] * 40, sequence))
             controller = LiveSensorInput(grip_source="camera")
@@ -164,9 +170,9 @@ class LiveBleTests(unittest.TestCase):
 
     def test_emg_does_not_keep_old_imus_alive(self):
         reader = BleSensorReader()
-        with patch("ble_sensor_input.time.monotonic", return_value=100.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.0):
             reader.notification("imu", imu_packet())
-        with patch("ble_sensor_input.time.monotonic", return_value=100.6):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.6):
             reader.notification("emg", emg_packet([2048] * 40))
             controller = LiveSensorInput()
             controller.reader = reader
@@ -179,7 +185,7 @@ class LiveBleTests(unittest.TestCase):
 
     def test_graphs_keep_received_samples_bounded_and_hide_stale_streams(self):
         reader = BleSensorReader()
-        with patch("ble_sensor_input.time.monotonic", return_value=100.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.0):
             for sequence in range(25):
                 reader.notification("emg", emg_packet(list(range(40)), sequence))
             reader.notification("imu", imu_packet())
@@ -189,9 +195,9 @@ class LiveBleTests(unittest.TestCase):
             self.assertEqual(data["imus"]["shoulder"], [(0, 0, 1, 0, 0, 0)])
             data["emg"].clear()
             self.assertEqual(len(reader.graph_data()["emg"]), 800)
-            reader.notification("imu", imu_packet(mask=1))
+            reader.notification("imu", imu_packet(mask=1, timestamp=1_010_000))
             self.assertEqual(reader.graph_data()["imus"]["wrist"], [])
-        with patch("ble_sensor_input.time.monotonic", return_value=100.6):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.6):
             self.assertEqual(reader.graph_data()["emg"], [])
             self.assertEqual(reader.graph_data()["imus"]["shoulder"], [])
         with reader._lock:
@@ -200,10 +206,10 @@ class LiveBleTests(unittest.TestCase):
 
     def test_imus_do_not_keep_old_emg_alive(self):
         reader = BleSensorReader()
-        with patch("ble_sensor_input.time.monotonic", return_value=100.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.0):
             for sequence in range(50):
                 reader.notification("emg", emg_packet([2048] * 40, sequence))
-        with patch("ble_sensor_input.time.monotonic", return_value=100.6):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.6):
             reader.notification("imu", imu_packet())
             controller = LiveSensorInput()
             controller.reader = reader
@@ -219,12 +225,40 @@ class LiveBleTests(unittest.TestCase):
         reader.notification("imu", imu_packet(mask=2))
         self.assertEqual(set(reader.latest()["imus"]), {"wrist"})
         self.assertIsNone(reader.latest()["imu_angles"])
-        reader.notification("imu", imu_packet(mask=0))
+        reader.notification("imu", imu_packet(mask=0, timestamp=1_010_000))
         self.assertEqual(reader.latest()["imus"], {})
+
+    def test_old_imu_packets_do_not_change_pose_or_extend_freshness(self):
+        clock = [100.0]
+        reader = BleSensorReader(clock=lambda: clock[0])
+        reader.imu_estimator = DualImuArmEstimator(alpha=0)
+        reader.notification("imu", imu_packet(sequence=10))
+        reader.notification(
+            "imu", imu_packet(sequence=11, timestamp=1_010_000, wrist=(0, 1000, 0, 0, 0, 0))
+        )
+        pose = reader.latest()["imu_angles"]
+        history = reader.graph_data()["imus"]
+        clock[0] += 0.4
+        for sequence in (11, 10):
+            reader.notification("imu", imu_packet(sequence=sequence, timestamp=1_020_000))
+        self.assertEqual(reader.latest()["imu_angles"], pose)
+        self.assertEqual(reader.graph_data()["imus"], history)
+        self.assertEqual(reader.imu_time, 100.0)
+        clock[0] += 0.2
+        self.assertEqual(reader.graph_data()["imus"]["wrist"], [])
+        reader.notification("imu", imu_packet(sequence=12, timestamp=1_030_000))
+        self.assertNotEqual(reader.latest()["imu_angles"], pose)
+        self.assertEqual(reader.imu_time, clock[0])
+
+    def test_imu_sequence_wrap_is_a_new_sample(self):
+        reader = BleSensorReader()
+        reader.notification("imu", imu_packet(sequence=0xFFFFFFFF))
+        reader.notification("imu", imu_packet(sequence=0, timestamp=1_010_000))
+        self.assertEqual(len(reader.graph_data()["imus"]["shoulder"]), 2)
 
     def test_gyro_integration_uses_device_time(self):
         reader = BleSensorReader()
-        with patch("ble_sensor_input.time.monotonic", return_value=100.0):
+        with patch("aurora.sensors.ble_input.time.monotonic", return_value=100.0):
             reader.notification("imu", imu_packet())
             with patch.object(
                 reader.imu_estimator, "update", wraps=reader.imu_estimator.update
@@ -295,7 +329,7 @@ class LiveBleTests(unittest.TestCase):
 
         application = SimpleNamespace(
             simulation_python=Path(sys.executable),
-            recording_ble_device=setting("LIMBServer"),
+            recording_ble_device=setting("AURORA"),
             fusion_camera_weight=setting("0.25"),
             processes={},
             _stop_serial_dashboard=Mock(),
@@ -308,10 +342,10 @@ class LiveBleTests(unittest.TestCase):
             fusion_wrist_twist_axis=setting("-y"),
             _start_program=Mock(),
         )
-        SimulationTabsMixin.start_live_sensor_fusion(application)
+        SimulationTabsMixin.start_live_control(application)
         command = application._start_program.call_args.args[2]
         self.assertEqual(command[command.index("--transport") + 1], "ble")
-        self.assertEqual(command[command.index("--device") + 1], "LIMBServer")
+        self.assertEqual(command[command.index("--device") + 1], "AURORA")
         self.assertNotIn("--port", command)
         self.assertEqual(command[command.index("--table-width-cm") + 1], "60")
         self.assertEqual(command[command.index("--table-depth-cm") + 1], "60")
@@ -322,8 +356,8 @@ class LiveBleTests(unittest.TestCase):
     def test_compatibility_launcher_defaults_to_ble_and_keeps_serial_commands(self):
         for arguments, expected in (([], "ble"), (["--port", "COM5"], "serial")):
             with (
-                patch.object(sys, "argv", ["live_sensor_fusion.py", *arguments]),
-                patch("live_sensor_fusion.subprocess.call", return_value=0) as launch,
+                patch.object(sys, "argv", ["live_control.py", *arguments]),
+                patch("aurora.simulation.live_control.subprocess.call", return_value=0) as launch,
             ):
                 self.assertEqual(launch_live(), 0)
                 command = launch.call_args.args[0]
@@ -340,7 +374,7 @@ class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
         frame.getCvFrame.return_value = object()
         measured = {"shoulder_flexion": 35, "elbow_flexion": 40, "shoulder_abduction": 8}
         with patch(
-            "live_sensor_input.analyze_frame",
+            "aurora.sensors.live_input.analyze_frame",
             return_value=(None, "tracked", None, {"angles_deg": measured}),
         ):
             controller.poll()
@@ -379,7 +413,7 @@ class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch("bleak.BleakClient", side_effect=lambda _target: Client()),
-            patch("ble_sensor_input.asyncio.sleep", new_callable=AsyncMock),
+            patch("aurora.sensors.ble_input.asyncio.sleep", new_callable=AsyncMock),
         ):
             await reader._connect_loop()
         self.assertEqual(len(attempts), 2)
@@ -413,7 +447,7 @@ class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch("bleak.BleakClient", return_value=Client()),
-            patch("ble_sensor_input.asyncio.sleep", side_effect=stop_after_subscription),
+            patch("aurora.sensors.ble_input.asyncio.sleep", side_effect=stop_after_subscription),
         ):
             await reader._connect_loop()
 

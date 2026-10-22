@@ -31,7 +31,7 @@
 #include "esp_nimble_hci.h"
 #endif
 
-#define DEVICE_NAME "LIMBServer"
+#define DEVICE_NAME "AURORA"
 
 /* 23011525-1212-efde-1523-785feabcd122 */
 static const ble_uuid128_t k_service_uuid = BLE_UUID128_INIT(

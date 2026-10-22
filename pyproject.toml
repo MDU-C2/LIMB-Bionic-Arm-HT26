@@ -1,4 +1,57 @@
 # Majd
+[build-system]
+requires = ["setuptools>=68,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aurora-arm"
+version = "0.1.0"
+description = "AURORA sensor recording and arm simulation"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "numpy==1.26.4",
+    "scipy==1.15.2",
+    "pybullet>=3.2.5,<4",
+    "jax==0.4.38",
+    "jaxlib==0.4.38",
+    "pygame==2.6.1",
+    "onnxruntime==1.23.2",
+    "bleak==0.22.3",
+    "pyserial==3.5",
+    "depthai==3.10.0",
+    "opencv-contrib-python==4.10.0.84",
+    "mediapipe==0.10.14",
+    "protobuf>=4.25.3,<5",
+    "matplotlib>=3.8,<4",
+]
+dynamic = ["optional-dependencies"]
+
+[tool.setuptools.dynamic.optional-dependencies]
+training = {file = ["requirements-training.txt"]}
+firmware = {file = ["requirements-firmware.txt"]}
+dev = {file = ["requirements-dev.txt"]}
+
+[project.scripts]
+aurora = "aurora.gui.app:main"
+
+# An explicit package mapping keeps editable imports usable in Unicode paths
+# on Python 3.10, even when the process uses the Windows system encoding.
+[tool.setuptools.package-dir]
+aurora = "src/aurora"
+scripts = "scripts"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["aurora*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+aurora = ["**/README.md"]
+"aurora.simulation.model" = ["arm/*.urdf", "arm/*.stl", "arm/fullhand2/*.stl"]
+
+[tool.setuptools.cmdclass]
+build_py = "scripts.build_package.ResourceBuild"
+
 [tool.ruff]
 target-version = "py310"
 line-length = 100
@@ -8,18 +61,11 @@ extend-exclude = ["data"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
 
-# These entry points add sibling folders to sys.path before importing them.
+# Launchers, native library paths and test display settings run before imports.
 [tool.ruff.lint.per-file-ignores]
 "scripts/check_*.py" = ["E402"]
-"src/recording/record_cup_trials.py" = ["E402"]
-"src/gui/recording_tab.py" = ["E402"]
-"src/gui/sensor_window.py" = ["E402"]
-"src/simulation/ai/live_sensor_input.py" = ["E402"]
-"src/simulation/ai/pose_mapping.py" = ["E402"]
-"src/simulation/ai/pose_recording_sim.py" = ["E402"]
-"src/simulation/interactive/limb_simulator.py" = ["E402"]
-"src/simulation/sim/limb_sim.py" = ["E402"]
-"src/simulation/sim/manual_sim.py" = ["E402"]
+"src/aurora/gui/app.py" = ["E402"]
+"src/aurora/simulation/interactive/__main__.py" = ["E402"]
 "tests/test_gui_support.py" = ["E402"]
 "tests/test_cup_recording.py" = ["E402"]
 "tests/test_vision_tracking.py" = ["E402"]

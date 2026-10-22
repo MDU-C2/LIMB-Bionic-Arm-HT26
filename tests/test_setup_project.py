@@ -13,12 +13,10 @@ from pathlib import Path
 from unittest.mock import call, patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-sys.path.insert(0, str(ROOT / "src/gui"))
 
-import firmware_workspace
-import setup_project
-from project_support import simulation_python_candidates
+import aurora.gui.firmware_workspace as firmware_workspace
+import scripts.setup_project as setup_project
+from aurora.gui.project_support import simulation_python_candidates
 
 
 class SetupTests(unittest.TestCase):
@@ -75,7 +73,9 @@ class SetupTests(unittest.TestCase):
             with (
                 patch.dict(os.environ, {"AURORA_SETUP_DIRECTORY": ""}),
                 patch.object(
-                    firmware_workspace, "__file__", str(root / "src/gui/firmware_workspace.py")
+                    firmware_workspace,
+                    "__file__",
+                    str(root / "src/aurora/gui/firmware_workspace.py"),
                 ),
                 patch.object(
                     firmware_workspace.tempfile, "gettempdir", return_value=str(root / "user name")
@@ -161,7 +161,7 @@ class SetupTests(unittest.TestCase):
         ):
             self.assertEqual(setup_project.main(["--launch"]), 7)
             launch.assert_called_once_with(
-                [sys.executable, str(root / "src/gui/app.py")],
+                [sys.executable, "-m", "aurora.gui.app"],
                 cwd=root,
             )
             self.assertEqual(os.environ["AURORA_SIMULATION_PYTHON"], sys.executable)
@@ -179,7 +179,7 @@ class SetupTests(unittest.TestCase):
             ):
 
                 def fail_build(*arguments, **kwargs):
-                    if arguments[0] == "src/gui/firmware_workspace.py":
+                    if arguments[0] == "src/aurora/gui/firmware_workspace.py":
                         raise OSError("Toolchain download interrupted")
 
                 run.side_effect = fail_build
@@ -198,7 +198,7 @@ class SetupTests(unittest.TestCase):
                 encoding="utf-8-sig",
             )
             with (
-                patch("project_support.REPOSITORY_ROOT", root),
+                patch("aurora.gui.project_support.REPOSITORY_ROOT", root),
                 patch.dict(os.environ, {"AURORA_SIMULATION_PYTHON": ""}),
             ):
                 python = "python.exe" if os.name == "nt" else "bin/python"

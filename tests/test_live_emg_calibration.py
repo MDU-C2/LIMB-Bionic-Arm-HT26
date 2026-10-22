@@ -4,12 +4,9 @@
 from __future__ import annotations
 
 import math
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/recording"))
-from emg_protocol import EmgActivationEstimator
+from aurora.sensors.emg_protocol import EmgActivationEstimator
 
 
 class LiveEmgCalibrationTests(unittest.TestCase):

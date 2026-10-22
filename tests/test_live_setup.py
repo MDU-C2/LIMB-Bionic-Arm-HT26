@@ -3,21 +3,21 @@
 
 from __future__ import annotations
 
-import sys
 import threading
 import time
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/simulation"))
-
-from ai.live_sensor_input import LiveFusionSnapshot, LiveSensorInput
-from ai.sensor_fusion import DualImuArmEstimator, fuse_control_angles, interactive_control_targets
-from ble_packets import HIGH_RATE_IMU_PACKET
-from ble_sensor_input import BleSensorReader
-from interactive.live_setup import LiveSetup
+from aurora.sensors.ble_input import BleSensorReader
+from aurora.sensors.ble_protocol import HIGH_RATE_IMU_PACKET
+from aurora.sensors.fusion import (
+    DualImuArmEstimator,
+    fuse_control_angles,
+    interactive_control_targets,
+)
+from aurora.sensors.live_input import LiveFusionSnapshot, LiveSensorInput
+from aurora.simulation.interactive.live_setup import LiveSetup
 
 
 def snapshot(**changes):
@@ -179,7 +179,7 @@ class LiveSetupTests(unittest.TestCase):
         def packet(y, z, timestamp):
             return HIGH_RATE_IMU_PACKET.pack(
                 0x103,
-                1,
+                timestamp // 10_000,
                 timestamp,
                 timestamp,
                 0,

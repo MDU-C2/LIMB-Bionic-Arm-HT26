@@ -7,15 +7,13 @@ import argparse
 import csv
 import json
 import math
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src/simulation"))
 
-from ai.recorded_sensor_input import RecordedSensorInput
-from ai.sensor_fusion import anatomical_reference_angles, interactive_control_targets
-from interactive.settings import LIVE_ALIGNMENT_POSE_DEG
+from aurora.sensors.fusion import anatomical_reference_angles, interactive_control_targets
+from aurora.sensors.replay_input import RecordedSensorInput
+from aurora.simulation.interactive.settings import LIVE_ALIGNMENT_POSE_DEG
 
 
 def check(trial: Path, output: Path) -> dict:

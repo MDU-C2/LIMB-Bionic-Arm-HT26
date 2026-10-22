@@ -1,0 +1,4 @@
+# Majd, Christian
+# Keep the inherited ONNX opset-12 exporter.
+torch>=2.2,<2.6
+onnx>=1.16,<1.18

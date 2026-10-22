@@ -1,5 +1,5 @@
 # Majd
-"""Verify live shoulder/wrist IMUs and optional EMG from the ESP32 stream."""
+"""Verify live upper-arm/forearm IMUs and optional EMG from the ESP32 stream."""
 
 from __future__ import annotations
 
@@ -7,14 +7,10 @@ import argparse
 import math
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "recording"))
-
-from emg_protocol import extract_emg
-from imu_protocol import ImuStreamDecoder, extract_imus, i2c_wiring_hint
+from aurora.sensors.emg_protocol import extract_emg
+from aurora.sensors.imu_protocol import ImuStreamDecoder, extract_imus, i2c_wiring_hint
 
 ROLE_ORDER = ("shoulder", "wrist")
 ESPRESSIF_VID = 0x303A

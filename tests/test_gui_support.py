@@ -13,19 +13,11 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "gui"))
-sys.path.insert(0, str(ROOT / "src" / "recording"))
-sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
 
-import app as gui_app
-from ble_dashboard import BleDashboardMixin
-from common import create_session_directory, experiment_metadata
-from imu_protocol import (
-    i2c_wiring_hint,
-)
-from live_sensor_input import installed_pose_model_complexity
-from process_manager import ManagedProcess, ProcessManagerMixin
-from project_support import (
+import aurora.gui.app as gui_app
+from aurora.gui.ble_dashboard import BleDashboardMixin
+from aurora.gui.process_manager import ManagedProcess, ProcessManagerMixin
+from aurora.gui.project_support import (
     FIRMWARE_WORKSPACE_SCRIPT,
     FirmwareProject,
     discover_firmware_projects,
@@ -33,7 +25,10 @@ from project_support import (
     firmware_command,
     resolve_firmware_tool,
 )
-from recording_tab import DEFAULT_BATCH_SOURCES, DEFAULT_BLE_SENSORS, batch_arguments
+from aurora.gui.recording_tab import DEFAULT_BATCH_SOURCES, DEFAULT_BLE_SENSORS, batch_arguments
+from aurora.recording.common import create_session_directory, experiment_metadata
+from aurora.sensors.imu_protocol import i2c_wiring_hint
+from aurora.sensors.live_input import installed_pose_model_complexity
 
 
 class RecordingBatchTests(unittest.TestCase):
@@ -63,9 +58,9 @@ class RecordingBatchTests(unittest.TestCase):
             _watch_process=Mock(),
         )
         with (
-            patch("process_manager.threading.Thread"),
+            patch("aurora.gui.process_manager.threading.Thread"),
             patch(
-                "process_manager.subprocess.Popen",
+                "aurora.gui.process_manager.subprocess.Popen",
                 side_effect=lambda *_args, **_kwargs: order.append("launch") or Mock(),
             ),
         ):
@@ -83,13 +78,41 @@ class RecordingBatchTests(unittest.TestCase):
             _stop_ble_dashboard=Mock(return_value=False),
             _append_log=Mock(),
         )
-        with patch("process_manager.subprocess.Popen") as launch:
+        with patch("aurora.gui.process_manager.subprocess.Popen") as launch:
             self.assertFalse(
                 ProcessManagerMixin._start_program(
                     manager, "BLE recording", "recording", ["python", "recorder.py"]
                 )
             )
         launch.assert_not_called()
+
+    def test_offline_tools_leave_ble_monitoring_connected(self):
+        for kind in ("plot", "processing", "motion_ai"):
+            with self.subTest(kind=kind):
+                manager = types.SimpleNamespace(
+                    processes={},
+                    _active_processes=lambda: [],
+                    _stop_ble_dashboard=Mock(),
+                    _append_log=Mock(),
+                    _set_status=Mock(),
+                    _display_command=Mock(return_value="python tool.py"),
+                    _update_controls=Mock(),
+                    _refresh_info=Mock(),
+                    _watch_process=Mock(),
+                    ble_sensor_connection=Mock(),
+                )
+                with (
+                    patch("aurora.gui.process_manager.threading.Thread"),
+                    patch("aurora.gui.process_manager.subprocess.Popen") as launch,
+                ):
+                    self.assertTrue(
+                        ProcessManagerMixin._start_program(
+                            manager, kind, kind, ["python", "tool.py"], parallel=True
+                        )
+                    )
+                manager._stop_ble_dashboard.assert_not_called()
+                manager.ble_sensor_connection.set.assert_not_called()
+                launch.assert_called_once()
 
     def test_ble_monitor_keeps_the_reader_until_its_thread_has_stopped(self):
         reader = Mock()
@@ -136,18 +159,18 @@ class RecordingBatchTests(unittest.TestCase):
             heavy.touch()
             self.assertEqual(installed_pose_model_complexity(fake_mp), 2)
 
-    def test_gui_relaunch_keeps_spaced_script_path_as_one_argument(self) -> None:
+    def test_gui_relaunch_keeps_spaced_interpreter_path_as_one_argument(self) -> None:
         simulation_python = ROOT / "environment with spaces" / "python.exe"
         with (
-            patch("app.importlib.util.find_spec", return_value=None),
-            patch("app.find_simulation_python", return_value=simulation_python),
+            patch("aurora.gui.app.importlib.util.find_spec", return_value=None),
+            patch("aurora.gui.app.find_simulation_python", return_value=simulation_python),
             patch.object(gui_app.sys, "executable", r"C:\Python313\python.exe"),
             patch.object(
                 gui_app.sys,
                 "argv",
-                [str((ROOT / "src" / "gui" / "app.py").resolve())],
+                [str((ROOT / "src" / "aurora" / "gui" / "app.py").resolve())],
             ),
-            patch("app.subprocess.call", return_value=0) as relaunch,
+            patch("aurora.gui.app.subprocess.call", return_value=0) as relaunch,
             patch.dict(os.environ, {"AURORA_GUI_RELAUNCHED": ""}),
             self.assertRaises(SystemExit) as exit_context,
         ):
@@ -156,8 +179,8 @@ class RecordingBatchTests(unittest.TestCase):
         self.assertEqual(exit_context.exception.code, 0)
         command = relaunch.call_args.args[0]
         self.assertEqual(command[0], str(simulation_python))
-        self.assertEqual(command[1], str((ROOT / "src" / "gui" / "app.py").resolve()))
-        self.assertEqual(len(command), 2)
+        self.assertEqual(command[1:3], ["-m", "aurora.gui.app"])
+        self.assertEqual(len(command), 3)
 
     def test_default_capture_uses_camera_and_ble_sensors(self) -> None:
         self.assertEqual(
@@ -176,7 +199,7 @@ class RecordingBatchTests(unittest.TestCase):
         self.assertEqual(project.system, "ESP-IDF")
         self.assertEqual(project.executable, "idf.py")
         with patch(
-            "project_support.resolve_firmware_tool",
+            "aurora.gui.project_support.resolve_firmware_tool",
             return_value=("idf.py",),
         ):
             self.assertEqual(
@@ -201,7 +224,7 @@ class RecordingBatchTests(unittest.TestCase):
         )
         platformio = str(Path(ROOT.anchor) / "tools" / "platformio")
         with patch(
-            "project_support.resolve_firmware_tool",
+            "aurora.gui.project_support.resolve_firmware_tool",
             return_value=(platformio,),
         ):
             self.assertEqual(
@@ -228,8 +251,8 @@ class RecordingBatchTests(unittest.TestCase):
         project = discover_firmware_projects()[str(Path("firmware") / "high_rate_emg_imu")]
         python = Path(r"C:\env with spaces\python.exe")
         with (
-            patch("project_support.shutil.which", return_value=None),
-            patch("project_support.importlib.util.find_spec", return_value=object()),
+            patch("aurora.gui.project_support.shutil.which", return_value=None),
+            patch("aurora.gui.project_support.importlib.util.find_spec", return_value=object()),
             patch.object(sys, "executable", str(python)),
         ):
             self.assertEqual(
@@ -240,7 +263,7 @@ class RecordingBatchTests(unittest.TestCase):
     def test_firmware_build_is_staged_when_repository_path_contains_spaces(self) -> None:
         project = FirmwareProject(ROOT / "firmware with spaces", "ESP-IDF", "idf.py")
         platformio = (sys.executable, "-m", "platformio")
-        with patch("project_support.resolve_firmware_tool", return_value=platformio):
+        with patch("aurora.gui.project_support.resolve_firmware_tool", return_value=platformio):
             self.assertEqual(
                 firmware_command(project, "flash", "COM5"),
                 [

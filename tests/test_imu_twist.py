@@ -5,13 +5,9 @@ from __future__ import annotations
 
 import copy
 import math
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/simulation/ai"))
-
-from sensor_fusion import DualImuArmEstimator, interactive_control_targets
+from aurora.sensors.fusion import DualImuArmEstimator, interactive_control_targets
 
 
 def resting_sensors():

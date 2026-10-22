@@ -1,11 +1,15 @@
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
 .venv/
 .aurora/
 venv/
 artifacts/.matplotlib/
 artifacts/models/*
 !artifacts/models/movement_gru.onnx
+!artifacts/models/movement_gru.json
 !artifacts/models/cup_yolo11n.onnx
 !artifacts/models/README.md
 !artifacts/models/ULTRALYTICS_LICENSE.txt

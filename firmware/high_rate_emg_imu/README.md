@@ -1,14 +1,15 @@
 # ESP32-C3 sensors
 
 The firmware records EMG at 4 kHz and reads up to two LSM6DSO32 IMUs at about
-100 Hz. Data uses BLE by default. The device name is `LIMBServer`.
-USB is used for power, flashing and diagnostics.
+100 Hz. Data uses BLE by default. The device name is `AURORA`.
+USB is used for power, flashing and diagnostics. The app also accepts the
+`LIMBServer` name advertised by earlier LIMB firmware.
 
 ## Wiring
 
 - EMG output: GPIO0 / ADC1 channel 0.
 - IMU bus: SDA GPIO2 and SCL GPIO1.
-- Shoulder IMU: address `0x6B`; wrist IMU: `0x6A`.
+- Upper-arm IMU: address `0x6B`; forearm IMU: `0x6A`.
 - Both IMUs share the bus and need different SA0/SDO settings.
 
 The bus also tries SDA/SCL 4/5 and 8/5. Missing IMUs are checked again while
@@ -45,5 +46,5 @@ Select Bluetooth under Recording in the app. Use the guided grip option to
 collect labelled rest, grip, hold and release phases. Raw samples and clock
 information are saved with every session.
 
-See the [recording guide](../../docs/RECORDING_GUIDE.md) for the saved files
+See the [recording guide](../../docs/recording-guide.md) for the saved files
 and signal checks.

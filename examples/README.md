@@ -5,5 +5,5 @@
 Run a playback without opening a window:
 
 ```powershell
-python src/simulation/sim/limb_sim.py --headless
+python -m aurora.simulation.trajectory_playback --headless
 ```

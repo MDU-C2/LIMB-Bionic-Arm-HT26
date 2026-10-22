@@ -4,18 +4,12 @@
 from __future__ import annotations
 
 import importlib.util
-import sys
 import unittest
-from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "gui"))
-sys.path.insert(0, str(ROOT / "src" / "simulation" / "ai"))
-
-from movement_recognition import DEFAULT_MODEL, MovementRecognizer
-from project_support import MOVEMENT_MODEL
+from aurora.gui.project_support import MOVEMENT_MODEL
+from aurora.ml.recognition import DEFAULT_MODEL, MovementRecognizer
 
 
 @unittest.skipUnless(importlib.util.find_spec("onnxruntime"), "ONNX Runtime is missing")
@@ -25,6 +19,16 @@ class MovementModelTests(unittest.TestCase):
         result = MovementRecognizer().embed(np.zeros((60, 69), dtype=np.float32))
         self.assertEqual(result.shape, (1, 128))
         self.assertTrue(np.all(np.isfinite(result)))
+
+    def test_empty_or_nonfinite_movements_are_rejected_before_inference(self):
+        recognizer = MovementRecognizer()
+        for batch in (
+            np.empty((0, 60, 69), dtype=np.float32),
+            np.full((60, 69), np.nan, dtype=np.float32),
+            np.full((60, 69), np.inf, dtype=np.float32),
+        ):
+            with self.subTest(shape=batch.shape), self.assertRaisesRegex(ValueError, "finite"):
+                recognizer.embed(batch)
 
 
 if __name__ == "__main__":

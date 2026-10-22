@@ -7,6 +7,7 @@ import argparse
 import io
 import sys
 import tempfile
+import time
 import types
 import unittest
 from contextlib import redirect_stdout
@@ -15,13 +16,11 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
-
-import record_oak_pose
-import record_serial_sensors
-from ble_preview import imu_tilt_degrees, relative_angle
-from ble_preview_draw import _draw_traces
-from serial_preview import numeric_values
+import aurora.recording.record_oak_pose as record_oak_pose
+import aurora.recording.record_serial_sensors as record_serial_sensors
+from aurora.gui.sensor_plot import draw_traces
+from aurora.recording.ble_preview import imu_tilt_degrees, relative_angle
+from aurora.recording.serial_preview import numeric_values
 
 
 class SensorPreviewTests(unittest.TestCase):
@@ -29,7 +28,7 @@ class SensorPreviewTests(unittest.TestCase):
         canvas = Mock()
         canvas.winfo_width.return_value = 600
         canvas.winfo_height.return_value = 250
-        _draw_traces(canvas, [[0, 20, 72]], unit="ADC", sample_period=0.00025, limits=(0, 4095))
+        draw_traces(canvas, [[0, 20, 72]], unit="ADC", sample_period=0.00025, limits=(0, 4095))
         points = canvas.create_line.call_args.args
         heights = points[1::2]
         self.assertLess(max(heights) - min(heights), 5)
@@ -363,9 +362,18 @@ class SensorPreviewTests(unittest.TestCase):
             patch.object(record_oak_pose, "parse_args", return_value=args),
             patch.object(record_oak_pose, "CupDetector", return_value=cup_detector),
             patch.object(
+                record_oak_pose,
+                "receive_frame",
+                return_value=(np.zeros((480, 640, 3), dtype=np.uint8), 123),
+            ),
+            patch.object(record_oak_pose.CameraSession, "add_frame", autospec=True) as add_frame,
+            patch.object(
                 record_oak_pose, "build_pipeline", return_value=(pipeline, video_queue, depth_queue)
             ),
-            patch("oak_session.create_session_directory", side_effect=AssertionError("recorded")),
+            patch(
+                "aurora.recording.oak_session.create_session_directory",
+                side_effect=AssertionError("recorded"),
+            ),
             patch.dict(sys.modules, {"cv2": cv2, "depthai": Mock(), "mediapipe": mp}),
             redirect_stdout(io.StringIO()),
         ):
@@ -374,6 +382,7 @@ class SensorPreviewTests(unittest.TestCase):
         hand_model.close.assert_called_once()
         cup_detector.close.assert_called_once()
         cv2.imshow.assert_called_once()
+        self.assertEqual(add_frame.call_args.kwargs["host_monotonic_ns"], 123)
         self.assertEqual(cv2.imshow.call_args.args[1].shape, (644, 640, 3))
 
     def test_camera_session_starts_only_after_record_pressed(self) -> None:
@@ -387,14 +396,17 @@ class SensorPreviewTests(unittest.TestCase):
             session = Path(temporary) / "capture"
             session.mkdir()
             camera = record_oak_pose.CameraSession(cv2, "S01", "left")
-            camera.add_frame(frame, None, {})
+            camera.add_frame(frame, None, {}, host_monotonic_ns=0)
             self.assertFalse(camera.recording)
-            with patch("oak_session.create_session_directory", return_value=session):
+            with patch(
+                "aurora.recording.oak_session.create_session_directory", return_value=session
+            ):
                 camera.start()
                 camera.add_frame(
                     frame,
                     {"shoulder": [1, 2, 0.5], "elbow": [3, 4, 0.5], "hand": []},
                     {"person_visible": True},
+                    host_monotonic_ns=time.monotonic_ns(),
                 )
                 camera.stop()
             self.assertFalse(camera.recording)

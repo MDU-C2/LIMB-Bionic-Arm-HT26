@@ -5,15 +5,12 @@ from __future__ import annotations
 
 import csv
 import struct
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "recording"))
-
-from clock_sync import SYNC_RESPONSE, ClockSynchronizer
-from record_ble_sensors import BleRecorder
+from aurora.recording.record_ble_sensors import BleRecorder
+from aurora.sensors.clock_sync import SYNC_RESPONSE, ClockSynchronizer
 
 
 class ClockSynchronizerTests(unittest.TestCase):

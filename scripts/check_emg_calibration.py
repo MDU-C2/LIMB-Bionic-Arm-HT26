@@ -11,8 +11,6 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-for directory in ("src/recording", "src/simulation/ai"):
-    sys.path.insert(0, str(ROOT / directory))
 if os.name == "nt":
     os.environ["PATH"] = (
         str(Path(sys.prefix) / "Library/bin") + os.pathsep + os.environ.get("PATH", "")
@@ -51,7 +49,8 @@ def main():
     if args.seconds < 4:
         parser.error("--seconds must be at least 4")
     import numpy as np
-    from ble_sensor_input import BleSensorReader
+
+    from aurora.sensors.ble_input import BleSensorReader
 
     reader = BleSensorReader()
     raw = []

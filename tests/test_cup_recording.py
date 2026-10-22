@@ -7,7 +7,6 @@ import io
 import json
 import queue
 import struct
-import sys
 import tempfile
 import time
 import unittest
@@ -15,16 +14,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-ROOT = Path(__file__).resolve().parents[1]
-for directory in ("recording", "simulation/ai", "gui"):
-    sys.path.insert(0, str(ROOT / "src" / directory))
-
-from ble_packets import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET
-from ble_sensor_input import BleSensorReader
-from cup_trials import CupTrialSession, next_trial_number
-from oak_camera import build_pipeline
-from process_manager import ManagedProcess, ProcessManagerMixin
-from record_cup_trials import CupRecorder
+from aurora.gui.process_manager import ManagedProcess, ProcessManagerMixin
+from aurora.recording.cup_trials import CupTrialSession, next_trial_number
+from aurora.recording.record_cup_trials import CupRecorder
+from aurora.sensors.ble_input import BleSensorReader
+from aurora.sensors.ble_protocol import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET
+from aurora.sensors.camera.oak_camera import build_pipeline
 
 
 def feed_samples(reader, sequence=1):
@@ -138,10 +133,12 @@ class CupRecordingTests(unittest.TestCase):
                 saved.append(trials.stop())
                 manifest = json.loads((saved[-1] / "trial.json").read_text())
                 self.assertTrue(manifest["complete"])
+                self.assertEqual(manifest["subject_id"], "S01")
+                self.assertEqual(manifest["format_version"], 3)
                 self.assertEqual(manifest["trial_id"], f"T{number:03d}")
                 self.assertEqual(manifest["packet_counts"], {"emg": 1, "imu": 1})
                 self.assertEqual(manifest["calibration"]["emg_reference"], 30)
-                self.assertEqual(manifest["camera_observation_frames"], 1)
+                self.assertEqual(manifest["camera_observation_frame_count"], 1)
                 self.assertEqual(manifest["cup_model_sha256"], "abc")
                 camera_meta = json.loads((saved[-1] / "camera/meta.json").read_text())
                 self.assertEqual(camera_meta["started_host_monotonic_ns"], camera_start)
@@ -149,6 +146,12 @@ class CupRecordingTests(unittest.TestCase):
                 self.assertEqual(len((saved[-1] / "ble/emg.csv").read_text().splitlines()), 41)
                 self.assertEqual(len((saved[-1] / "ble/packets.jsonl").read_text().splitlines()), 2)
                 pose = json.loads((saved[-1] / "camera/pose.json").read_text())
+                self.assertEqual(pose["subject_id"], manifest["subject_id"])
+                self.assertEqual(pose["trial_id"], manifest["trial_id"])
+                self.assertEqual(pose["pose_frame_count"], len(pose["data"]))
+                self.assertEqual(pose["observation_frame_count"], len(pose["observations"]))
+                self.assertGreater(pose["video_frame_count"], 0)
+                self.assertEqual(pose["coordinate_system"], "rgb_pixels_stereo_depth")
                 self.assertEqual(pose["observations"][0]["host_monotonic_ns"], frame.frame_time_ns)
                 self.assertEqual(
                     pose["observations"][0]["cup_detections"],
@@ -232,7 +235,7 @@ class CupRecordingTests(unittest.TestCase):
             path = trials.stop()
             manifest = json.loads((path / "trial.json").read_text())
             self.assertFalse(manifest["complete"])
-            self.assertEqual(manifest["camera_observation_frames"], 0)
+            self.assertEqual(manifest["camera_observation_frame_count"], 0)
 
     def test_lost_camera_or_calibration_prevents_start(self):
         live = SimpleNamespace(
@@ -259,7 +262,7 @@ class CupRecordingTests(unittest.TestCase):
         recorder = object.__new__(CupRecorder)
         recorder.trials = SimpleNamespace(active=True)
         recorder.live = Mock()
-        with patch("record_cup_trials.emit") as emitted:
+        with patch("aurora.recording.record_cup_trials.emit") as emitted:
             recorder.command("rest")
         recorder.live.reader.calibrate_emg.assert_not_called()
         self.assertEqual(emitted.call_args.args[0], "error")

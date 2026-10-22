@@ -4,29 +4,25 @@
 from __future__ import annotations
 
 import math
-import sys
 import unittest
-from pathlib import Path
 
 import numpy as np
 import pybullet as p
 from scipy.spatial.transform import Rotation
+from simulation_fixture import SimulationPhysicsCase
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "simulation"))
-
-from interactive.kinematics import calculate_ik_angles, is_reachable
-from interactive.torque_graph import TorqueHistory
-from sim.contact_feedback import estimate_contact_force_n, grasp_is_ready
-from sim.controller_params import ARM_ACTUATOR_INFO, ARM_MOTOR_FORCE_NM
-from sim.dynamics import ArmDynamics
-from sim.joint_limits import LEFT_ARM_LIMITS_DEG, finger_joint_angles_rad
-from sim.robot_model import (
+from aurora.simulation.interactive.kinematics import calculate_ik_angles, is_reachable
+from aurora.simulation.interactive.torque_graph import TorqueHistory
+from aurora.simulation.model.contact_feedback import estimate_contact_force_n, grasp_is_ready
+from aurora.simulation.model.controller_params import ARM_ACTUATOR_INFO, ARM_MOTOR_FORCE_NM
+from aurora.simulation.model.dynamics import ArmDynamics
+from aurora.simulation.model.joint_limits import LEFT_ARM_LIMITS_DEG, finger_joint_angles_rad
+from aurora.simulation.model.robot_model import (
     LEFT_ARM_JOINTS,
     LEFT_GRIP_OFFSET_M,
     LEFT_HAND_LINK,
     load_left_arm,
 )
-from simulation_fixture import SimulationPhysicsCase
 
 
 class SimulationDynamicsTests(SimulationPhysicsCase):

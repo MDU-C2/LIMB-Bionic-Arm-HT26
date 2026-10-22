@@ -277,8 +277,12 @@ class InteractiveRuntimeTests(unittest.TestCase):
                     self.assertFalse(p.getClosestPoints(body, simulator.table_body, -0.001))
             current = waypoint
 
+        self.assertTrue(p.getClosestPoints(simulator.robot_body, simulator.target_body, -0.001))
+        held_pose = p.getBasePositionAndOrientation(simulator.target_body)
         self.frame((pygame.K_g,))
         self.assertIsNone(simulator.grasp_transform)
+        velocity, _ = p.getBaseVelocity(simulator.target_body)
+        self.assertLess(math.hypot(*velocity[:2]), 0.01)
         for _ in range(120):
             self.frame()
         position, _ = p.getBasePositionAndOrientation(simulator.target_body)
@@ -286,6 +290,10 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertGreater(position[0], simulator.target_start_position[0] + 0.20)
         self.assertLess(math.dist(position[:2], simulator.target_destination_position[:2]), 0.04)
         self.assertTrue(p.getContactPoints(simulator.target_body, simulator.table_body))
+        self.assertFalse(simulator.target_collision_pending)
+        p.resetBasePositionAndOrientation(simulator.target_body, *held_pose)
+        p.performCollisionDetection()
+        self.assertTrue(p.getContactPoints(simulator.robot_body, simulator.target_body))
 
     def test_motor_driven_raise_clears_the_60_cm_table(self):
         from aurora.simulation.interactive.arm_control import set_shoulder
@@ -347,6 +355,7 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertEqual(tuple(position), tuple(simulator.target_start_position))
         self.assertIsNotNone(simulator.target_anchor_constraint)
         self.assertFalse(simulator.auto_grasp_pending)
+        self.assertFalse(simulator.target_collision_pending)
 
     def test_live_targets_and_grip_follow_existing_limits(self):
         simulator = self.simulator

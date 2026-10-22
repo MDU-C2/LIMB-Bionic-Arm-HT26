@@ -277,6 +277,7 @@ class GraspMixin:
                         collisionFilterGroup=0,
                         collisionFilterMask=0,
                     )
+                self.target_collision_pending = False
                 self.grasp_transform = (target_position_in_hand, target_orientation_in_hand)
                 self.notice_text = (
                     "Manual F grip secured"
@@ -334,6 +335,11 @@ class GraspMixin:
                 collisionFilterGroup=1,
                 collisionFilterMask=1,
             )
+            if not self.dynamic_mode:
+                # Preview poses can overlap the cup and hand. Let the cup clear
+                # the arm before restoring contact, without disabling the table.
+                self.set_target_robot_collision(False)
+                self.target_collision_pending = True
             p.resetBaseVelocity(self.target_body, linearVelocity=[0, 0, -0.2])
             self.notice_text = "Target released"
             self.notice_until_ms = pygame.time.get_ticks() + 1800

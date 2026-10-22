@@ -20,6 +20,9 @@ jobs:
       - run: python -m ruff format --check src scripts tests
 
   tests:
+    defaults:
+      run:
+        shell: pwsh
     strategy:
       fail-fast: false
       matrix:
@@ -33,21 +36,33 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: mamba-org/setup-micromamba@v3
+        id: environment
         with:
           environment-file: environment.yml
           init-shell: none
           cache-environment: true
+      - name: Select project Python
+        env:
+          AURORA_CI_PREFIX: ${{ steps.environment.outputs.environment-path }}
+        run: |
+          $taskPython = Join-Path $env:AURORA_CI_PREFIX $(if ($IsWindows) { 'python.exe' } else { 'bin/python' })
+          if (-not (Test-Path -LiteralPath $taskPython)) { throw "Project Python not found: $taskPython" }
+          "AURORA_CI_PYTHON=$taskPython" >> $env:GITHUB_ENV
+          if ($IsWindows) {
+            $env:AURORA_CI_PREFIX >> $env:GITHUB_PATH
+            (Join-Path $env:AURORA_CI_PREFIX 'Scripts') >> $env:GITHUB_PATH
+            (Join-Path $env:AURORA_CI_PREFIX 'Library/bin') >> $env:GITHUB_PATH
+          }
       - name: Install training dependencies and the local package
-        shell: pwsh
         run: |
           if ($IsWindows -or $IsLinux) {
-            micromamba run -n aurora python -m pip install "torch>=2.2,<2.6" --index-url https://download.pytorch.org/whl/cpu
+            & $env:AURORA_CI_PYTHON -m pip install "torch>=2.2,<2.6" --index-url https://download.pytorch.org/whl/cpu
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          micromamba run -n aurora python -m pip install -r requirements-setup.txt
+          & $env:AURORA_CI_PYTHON -m pip install -r requirements-setup.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          micromamba run -n aurora python -m pip install --no-deps -e .
+          & $env:AURORA_CI_PYTHON -m pip install --no-deps -e .
       - name: Run offline tests
-        run: micromamba run -n aurora python scripts/check_project.py
+        run: '& $env:AURORA_CI_PYTHON scripts/check_project.py'
       - name: Check installed package resources
-        run: micromamba run -n aurora python scripts/check_package.py
+        run: '& $env:AURORA_CI_PYTHON scripts/check_package.py'

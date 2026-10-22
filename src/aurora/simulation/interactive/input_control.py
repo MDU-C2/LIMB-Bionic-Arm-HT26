@@ -202,7 +202,8 @@ class InputMixin:
             if self.grasp_constraint is not None:
                 p.removeConstraint(self.grasp_constraint)
                 self.grasp_constraint = None
-                self.set_target_robot_collision(True)
+            self.set_target_robot_collision(True)
+            self.target_collision_pending = False
             if self.target_anchor_constraint is not None:
                 p.removeConstraint(self.target_anchor_constraint)
                 self.target_anchor_constraint = None

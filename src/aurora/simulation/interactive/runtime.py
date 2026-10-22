@@ -75,6 +75,7 @@ class InteractiveSimulator(
         self.grasp_transform = None
         self.grasp_constraint = None
         self.auto_grasp_pending = False
+        self.target_collision_pending = False
         self.auto_grasp_phase = "reach"
         self.h_contact_stop = False
         self.latched_fingertip_force_n = {finger: 0.0 for finger in FINGER_JOINT_TOKENS}

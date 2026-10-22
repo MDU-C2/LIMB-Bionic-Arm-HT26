@@ -31,6 +31,12 @@ class PhysicsMixin:
             self.running = False
             return False
 
+        if self.target_collision_pending and not p.getClosestPoints(
+            self.robot_body, self.target_body, distance=0.002
+        ):
+            self.set_target_robot_collision(True)
+            self.target_collision_pending = False
+
         if self.dynamic_mode:
             sync_to_pybullet(
                 arm=self.arm,

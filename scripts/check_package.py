@@ -19,11 +19,23 @@ def run(*arguments: str, cwd: Path = ROOT) -> None:
     subprocess.run([sys.executable, *arguments], cwd=cwd, check=True)
 
 
+def extract_source_archive(archive: Path, destination: Path) -> None:
+    destination = destination.resolve()
+    with tarfile.open(archive) as source:
+        for member in source.getmembers():
+            if not (destination / member.name).resolve().is_relative_to(destination) or not (
+                member.isfile() or member.isdir()
+            ):
+                raise ValueError(f"Unexpected source archive entry: {member.name!r}")
+        source.extractall(destination)
+
+
 def main() -> int:
     os.environ["PYTHONUTF8"] = "1"
     os.environ["MPLBACKEND"] = "Agg"
     with tempfile.TemporaryDirectory(prefix="aurora_package_") as temporary:
-        work = Path(temporary)
+        # Temporary folders can use short Windows paths or symlinked macOS paths.
+        work = Path(temporary).resolve()
         archive_directory = work / "source"
         archive_directory.mkdir()
         run(
@@ -32,13 +44,7 @@ def main() -> int:
             str(archive_directory),
         )
         archive = next(archive_directory.glob("*.tar.gz"))
-        with tarfile.open(archive) as source:
-            for member in source.getmembers():
-                if not (archive_directory / member.name).resolve().is_relative_to(
-                    archive_directory
-                ) or not (member.isfile() or member.isdir()):
-                    raise ValueError("Unexpected source archive entry")
-            source.extractall(archive_directory)
+        extract_source_archive(archive, archive_directory)
         source_root = next(path for path in archive_directory.iterdir() if path.is_dir())
         wheels = work / "wheels"
         run(

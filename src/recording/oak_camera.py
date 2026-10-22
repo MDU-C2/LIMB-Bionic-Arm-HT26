@@ -31,7 +31,15 @@ def configure_depthai_runtime() -> None:
 
 def build_pipeline(dai, use_depth: bool = False):
     """Run RGB tracking; add stereo only when explicitly requested."""
-    pipeline = dai.Pipeline()
+    try:
+        pipeline = dai.Pipeline()
+    except RuntimeError as error:
+        if "No available devices" in str(error):
+            raise RuntimeError(
+                "OAK-D camera unavailable. Connect its USB data cable, close other camera "
+                "previews, wait a few seconds and try again."
+            ) from error
+        raise
     color = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
     color_output = color.requestOutput(
         FRAME_SIZE,

@@ -26,6 +26,7 @@ def main() -> int:
     parser.add_argument("--depth", action="store_true")
     parser.add_argument("--mode", choices=("kinematic", "dynamic"), default="kinematic")
     parser.add_argument("--address", default="")
+    parser.add_argument("--replay", type=Path, help="Use a recorded cup trial instead of hardware")
     parser.add_argument("--out", type=Path, default=ROOT / "outputs/live_control_diagnostic.json")
     args = parser.parse_args()
     if args.seconds <= 0:
@@ -45,6 +46,7 @@ def main() -> int:
                 "--address",
                 args.address,
                 *(["--depth"] if args.depth else []),
+                *(["--replay", str(args.replay)] if args.replay else []),
             ]
         )
     )
@@ -56,7 +58,10 @@ def main() -> int:
         simulator.initialize_hud()
         simulator.initialize_task()
         simulator.start_live_input()
+        if args.replay:
+            simulator.advance_live_setup()
         deadline = time.monotonic() + args.seconds
+        control_started = time.monotonic()
         last_sample = 0.0
         while simulator.running and time.monotonic() < deadline:
             if not simulator.prepare_frame():
@@ -75,6 +80,19 @@ def main() -> int:
                 print(json.dumps(sample), flush=True)
             simulator.clock.tick(60)
         report["running_at_end"] = simulator.running
+        report["control_frames"] = simulator.frame_number
+        report["control_elapsed_s"] = round(time.monotonic() - control_started, 3)
+        report["control_frames_per_second"] = round(
+            simulator.frame_number / max(0.001, time.monotonic() - control_started), 1
+        )
+        report["requested_joint_angles_deg"] = {
+            "shoulder_x": simulator.arm.shoulder.angle_x,
+            "shoulder_y": simulator.arm.shoulder.angle_y,
+            "shoulder_z": simulator.arm.shoulder.angle_z,
+            "elbow_x": simulator.arm.elbow.angle_x,
+            "wrist_rotation": simulator.arm.wrist.rotation,
+        }
+        report["measured_joint_angles_deg"] = simulator.measured_angles_deg
         live = simulator.live_sensor_input
         if live is not None and live.reader is not None:
             data = live.reader.graph_data()

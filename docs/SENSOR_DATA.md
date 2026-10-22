@@ -84,55 +84,21 @@ is treated as the upper-arm sensor, matching HT25's original placement.
 
 ## Live camera/IMU/EMG simulation control
 
-Open **Simulation**, check the ESP32 **BLE device name** (`LIMBServer` by default),
-close the standalone camera preview, then choose **Start live interactive
-control**. It opens the full table-and-target simulator, annotated camera view,
-and a separate live sensor monitor. The GUI releases its BLE preview before
-control connects. The live controller:
+Open **Simulation ? Connect + open live setup**. Follow **Align starting pose ?
+Relaxed EMG ? Firm grip ? Start interactive control**. Keep the open hand at
+marker 1, thumb up and elbow comfortably bent during starting-pose alignment.
+See [Live control](LIVE_CONTROL.md) for mounting, theory and offline replay.
 
-1. detects whether zero, one, or two IMUs are reporting valid samples;
-2. reproduces HT25's installed-sensor mapping: sample-rate-independent smoothed
-   `atan2(Y, Z)` tilt and scaled, dead-zoned, signed gyro Z for shoulder
-   left/right;
-3. computes elbow flexion from wrist tilt relative to shoulder tilt when both
-   sensors are present, and adds calibrated upper-arm/relative forearm gyro twist;
-4. corrects the bounded targets with trunk-relative OAK-D/MediaPipe angles and
-   uses tracked hand curl for the default Camera grip source;
-5. filters high-rate raw EMG in the 20–450 Hz band with a 50 Hz notch, computes
-   an RMS envelope, and maps rest/strong-grip calibrated activation to grip when
-   EMG is selected (low-rate legacy packets use envelope processing); and
-6. applies the existing LIMB joint and speed limits to PyBullet.
+The camera corrects elevation, elbow and lateral motion as well as the observable
+upper-arm rotation proxy. IMU predictions continue between camera frames.
+Measured angles remain intact through calibration and fusion; robot limits apply
+when mapping to joint commands. The mounted tilt/twist model remains approximate.
+The forearm's axial drift has no camera correction.
 
-Grip source can be Camera, EMG, or Auto. Auto prefers a current EMG activation
-even with unattached electrodes; it falls back to camera curl only when EMG is
-unavailable. This setting does not affect which streams are recorded.
-
-Camera correction weights channels available from both sources. `0` prefers
-IMUs and `1` prefers camera; single-source channels remain available. At `0.25`,
-IMUs contribute to elevation and elbow movement while camera supplies absolute
-abduction and corrects the upper-arm gyro twist state. Live feedback initially stays paused with the simulated arm in its neutral
-tabletop pose (shoulder and elbow at 45 degrees, wrist neutral and hand open).
-Copy that pose with the real arm, then press `L` to calibrate and
-start feedback. Press `R` to pause, reset the scene, and show the reference pose
-again. `K` recalibrates at the current pose. Press `Q` in the camera window to
-stop.
-
-Camera axial correction requires a visible bent elbow; calibrated IMU twist
-continues when that observation is unavailable. Forearm twist uses both sensors
-with common-motion compensation; its drift has no camera correction in the old
-mapping. Q/E and Left/Right provide fallback when live twist targets are absent.
-Mount the default sensor Y axes along the limbs and hold still for 0.5 seconds
-after L; see [mounting and isolated-motion checks](SIMULATION.md#mounting-and-twist-calibration)
-before trusting anatomical movement. Axis selections affect live control only.
-Fingers share a grip
-command, with live movement limited by the HT25 finger-servo speeds. See
-[Joint limits](JOINT_LIMITS.md) for the source and model limitations.
-
-Live simulation uses the same BLE decoder as recording without creating files.
-Every EMG sample contributes to the grip envelope, and IMU updates use device
-sample timing when available. Bluetooth reconnects in the background; each
-stream expires independently after 0.5 seconds without fresh data. Hardware
-operation still needs checking with the ESP32 and camera connected.
+The app defaults to EMG grip. Camera and Auto are also available. EMG supplies a
+shared grip command, not individual finger angles or measured grip force. Live
+preview follows targets within joint limits; physics mode also models motor speed,
+gravity and contact. Reconnecting Bluetooth requires guided calibration again.
 
 ## Record synchronized sources
 

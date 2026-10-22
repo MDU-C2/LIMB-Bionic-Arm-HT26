@@ -78,7 +78,8 @@ class InputMixin:
 
     def process_events(self) -> None:
         """Handle keyboard actions and live alignment/calibration."""
-        reset_requested = False
+        reset_requested = getattr(self, "live_reset_requested", False)
+        self.live_reset_requested = False
         self.interact_requested = False
         self.camera_changed = False
         calibrate_requested = False
@@ -159,6 +160,11 @@ class InputMixin:
         if self.bullet_key_triggered("l") and self.live_sensor_input is not None:
             start_live_requested = True
 
+        if (start_live_requested or calibrate_requested) and (
+            getattr(self, "live_setup", None) is not None or getattr(self.args, "replay", None)
+        ):
+            self.advance_live_setup()
+            start_live_requested = calibrate_requested = False
         if start_live_requested:
             tracking_ready = self.live_snapshot is not None and (
                 self.live_snapshot.camera_ready or self.live_snapshot.imu_ready
@@ -221,6 +227,13 @@ class InputMixin:
             if self.live_sensor_input is not None:
                 self.live_feedback_active = False
                 set_live_alignment_pose(self.arm)
+                if getattr(self, "live_setup", None) is not None:
+                    from .live_setup import LiveSetup
+
+                    self.live_setup = LiveSetup(
+                        self.live_sensor_input,
+                        anatomical_reference_angles(get_angles_deg(self.arm)),
+                    )
             else:
                 set_ready_pose(self.arm)
             self.manual_motion.reset()
@@ -230,7 +243,7 @@ class InputMixin:
                 )
                 p.performCollisionDetection()
             self.notice_text = (
-                "Neutral tabletop pose ready - match it, then press L"
+                "Paused at tabletop pose - follow Live control setup in the sensor window"
                 if self.live_sensor_input is not None
                 else "Arm and target reset"
             )
@@ -257,25 +270,31 @@ class InputMixin:
         if self.h_reach_requested or self.auto_grasp_pending:
             self.manual_motion.reset()
         elif self.args.control == "camera-imu" and self.live_feedback_active:
+
+            def live_step(current, target, joint, *, elapsed_s):
+                if not self.dynamic_mode:
+                    return target
+                return step_toward(current, target, joint, elapsed_s=elapsed_s)
+
             targets = interactive_control_targets(
                 self.live_snapshot.angles if self.live_snapshot is not None else None
             )
             if targets:
                 set_shoulder(
                     self.arm,
-                    x=step_toward(
+                    x=live_step(
                         self.arm.shoulder.angle_x,
                         targets.get("shoulder_x", self.arm.shoulder.angle_x),
                         "shoulder_x",
                         elapsed_s=self.loop_dt_s,
                     ),
-                    y=step_toward(
+                    y=live_step(
                         self.arm.shoulder.angle_y,
                         targets.get("shoulder_y", self.arm.shoulder.angle_y),
                         "shoulder_y",
                         elapsed_s=self.loop_dt_s,
                     ),
-                    z=step_toward(
+                    z=live_step(
                         self.arm.shoulder.angle_z,
                         targets.get("shoulder_z", self.arm.shoulder.angle_z),
                         "shoulder_z",
@@ -285,7 +304,7 @@ class InputMixin:
                 )
                 set_elbow(
                     self.arm,
-                    x=step_toward(
+                    x=live_step(
                         self.arm.elbow.angle_x,
                         targets.get("elbow_x", self.arm.elbow.angle_x),
                         "elbow_x",
@@ -321,7 +340,7 @@ class InputMixin:
             if targets and "wrist_rotation" in targets:
                 set_wrist(
                     self.arm,
-                    step_toward(
+                    live_step(
                         self.arm.wrist.rotation,
                         targets["wrist_rotation"],
                         "wrist_rotation",
@@ -340,6 +359,8 @@ class InputMixin:
                     self.loop_dt_s,
                 )
                 set_wrist(self.arm, delta, mode="rel")
+        elif self.args.control == "camera-imu":
+            self.manual_motion.reset()
         else:
             delta_should_y = self.manual_motion.step(
                 self.keys,

@@ -357,8 +357,11 @@ class SensorPreviewTests(unittest.TestCase):
         args = argparse.Namespace(
             preview=True, duration=0.0, subject="S01", side="left", depth=False, pose_model=1
         )
+        cup_detector = Mock(name="test_cups", status="ready", model_sha256="test", threshold=0.25)
+        cup_detector.detect.return_value = []
         with (
             patch.object(record_oak_pose, "parse_args", return_value=args),
+            patch.object(record_oak_pose, "CupDetector", return_value=cup_detector),
             patch.object(
                 record_oak_pose, "build_pipeline", return_value=(pipeline, video_queue, depth_queue)
             ),
@@ -369,6 +372,7 @@ class SensorPreviewTests(unittest.TestCase):
             self.assertEqual(record_oak_pose.main(), 0)
         pipeline.stop.assert_called_once()
         hand_model.close.assert_called_once()
+        cup_detector.close.assert_called_once()
         cv2.imshow.assert_called_once()
         self.assertEqual(cv2.imshow.call_args.args[1].shape, (644, 640, 3))
 

@@ -22,8 +22,7 @@ controller, and the separate sensor display.
 | Change camera | C or Tab |
 | Show camera panels | P |
 | Show sensor display | I |
-| Recalibrate live IMUs | K (live mode) |
-| Start live feedback after matching reference | L (live mode) |
+| Advance live setup | K or L (live mode) |
 | Reset and return to neutral tabletop reference | R |
 | Quit | Escape |
 
@@ -33,92 +32,37 @@ The arm is a complete left/right reflection, including the wrist and fingers,
 mounted to the left of the centered table. See [Joint limits](JOINT_LIMITS.md)
 for the source of every movement range and the camera-to-CAD zero conversion.
 
-**Start live interactive control** opens the same task scene together with an
-annotated OAK-D camera monitor and a separate live sensor monitor. A connected
-shoulder IMU supplies mounted Y/Z tilt and gyro-Z left/right motion. The wrist
-IMU adds relative elbow motion when present; a wrist-only IMU is monitored but
-is not mistaken for an upper-arm sensor. Camera tracking supplies absolute pose,
-axial-rotation correction, and finger curl. The result passes through the
-existing joint and speed limits. Live control connects to the **BLE device**
-name (default `LIMBServer`); no COM port is needed. The GUI releases its BLE
-monitor automatically; close the standalone camera preview before starting.
-The simulator reconnects if Bluetooth drops
-and stops using sensor values after half a second without updates. **Grip source**
-defaults to **Camera**, so opening and closing the tracked hand works while
-electrodes are unattached. Select **EMG** once electrodes are attached and the
-rest/contraction signals have been checked. **Auto** retains EMG-first selection,
-with camera fallback only when EMG is unavailable; receiving EMG packets does
-not establish electrode contact. A missing selected grip source holds the last
-finger pose. F/G still provides manual opening and closing.
+**Connect + open live setup** opens the scene paused, the camera view and a
+step-by-step calibration panel. Follow **Align starting pose ? Relaxed EMG ?
+Firm grip ? Start interactive control**. The [live control guide](LIVE_CONTROL.md)
+explains arm placement, fusion and offline replay.
 
-Upper-arm axial rotation now follows the upper-arm IMU, with camera correction
-when a bent elbow is visible. It continues from the calibrated gyro estimate
-when camera axial tracking is missing. Forearm/wrist twist uses both IMUs and
-removes upper-arm motion, accounting for the measured elbow bend. Wrist twist
-has no camera correction in the old mapping and can drift during longer trials.
-Q/E and Left/Right provide manual rotation when the respective live target is
-unavailable. Keyboard mode retains full manual control.
-Shoulder left/right is a separate channel, driven by camera abduction and the
-shoulder IMU's gyro-Z estimate. Keep the chosen arm and hips in view.
+Live preview follows bounded pose targets directly. **Physics mode** keeps
+motor speed and force limits, so it may follow a person more slowly. The shared
+finger command follows calibrated EMG by default in the app; Camera and Auto
+remain available. Live grip needs fingertip contact to secure the cup. Opening
+the hand releases it. F/G and Space remain available in keyboard control.
 
-Before trying this on a person, follow the mounting check below. Loose boards
-can verify sensor reception, but cannot establish correct anatomical movement.
+Camera inference runs separately from the simulation loop. BLE control reads
+continue between camera observations. Each stream expires after half a second
+without updates, and reconnecting invalidates the guided calibration.
 
 ### Mounting and twist calibration
 
-1. Fix IMU1 (`0x6B`) to the upper arm and IMU2 (`0x6A`) to the forearm, with
-   consistent board orientation. The default assumes each board's **Y axis runs
-   along the limb**, with matching positive directions and bend axes.
-2. Simulation's **Upper-arm twist axis** and **Forearm twist axis** select the
-   longitudinal axes. Use a negative axis when its direction needs reversing.
-   These selections remap both acceleration and gyro vectors for live control;
-   recordings keep their original sensor axes. Defaults preserve the existing
-   Y/Z tilt mapping. An X-length mounting uses sensor Y for the bend axis;
-   Y/Z-length mountings use sensor X for the bend axis.
-3. Match the neutral tabletop reference, press **L**, and hold both sensors still for
-   **0.5 seconds**. Moving restarts the twist baseline. K recalibrates the current
-   pose; R returns to alignment. Recalibration/reconnection resets twist references.
-4. Test small isolated movements: elbow bend, upper-arm twist, then forearm
-   pronation/supination with the upper arm still. Check direction, unwanted movement
-   in other joints, and stops before attempting combined movements. If directions
-   are wrong, stop control, correct the axes/mounting, restart and recalibrate.
-5. Repeat with a bent elbow and during a short camera occlusion. The mapping uses
-   HT25's relative orientation approach and needs this physical check; it is not
-   a validated full anatomical model. Forearm twist starts at the old firmware's
-   zero command and is limited to 0–140 degrees, so only the positive direction
-   moves from zero. A middle reference offset has not been invented.
+Fix IMU1 (`0x6B`) to the upper arm and IMU2 (`0x6A`) to the forearm. Select
+signed longitudinal sensor axes in Simulation; the default is Y for each board.
+Keep their bend axes consistent. The camera provides trunk-relative pose and
+corrects the mounted IMU estimate. Sensor distance is not needed for angle control.
 
-The hand uses a shared grip value, rather than mirroring each finger separately.
-Live grip follows the final HT25 finger-servo speed limits; a full close/open
-takes about 2.25 seconds. The CAD finger coupling is an approximate visual pose,
-not a measured tendon model.
+Calibrate with the hand open at marker 1, thumb up and elbow comfortably bent.
+The guide waits for a still pose and then an IMU rest baseline. After calibration,
+check isolated elbow bending, arm raising, sideways motion and forearm twist.
+Pause and correct mounting/settings if a direction is wrong. The tilt and twist
+mapping remains an approximation; forearm axial drift has no camera correction.
 
-BLE live control also opens a graph window with raw EMG and acceleration/gyro
-traces for both IMUs. It shares the control connection and keeps bounded sample
-buffers, without saving files. EMG displays the most recent 800 received samples
-(about 200 ms at 4 kHz), and each IMU displays up to 300 samples. The plots redraw
-at most 20 times per second; acquisition still processes every received sample.
-Streams stop displaying after half a second without data. Packet gap counters
-remain visible because missing samples are not represented as time gaps on the
-plots. Use **Show live BLE graphs** in the sensor monitor to reopen the window.
-Enable EMG auto-scale to inspect small signals, checking the ADC axis values
-because noise is enlarged too.
-
-The BLE reader processes every EMG sample and IMU packet in the background,
-using the existing rest-baseline/envelope and arm-angle filters. Camera rendering
-reads the latest result. Keep the muscle relaxed during the first half-second
-after calibration. Live control does not create a sensor recording.
-
-For EMG grip, select **EMG** before starting and calibrate in the simulator's
-live graph window:
-
-1. Press **1. Calibrate EMG at rest** and relax the monitored muscle for at least
-   half a second.
-2. Press **2. Calibrate strong grip (3 s)** and hold a strong, comfortable grip
-   until the status says **Grip calibrated**.
-3. Relax to open the simulated hand and contract to close it. Match the neutral
-   tabletop pose and press **L** to enable feedback. L/K align the arm sensors;
-   they preserve the EMG calibration.
+**Replay a recorded cup trial** accepts `trial.json` and uses saved BLE packets,
+calibration and camera observations without opening hardware. Replay validates
+the control path, not anatomical tracking accuracy.
 
 Repeat both EMG steps after starting a new simulator or moving electrodes. The
 standalone monitor and simulator have separate acquisition sessions. For grip,
@@ -182,13 +126,10 @@ release the cup using the existing controls. Reach assistance uses the mounted
 shoulder's coordinate frame. In physics mode, open the fingers and tilt or
 withdraw the hand when placing the cup so it can settle onto the table.
 
-Live control begins paused with the shoulder and elbow at 45 degrees and the
-forearm approximately horizontal beside the table's left edge, wrist neutral
-and hand open. Match that
-pose with the tracked real arm, then press `L` to calibrate and start feedback.
-Press `R` to pause and return to the reference pose, or `K` to recalibrate at
-the current pose. Press `Q` in the camera window to stop. See
-[Sensor data](SENSOR_DATA.md) for wiring and units.
+Live control begins paused at the tabletop reference. Follow the calibration
+panel with the open hand at marker 1, then press **Start interactive control**.
+Press `R` to pause and reset. `L` and `K` advance the current setup step.
+Press `Q` in the camera window to stop. See [Sensor data](SENSOR_DATA.md) for wiring.
 
 Calibration anchors camera and IMU angles to the displayed joint pose. A matched
 bent elbow therefore stays bent instead of being reset to zero; raising/lowering

@@ -292,7 +292,8 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.frame()
         self.assertGreater(simulator.arm.elbow.angle_x, before)
         self.assertGreater(simulator.arm.hand.curl, 0)
-        self.assertLess(simulator.arm.hand.curl, 0.8 * 1.5)
+        self.assertEqual(simulator.arm.hand.curl, 0.8 * 1.5)
+        self.assertEqual(simulator.arm.elbow.angle_x, 50.0)
         for name, value in get_angles_deg(simulator.arm).items():
             self.assertEqual(LEFT_ARM_LIMITS_DEG[name].clamp(value), value)
 
@@ -384,12 +385,8 @@ class InteractiveRuntimeTests(unittest.TestCase):
         for target in (1.0, 0.0):
             simulator.live_snapshot.hand_curl = target
             for _ in range(24):
-                before = simulator.arm.hand.curl
                 simulator.update_grasp()
-                progress_speed = abs(simulator.arm.hand.curl - before) / 1.5 / 0.1
-                for limit in FINGER_LIMITS_DEG.values():
-                    servo_speed = progress_speed * (limit.upper - limit.lower)
-                    self.assertLessEqual(servo_speed, limit.speed(target - before) + 1e-8)
+                self.assertAlmostEqual(simulator.arm.hand.curl, 1.5 * target)
                 simulator.update_arm()
                 simulator.advance_physics()
             self.assertAlmostEqual(simulator.arm.hand.curl, 1.5 * target)
@@ -401,6 +398,55 @@ class InteractiveRuntimeTests(unittest.TestCase):
                 self.assertAlmostEqual(measured, angle, places=6)
                 self.assertLessEqual(lower, measured)
                 self.assertLessEqual(measured, upper)
+
+    def test_live_physics_grip_keeps_motor_speed_limits(self):
+        simulator = self.simulator
+        simulator.args.control = "camera-imu"
+        simulator.dynamic_mode = True
+        simulator.live_feedback_active = True
+        simulator.live_snapshot = LiveFusionSnapshot(
+            None, {}, True, False, "recorded", hand_curl=1.0, grip_source="EMG"
+        )
+        simulator.loop_dt_s = 0.1
+        simulator.keys = defaultdict(bool)
+        simulator.bullet_events = {}
+        for target in (1.0, 0.0):
+            simulator.live_snapshot.hand_curl = target
+            for _ in range(24):
+                before = simulator.arm.hand.curl
+                simulator.update_grasp()
+                progress_speed = abs(simulator.arm.hand.curl - before) / 1.5 / 0.1
+                for limit in FINGER_LIMITS_DEG.values():
+                    self.assertLessEqual(
+                        progress_speed * (limit.upper - limit.lower),
+                        limit.speed(target - before) + 1e-8,
+                    )
+            self.assertAlmostEqual(simulator.arm.hand.curl, 1.5 * target)
+
+    def test_live_grip_requires_contact_and_opening_releases_the_cup(self):
+        simulator = self.simulator
+        simulator.args.control = "camera-imu"
+        simulator.live_feedback_active = True
+        simulator.live_snapshot = LiveFusionSnapshot(
+            None, {}, True, True, "recorded", hand_curl=1.0, grip_source="EMG"
+        )
+        simulator.loop_dt_s = 0.02
+        simulator.keys = defaultdict(bool)
+        simulator.bullet_events = {}
+        simulator.hand_target_distance = 0.1
+        forces = dict.fromkeys(FINGER_LIMITS_DEG, 0.0)
+        simulator.target_contact_feedback = Mock(return_value=(set(), forces))
+        simulator.update_grasp()
+        self.assertIsNone(simulator.grasp_transform)
+        simulator.target_contact_feedback.return_value = (
+            set(),
+            {**forces, "thumb": 0.2, "index": 0.2},
+        )
+        simulator.update_grasp()
+        self.assertIsNotNone(simulator.grasp_transform)
+        simulator.live_snapshot.hand_curl = 0.0
+        simulator.update_grasp()
+        self.assertIsNone(simulator.grasp_transform)
 
     def test_ble_twist_reaches_real_upper_arm_and_wrist_joints(self):
         from ai.ble_sensor_input import BleSensorReader

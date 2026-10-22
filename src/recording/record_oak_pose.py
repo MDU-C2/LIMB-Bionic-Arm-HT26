@@ -11,6 +11,8 @@ from common import (
     enable_ctrl_break_as_interrupt,
     env_float,
 )
+from cup_detection import CupDetector
+from hand_tracking import ArmHandTracker
 from oak_camera import DEPTH_SIZE as DEPTH_SIZE
 from oak_camera import FRAME_SIZE as FRAME_SIZE
 from oak_camera import VIDEO_FPS as VIDEO_FPS
@@ -132,7 +134,9 @@ def draw_window(frame, status: str, session: CameraSession, cv2, np, observation
     )
     cv2.putText(
         canvas,
-        "Cup detector: model unavailable",
+        ("Cup detected" if (observation or {}).get("cup_visible") else "Cup not detected")
+        if (observation or {}).get("cup_detector_status") == "ready"
+        else "Cup detector unavailable",
         (12, height + 121),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.47,
@@ -209,6 +213,7 @@ def main() -> int:
     latest_depth = None
     pose = None
     hands = None
+    cup_detector = None
     try:
         pose = mp.solutions.pose.Pose(
             static_image_mode=False,
@@ -216,13 +221,8 @@ def main() -> int:
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
         )
-        hands = mp.solutions.hands.Hands(
-            static_image_mode=False,
-            max_num_hands=2,
-            model_complexity=0,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-        )
+        hands = ArmHandTracker(mp, cv2)
+        cup_detector = CupDetector(cv2, np)
         cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(WINDOW, on_mouse)
         print(f"Live OAK-D tracking: subject's {args.side} arm, hand and fingers.")
@@ -230,7 +230,7 @@ def main() -> int:
             "Camera video is mirrored for the operator; tracking and saved "
             "coordinates use the raw frame."
         )
-        print("Cup detection needs a model; no cup model is present in this repository.")
+        print(f"Cup detector: {cup_detector.name} ({cup_detector.status})")
         if not args.depth:
             print("Stereo depth is off; use --depth to attempt depth-backed playback points.")
         if getattr(args, "auto_start", False):
@@ -254,6 +254,7 @@ def main() -> int:
                         args.side,
                         intrinsics,
                         hands,
+                        cup_detector=cup_detector,
                     )
                     session.add_frame(image, sample, observation)
                     canvas, controls["button"] = draw_window(
@@ -288,6 +289,8 @@ def main() -> int:
             pose.close()
         if hands is not None:
             hands.close()
+        if cup_detector is not None:
+            cup_detector.close()
         cv2.destroyAllWindows()
         stop = getattr(pipeline, "stop", None)
         if callable(stop):

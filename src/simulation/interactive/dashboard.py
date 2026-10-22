@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import time
 import tkinter as tk
 
 from sim.controller_params import (
@@ -30,28 +31,82 @@ class DashboardMixin:
         print("Initializing sensor window (Tkinter)...")
         self.sensor_window = tk.Tk()
         self.sensor_window.title(
-            "LIMB Live Sensor Monitor"
+            "LIMB Recorded Trial Replay"
+            if getattr(self.args, "replay", None)
+            else "LIMB Live Sensor Monitor"
             if self.args.control == "camera-imu"
             else "LIMB Sensor Dashboard"
         )
         self.sensor_window.geometry("500x805+35+35")
         self.sensor_window.protocol("WM_DELETE_WINDOW", self.sensor_window.withdraw)
 
+        if self.args.control == "camera-imu":
+            height = min(900, self.sensor_window.winfo_screenheight() - 80)
+            self.sensor_window.geometry(f"560x{height}+25+25")
+            setup = tk.LabelFrame(self.sensor_window, text="Live control setup", padx=10, pady=8)
+            setup.pack(fill="x", padx=8, pady=6)
+            tk.Label(
+                setup,
+                text="Starting pose: sit upright, upper arm relaxed, elbow about 90°. "
+                "Rest the open hand at 1, thumb up. Keep shoulders, hips and arm in view.",
+                wraplength=510,
+                justify="left",
+            ).pack(anchor="w", pady=(0, 8))
+            self.setup_text = tk.StringVar(
+                value="Connecting inputs. Movement stays paused during setup."
+            )
+            tk.Label(setup, textvariable=self.setup_text, wraplength=510, justify="left").pack(
+                anchor="w"
+            )
+            self.setup_button = tk.Button(
+                setup,
+                text="1. Align starting pose (hold still 2 s)",
+                command=self.advance_live_setup,
+                state="disabled",
+            )
+            self.setup_button.pack(anchor="w", pady=6)
+            tk.Button(
+                setup, text="Pause / start setup again", command=self.pause_live_control
+            ).pack(anchor="w")
+
         if self.args.control == "camera-imu" and self.args.transport == "ble":
             self.live_signal_graphs = LiveSignalGraphs(
-                self.sensor_window, self.calibrate_live_emg, self.calibrate_live_emg_strength
+                self.sensor_window,
+                None if getattr(self.args, "replay", None) else self.calibrate_live_emg,
+                None if getattr(self.args, "replay", None) else self.calibrate_live_emg_strength,
             )
+            self.live_signal_graphs.window.withdraw()
             tk.Button(
                 self.sensor_window,
                 text="Show live BLE graphs",
                 command=self.live_signal_graphs.show,
             ).pack(anchor="w", padx=10, pady=4)
 
+        detail_parent = self.sensor_window
+        if self.args.control == "camera-imu":
+            details = tk.Frame(self.sensor_window)
+            details.pack(fill="both", expand=True)
+            canvas = tk.Canvas(details, highlightthickness=0)
+            scroll = tk.Scrollbar(details, orient="vertical", command=canvas.yview)
+            canvas.configure(yscrollcommand=scroll.set)
+            scroll.pack(side="right", fill="y")
+            canvas.pack(side="left", fill="both", expand=True)
+            detail_parent = tk.Frame(canvas)
+            item = canvas.create_window((0, 0), window=detail_parent, anchor="nw")
+            detail_parent.bind(
+                "<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+            canvas.bind("<Configure>", lambda event: canvas.itemconfigure(item, width=event.width))
+            self.sensor_window.bind(
+                "<MouseWheel>",
+                lambda event: canvas.yview_scroll(-1 if event.delta > 0 else 1, "units"),
+            )
+
         self.sensor_vars = {}
         tk_font = ("Consolas", 11)
         tk_font_bold = ("Consolas", 12, "bold")
 
-        joint_frame = tk.Frame(self.sensor_window, padx=10, pady=10)
+        joint_frame = tk.Frame(detail_parent, padx=10, pady=10)
         joint_frame.pack(fill="x")
 
         tk.Label(joint_frame, text="--- JOINT POSE (Simulated) ---", font=tk_font_bold).pack(
@@ -107,7 +162,7 @@ class DashboardMixin:
             row.pack(anchor="w")
 
         self.torque_graph = TorqueGraph(
-            self.sensor_window,
+            detail_parent,
             tk,
             {key: name for name, key in self.joint_names_map.items()},
             torque_limit_nm=max(ARM_MOTOR_FORCE_NM.values()),
@@ -115,7 +170,7 @@ class DashboardMixin:
         )
         self.torque_graph.redraw(self.dynamic_mode)
 
-        imu_frame = tk.Frame(self.sensor_window, padx=10, pady=10)
+        imu_frame = tk.Frame(detail_parent, padx=10, pady=10)
         imu_frame.pack(fill="x")
 
         tk.Label(imu_frame, text="--- IMU SENSOR (Hand) ---", font=tk_font_bold).pack(anchor="w")
@@ -131,13 +186,17 @@ class DashboardMixin:
         )
         tk.Label(imu_frame, textvariable=self.sensor_vars["imu_yaw"], font=tk_font).pack(anchor="w")
 
-        bio_frame = tk.Frame(self.sensor_window, padx=10, pady=10)
+        bio_frame = tk.Frame(detail_parent, padx=10, pady=10)
         bio_frame.pack(fill="x")
 
         tk.Label(bio_frame, text="--- HAND INPUT AND CONTACT ---", font=tk_font_bold).pack(
             anchor="w"
         )
-        self.sensor_vars["emg_shoulder"] = tk.StringVar(value="EMG: not available in keyboard mode")
+        self.sensor_vars["emg_shoulder"] = tk.StringVar(
+            value="EMG: waiting for samples"
+            if self.args.control == "camera-imu"
+            else "EMG: not available in keyboard mode"
+        )
         self.sensor_vars["pressure_hand"] = tk.StringVar(value="Fingertip contact: 0/5")
 
         tk.Label(bio_frame, textvariable=self.sensor_vars["emg_shoulder"], font=tk_font).pack(
@@ -156,7 +215,7 @@ class DashboardMixin:
                 font=tk_font,
             ).pack(anchor="w")
 
-        physics_frame = tk.Frame(self.sensor_window, padx=10, pady=6)
+        physics_frame = tk.Frame(detail_parent, padx=10, pady=6)
         physics_frame.pack(fill="x")
         tk.Label(physics_frame, text="--- PHYSICS (URDF ESTIMATE) ---", font=tk_font_bold).pack(
             anchor="w"
@@ -170,7 +229,7 @@ class DashboardMixin:
             anchor="w"
         )
 
-        live_frame = tk.Frame(self.sensor_window, padx=10, pady=6)
+        live_frame = tk.Frame(detail_parent, padx=10, pady=6)
         live_frame.pack(fill="x")
         tk.Label(live_frame, text="--- LIVE CONTROL SOURCES ---", font=tk_font_bold).pack(
             anchor="w"
@@ -201,6 +260,31 @@ class DashboardMixin:
     def update_dashboard(self) -> None:
         """Refresh the monitor from this frame's measurements."""
         try:
+            now = time.monotonic()
+            if now - getattr(self, "last_dashboard_update", 0.0) < 0.1:
+                self.sensor_window.update()
+                return
+            self.last_dashboard_update = now
+            if (
+                getattr(self.args, "replay", None)
+                and self.live_sensor_input is not None
+                and self.live_sensor_input.ended
+            ):
+                self.live_feedback_active = False
+                self.setup_text.set(
+                    "Recording finished. Close this simulation to choose another trial."
+                )
+                self.setup_button.configure(state="disabled")
+            guide = getattr(self, "live_setup", None)
+            if guide is not None and self.live_snapshot is not None:
+                guide.update(self.live_snapshot)
+                if guide.stage != "running":
+                    self.live_feedback_active = False
+                self.setup_text.set(guide.message)
+                self.setup_button.configure(
+                    text=guide.button,
+                    state="disabled" if guide.pending or guide.stage == "running" else "normal",
+                )
             for key in self.joint_names_map.values():
                 self.sensor_vars[f"{key}_angle"].set(f"{self.hardware_angles_deg[key]:.1f} deg")
                 self.sensor_vars[f"{key}_torque"].set(
@@ -225,7 +309,7 @@ class DashboardMixin:
                 live_phase = (
                     "Feedback ACTIVE"
                     if self.live_feedback_active
-                    else "MATCH TABLETOP POSE - press L when matched"
+                    else "Paused - complete Live control setup"
                 )
                 self.sensor_vars["live_status"].set(f"{live_phase} | {self.live_snapshot.status}")
                 self.sensor_vars["live_shoulder"].set(

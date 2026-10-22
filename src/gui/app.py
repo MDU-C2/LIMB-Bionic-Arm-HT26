@@ -74,7 +74,7 @@ class ProjectGui(
         self.fusion_depth = tk.BooleanVar(value=False)
         self.table_width_cm = tk.StringVar(value="60")
         self.table_depth_cm = tk.StringVar(value="60")
-        self.fusion_grip_source = tk.StringVar(value="Camera")
+        self.fusion_grip_source = tk.StringVar(value="EMG")
         self.fusion_shoulder_twist_axis = tk.StringVar(value="y")
         self.fusion_wrist_twist_axis = tk.StringVar(value="y")
         self.motion_recording = tk.StringVar()
@@ -184,6 +184,10 @@ class ProjectGui(
             state="disabled" if non_preview_running or not interactive_ready else "normal"
         )
         self.fusion_button.configure(state="disabled" if running or not fusion_ready else "normal")
+        if hasattr(self, "replay_button"):
+            self.replay_button.configure(
+                state="disabled" if running or not fusion_ready else "normal"
+            )
         camera_preview_running = any(
             process.key == "preview:record_oak_pose.py"
             for process in self._active_processes("preview")
@@ -253,6 +257,7 @@ class ProjectGui(
         )
         ble_monitor_running = self.ble_reader is not None and self.ble_reader.thread.is_alive()
         self.stop_button.configure(state="normal" if running or ble_monitor_running else "disabled")
+        self._update_cup_controls()
 
     # UI helpers
 

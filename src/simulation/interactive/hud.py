@@ -37,7 +37,9 @@ class HudMixin:
         print("\n--- Keyboard Controls ---")
         print("Shoulder: W/S and A/D | Upper arm: Q/E")
         print("Elbow: Up/Down | Wrist: Left/Right | Fingers: F/G")
-        print("Space interact | H auto reach | R align | L start live | C camera | Esc quit")
+        print(
+            "Space interact | H auto reach | R pause/reset | L/K next setup step | C camera | Esc quit"
+        )
 
     def draw_text(self, text: str, position, color, text_font=None) -> None:
         text_font = self.font if text_font is None else text_font
@@ -165,7 +167,7 @@ class HudMixin:
             current_notice = "Click here for controls; task keys also work in the 3D scene"
         elif not current_notice:
             current_notice = (
-                "R align | L start live | K recalibrate | P previews | I sensors | Esc quit"
+                "R pause/reset | L/K next setup step | P previews | I sensors | Esc quit"
                 if self.live_sensor_input is not None
                 else "Ctrl precise | T guide | P previews | I sensors | Esc quit"
             )

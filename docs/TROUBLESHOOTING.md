@@ -7,6 +7,10 @@ the project Python before launching it directly. On Windows, numerical libraries
 need the environment's `Library/bin` directory. The app sets this for its child
 programs.
 
+`OAK-D camera unavailable` means the camera could not be opened. Check its USB
+data connection, close other camera previews and retry after a few seconds.
+Failed programs show an error dialog and keep their output in `outputs/logs/`.
+
 If the camera reports `X_LINK_ERROR`, try live control with stereo depth off.
 Close other camera programs before retrying. The stereo pipeline uses the
 FAST_DENSITY preset with subpixel processing disabled to reduce its load.

@@ -38,6 +38,9 @@ class GraspMixin:
 
     def update_grasp(self) -> None:
         """Advance the existing cup interaction and grip logic."""
+        if self.args.control == "camera-imu" and not self.live_feedback_active:
+            self.h_reach_requested = False
+            return
         current_contact_links, self.fingertip_force_n = self.target_contact_feedback()
         self.hand_target_contact = bool(current_contact_links & self.hand_contact_link_indices)
         self.active_fingertips = {
@@ -155,8 +158,12 @@ class GraspMixin:
                 and self.live_snapshot.hand_curl is not None
             ):
                 target_curl = self.live_snapshot.hand_curl * MAX_GRASP_CURL
-                hand_step = shared_grip_step(
-                    target_curl - self.arm.hand.curl, self.loop_dt_s, MAX_GRASP_CURL
+                hand_step = (
+                    shared_grip_step(
+                        target_curl - self.arm.hand.curl, self.loop_dt_s, MAX_GRASP_CURL
+                    )
+                    if self.dynamic_mode
+                    else MAX_GRASP_CURL
                 )
                 self.arm.hand.curl += clamp(
                     target_curl - self.arm.hand.curl,
@@ -168,9 +175,23 @@ class GraspMixin:
         manual_grasp_requested = (
             self.keys[pygame.K_f] or self.bullet_key_down("f")
         ) and self.hand_target_distance <= GRASP_CAPTURE_DISTANCE_M
+        live_grasp_ready = (
+            self.args.control == "camera-imu"
+            and self.live_feedback_active
+            and self.live_snapshot is not None
+            and self.live_snapshot.hand_curl is not None
+            and self.arm.hand.curl >= MIN_GRASP_CURL
+            and self.hand_target_distance <= GRASP_CAPTURE_DISTANCE_M
+            and len(self.active_fingertips) >= MIN_GRASP_FINGERTIPS
+        )
 
         if (
-            (self.interact_requested or self.auto_grasp_pending or manual_grasp_requested)
+            (
+                self.interact_requested
+                or self.auto_grasp_pending
+                or manual_grasp_requested
+                or live_grasp_ready
+            )
             and self.grasp_transform is None
             and self.hand_link_index != -1
         ):
@@ -180,16 +201,20 @@ class GraspMixin:
                 self.notice_text = "Assisted grasp canceled"
                 self.notice_until_ms = pygame.time.get_ticks() + 1800
                 print(self.notice_text)
-            elif manual_grasp_requested or (
-                self.auto_grasp_pending
-                and self.auto_grasp_phase == "close"
-                and grasp_is_ready(
-                    self.arm.hand.curl,
-                    self.hand_target_distance,
-                    len(self.active_fingertips),
-                    min_curl=MIN_GRASP_CURL,
-                    capture_distance_m=GRASP_CAPTURE_DISTANCE_M,
-                    min_fingertip_contacts=MIN_GRASP_FINGERTIPS,
+            elif (
+                manual_grasp_requested
+                or live_grasp_ready
+                or (
+                    self.auto_grasp_pending
+                    and self.auto_grasp_phase == "close"
+                    and grasp_is_ready(
+                        self.arm.hand.curl,
+                        self.hand_target_distance,
+                        len(self.active_fingertips),
+                        min_curl=MIN_GRASP_CURL,
+                        capture_distance_m=GRASP_CAPTURE_DISTANCE_M,
+                        min_fingertip_contacts=MIN_GRASP_FINGERTIPS,
+                    )
                 )
             ):
                 self.auto_grasp_pending = False
@@ -284,7 +309,16 @@ class GraspMixin:
                 print(self.notice_text)
 
         elif (
-            self.interact_requested or self.keys[pygame.K_g] or self.bullet_key_down("g")
+            self.interact_requested
+            or self.keys[pygame.K_g]
+            or self.bullet_key_down("g")
+            or (
+                self.args.control == "camera-imu"
+                and self.live_feedback_active
+                and self.live_snapshot is not None
+                and self.live_snapshot.hand_curl is not None
+                and self.arm.hand.curl < 0.2 * MAX_GRASP_CURL
+            )
         ) and self.grasp_transform is not None:
             self.grasp_transform = None
             self.latched_fingertip_force_n = {finger: 0.0 for finger in FINGER_JOINT_TOKENS}

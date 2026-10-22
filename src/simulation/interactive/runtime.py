@@ -10,11 +10,15 @@ import tkinter as tk
 import pybullet as p
 import pygame
 from ai.live_sensor_input import LiveSensorInput
+from ai.recorded_sensor_input import RecordedSensorInput
+from ai.sensor_fusion import anatomical_reference_angles
 
+from .arm_control import get_angles_deg
 from .dashboard import DashboardMixin
 from .grasp_control import GraspMixin
 from .hud import HudMixin
 from .input_control import InputMixin
+from .live_setup import LiveSetup
 from .physics import PhysicsMixin
 from .scene import SceneMixin
 from .settings import (
@@ -131,7 +135,14 @@ class InteractiveSimulator(
         self.live_snapshot = None
         self.live_feedback_active = self.args.control != "camera-imu"
         if self.args.control == "camera-imu":
-            self.live_sensor_input = LiveSensorInput(
+            input_class = (
+                RecordedSensorInput if getattr(self.args, "replay", None) else LiveSensorInput
+            )
+            replay_arguments = (
+                {"trial": self.args.replay} if getattr(self.args, "replay", None) else {}
+            )
+            self.live_sensor_input = input_class(
+                **replay_arguments,
                 port=self.args.port,
                 baud=self.args.baud,
                 side=self.args.side,
@@ -146,12 +157,30 @@ class InteractiveSimulator(
             )
             try:
                 self.live_sensor_input.start()
+                self.live_sensor_input.start_background()
+                if getattr(self.args, "replay", None):
+                    self.live_sensor_input.calibrate(
+                        anatomical_reference_angles(get_angles_deg(self.arm))
+                    )
+                    self.live_setup = None
+                    self.setup_text.set(
+                        "Recorded calibration loaded. Press Play recording. Camera and BLE are not used."
+                    )
+                    self.setup_button.configure(text="Play recording", state="normal")
+                else:
+                    self.live_setup = LiveSetup(
+                        self.live_sensor_input,
+                        anatomical_reference_angles(get_angles_deg(self.arm)),
+                    )
+                    self.setup_button.configure(state="normal")
                 self.notice_text = (
-                    "Match the neutral tabletop pose, then press L and hold still for 0.5 s"
+                    "Complete Live control setup in the sensor window before moving the arm"
                 )
                 self.notice_until_ms = pygame.time.get_ticks() + 6000
                 sensor_connection = (
-                    f"BLE {self.args.address or self.args.device}"
+                    f"Recorded trial {self.args.replay}"
+                    if getattr(self.args, "replay", None)
+                    else f"BLE {self.args.address or self.args.device}"
                     if self.args.transport == "ble"
                     else f"{self.args.port} at {self.args.baud} baud"
                 )
@@ -161,6 +190,26 @@ class InteractiveSimulator(
                 raise SystemExit(
                     f"Could not start live camera + IMU + EMG control: {error}"
                 ) from error
+
+    def advance_live_setup(self) -> None:
+        if getattr(self.args, "replay", None):
+            self.live_sensor_input.play()
+            self.live_feedback_active = True
+            self.setup_text.set(
+                "Playing recorded camera observations and raw BLE through the live controller."
+            )
+            return
+        if getattr(self, "live_setup", None) is not None and self.live_setup.action():
+            self.live_feedback_active = True
+            self.live_snapshot = None
+
+    def pause_live_control(self) -> None:
+        self.live_feedback_active = False
+        if getattr(self.args, "replay", None):
+            self.live_sensor_input.pause()
+            self.setup_text.set("Recording paused. Press Play recording to continue.")
+            return
+        self.live_reset_requested = True
 
     def close(self) -> None:
         print("Simulation finished.")
@@ -180,7 +229,17 @@ class InteractiveSimulator(
     def calibrate_live_emg(self) -> None:
         if self.live_sensor_input is not None:
             self.live_sensor_input.calibrate_emg()
+            if getattr(self, "live_setup", None) is not None:
+                self.live_feedback_active = False
+                self.live_setup.stage, self.live_setup.pending = "rest", True
+                self.live_setup.message = "Relax the muscle while the rest baseline is measured."
 
-    def calibrate_live_emg_strength(self) -> None:
+    def calibrate_live_emg_strength(self) -> bool:
         if self.live_sensor_input is not None:
-            self.live_sensor_input.calibrate_emg_strength()
+            started = self.live_sensor_input.calibrate_emg_strength()
+            if getattr(self, "live_setup", None) is not None:
+                self.live_feedback_active = False
+                self.live_setup.stage, self.live_setup.pending = "grip", started
+                self.live_setup.message = "Hold a firm grip for 3 seconds, then relax."
+            return started
+        return False

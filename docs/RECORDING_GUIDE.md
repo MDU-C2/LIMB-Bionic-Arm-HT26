@@ -1,139 +1,104 @@
 # Recording guide
 
-Use BLE for EMG and IMUs. The OAK-D camera connects to the PC over USB.
-The ESP32 can stay on USB for power while its sensor data travels over BLE.
+Use BLE for EMG and both IMUs. Connect the OAK-D camera to the PC over USB.
+The ESP32 can use a separate USB power source.
 
-## 1. Connect and check the live signals
+## Cup transfers
 
-1. Power the ESP32 and turn on the PC's Bluetooth. Connect the OAK-D if needed.
-2. Open Start.bat. The GUI starts a BLE monitor and opens the live graphs.
-3. Leave the BLE device name as LIMBServer. It is the name to search for,
-   not a connection indicator. Change selects another advertised name; it
-   does not rename the ESP32. Manual Windows pairing is not required.
-4. Wait for the header to show 2/2 IMUs and EMG receiving. Move each IMU and
-   check its acceleration and gyro traces. Previewing does not save files.
-5. Attach the EMG electrodes using the project's wiring/setup instructions.
-   Compare relaxed muscle with a contraction. Press **1. Calibrate EMG at rest**
-   after attaching them, and relax for half a second. Then press
-   **2. Calibrate strong grip (3 s)** and hold a strong comfortable grip for the
-   countdown. Repeat in the simulator after launching live control. Unattached
-   electrodes do not provide a muscle-signal check.
-6. EMG starts with a 0–4095 ADC scale. Enable auto-scale for small signals,
-   checking the axis values because it also enlarges noise. Check the packet
-   counters for gaps, missing notifications and decode errors.
-7. Use Open camera monitor to check framing. Show the chosen arm, hand and hips.
-   Close that camera preview before recording so the recorder can use the camera.
+1. Mount the camera on the wall in front of the subject. Frame both shoulders,
+   hips, the selected arm, hand and the cup's path across the table.
+2. Open **Recording**. Enter a subject ID such as `S01` and choose the arm.
+   Leave trial duration at `0` to stop each trial manually, or enter seconds.
+3. Press **Connect camera + BLE**. The app releases its standalone previews.
+   Wait for both IMUs and EMG. Use **Signals** to inspect the graphs.
+4. Press **Calibrate IMUs** and keep the arm still in its starting pose for half
+   a second. Press **Relaxed EMG** while relaxed, then **Strong grip (3 s)**
+   and follow the countdown. Wait for `Grip calibrated`.
+5. Press **Record T001**, move the coffee cup, then press **Stop and save**.
+   Repeat with **Record T002** and the following trials. Camera and BLE stay
+   connected and calibration carries over between trials.
+6. Press **Finish subject**, enter the next subject ID and repeat calibration.
+   Recalibrate if the electrodes or IMUs move. A Bluetooth reconnect also
+   requires calibration again.
 
-If the graph window was hidden, use Connect BLE / show graphs in the GUI header.
-The USB monitor is an optional diagnostic tool for firmware with USB streaming
-enabled; the default BLE firmware does not send sensor samples to that monitor.
+Normal recording uses the RGB camera with the full pose model. Stereo depth
+is off. Cup detection runs locally and shows a box with its score. Hand tracking
+uses a closer wrist crop. Fingers hidden behind the cup can still be missed;
+missing finger landmarks are left unavailable. Keep the raw files even when a
+trial needs repeating.
 
-## 2. Set up a trial
+Choose **natural**, **slow** or **fast** before each trial. The movement is:
+hand at 1 → grasp the cup at 2 → place and release at 3 → empty hand at 4.
+Use the [subject protocol](CUP_TRANSFER_PROTOCOL.md) for the spoken instructions,
+practice, trial order and rest periods. Optional marker buttons save operator
+timestamps; **Mark 4 + save** ends the trial.
 
-1. Open Recording. Keep ESP32 sensors (Bluetooth) selected, with IMU and EMG
-   checked. Keep OAK-D camera selected when collecting camera data too.
-2. Leave ESP32 sensors (USB diagnostic) unchecked for normal data collection.
-3. Set Subject (for example S01), Trial ID (for example rest_01 or clench_01),
-   Test type, and Camera arm. Reuse the same Subject for that participant and
-   use a new Trial ID for each trial. The trial name is metadata; it does not
-   automatically label individual samples or ask for a movement sequence.
-4. Start with Duration set to 30 seconds. Use 0 for manual stopping.
-5. Check Output; its default is outputs/recordings. Put sensor positions,
-   electrode placement and the intended movements in your experiment notes.
+## Saved files
 
-## 3. Record
+Trials are grouped automatically:
 
-1. Press Start selected sources. The GUI disconnects its BLE preview before
-   the recorder connects. Camera and BLE recorders launch with shared session
-   metadata. Watch Activity for Connected and the subscribed IMU/EMG streams;
-   startup/scanning time is not the recorded trial duration.
-2. Perform the planned trial after both selected sources have started.
-3. Let the duration finish, or press Stop recording sources and confirm.
-   Wait for the saved-session messages before opening the files or unplugging.
-4. The standalone BLE graphs reconnect when all managed programs finish.
-   These graphs are a live preview; they do not draw the saved recording.
-
-Live simulation control uses the same BLE device. Finish recording before
-starting control; each mode owns its connection. Its graphs open with the
-simulator and do not collect a dataset.
-For simulation with unattached electrodes, leave Simulation's Grip source on
-Camera. Select EMG when ready to control grip from muscle activity. This setting
-changes simulated grip control; it does not change what the recorder captures.
-Live rotation also requires fixed IMU mounting and the half-second rest baseline
-after L. Follow Simulation's mounting checks; moving loose boards is a reception
-test, not a check of anatomical accuracy. Mounting-axis selections do not alter
-the raw recorded coordinates.
-
-## Guided grip trial
-
-Select **Guided grip trial** under Recording and choose the number of repeats.
-Keep Bluetooth and EMG selected. Set duration to 0 and start recording.
-Follow the cues on the Recording page: relax, close your hand, hold, then open it.
-Five repeats take about 38 seconds after the countdown. The BLE recorder stops
-when the trial finishes. If the camera is also running with duration 0, stop it
-after the grip trial.
-
-The BLE folder keeps the raw samples and adds:
-
-- `emg_trial.json`: phase labels and cue times, in seconds from the trial start.
-- `emg_trial_features.csv`: RMS and mean absolute value for each labelled window.
-- `grip_trial` in `meta.json`: phase counts, rest/hold levels and their ratio.
-
-The labels follow the cues. Check the signal and correct the times if your
-movement started later. Edit `start_s` and `end_s` in `emg_trial.json`, then run:
-
-```powershell
-python src/recording/emg_processing.py --file outputs/recordings/SESSION/emg.csv --labels outputs/recordings/SESSION/emg_trial.json
+```text
+outputs/recordings/S01/T001_DATE_TIME/
+    trial.json
+    ble/
+        emg.csv
+        imu.csv
+        packets.jsonl
+        meta.json
+    camera/
+        video.mp4
+        pose.json
+        meta.json
 ```
 
-Features keep their ADC scale. Windows crossing a phase boundary are left out.
-Missing or irregular samples stop feature export; the raw recording is kept.
-Use whole recording sessions for training and separate sessions for testing.
+`trial.json` keeps subject, arm, trial ID, calibration values, packet health,
+clock-sync details, requested pace, marker definitions, operator events and the
+completion status. A disconnected or interrupted
+trial is marked incomplete. A completed trial still needs a signal-quality check.
+The output folder can be changed under **Advanced recording options**.
 
-## 4. Check every saved session
+`pose.json` keeps timestamps and observations, including visible arm/hand
+landmarks, cup boxes and scores, and available joint estimates. Cup boxes use
+raw camera pixels; the preview and saved video are mirrored. With stereo off, `observations`
+contains the camera tracking and `data` has no depth-backed pose frames.
+Monocular 3D angles are estimates. Repeated video frames preserve playback
+duration; the observation count shows the actual tracking rate.
 
-Open Recordings, refresh the list, or use Open output folder. A combined trial
-creates separate BLE and camera folders with the same session prefix.
+Use `synced_host_monotonic_ns` in the BLE files and `host_monotonic_ns` in the
+camera observations for alignment. Time-sync metadata records the estimated
+uncertainty. These times do not establish exact simultaneous acquisition.
+Full-rate EMG is about 4,000 samples/s; each connected IMU is about 100 samples/s.
+Keep participants separate when evaluating a model on new people.
 
-- BLE: emg.csv, imu.csv, packets.jsonl and meta.json.
-- Camera: video.mp4, pose.json and meta.json. Frame times are stored in pose.json.
-- Check metadata for the subject/trial, requested and subscribed streams,
-  duration, packet counts and packet_health. Review any gaps, missing packets
-  or decode errors before using a trial for training.
-- Full-rate BLE EMG should be about 4,000 samples/second with 250 microsecond
-  device spacing. Each connected IMU should be about 100 samples/second.
-  Notification counts are not EMG sample counts; each notification batches samples.
-- Check both IMU roles and compare rest against contraction. Use Plot selected
-  CSV to inspect the saved traces. Flat, clipped or noise-only EMG needs a
-  setup check even when Bluetooth delivery is working.
-- Check the camera actually tracked the subject. A saved video with no visible
-  person does not provide useful arm-pose training data. Video frame count can
-  include duplicates added to preserve playback timing.
-- Current BLE recordings include synced_host_monotonic_ns and time-sync
-  metadata. Keep these fields for cross-sensor alignment. Physical camera/sensor
-  acquisition alignment still needs a separate check; launching together does
-  not establish exact simultaneous sampling.
+## Advanced recordings
 
-Keep raw recordings. Existing offline EMG processing removes DC, applies a
-20–450 Hz band-pass and a 50 Hz notch, and writes RMS/MAV features separately:
+Expand **Advanced recording options** for individual sources, USB diagnostics,
+custom camera arguments or guided grip trials. The existing recorders still
+save separate source folders with shared subject and session metadata.
 
-    python src/recording/emg_processing.py --file outputs/recordings/SESSION/emg.csv
+For a guided grip trial, select Bluetooth and EMG, enable **Guided grip trial**
+and set duration to `0`. Five repeats take about 38 seconds. Follow the relax,
+close, hold and open cues. Stop a separate camera recorder afterward.
 
-Run this from the project environment and replace SESSION with the BLE folder.
-It requires regularly spaced samples; a recording with gaps needs a continuous
-segment before filtering. Processing preserves the source CSV.
+The BLE folder adds `emg_trial.json` cue times and `emg_trial_features.csv`
+with RMS and mean absolute value. Cue times are labels to review against the
+actual movement. Cup transfers have a trial-level task name; grasp and release
+phases are not automatically labelled.
 
-## If no sensors appear
+The marker buttons add operator observations. They do not automatically establish
+exact grasp and release times. Existing recordings without pace metadata remain
+unspecified; assign labels only after checking what was actually recorded.
 
-- Read the BLE status in the GUI header and the graph window. Scanning or
-  Reconnecting means the reader has not established a usable connection yet.
-- Check ESP32 power, PC Bluetooth and the advertised name LIMBServer.
-- Stop other recording/control programs that might already own the connection.
-- Press Connect BLE / show graphs to reopen or retry the monitor.
-- If the GUI reports a missing dependency, run Setup.bat and restart it.
-- Optional scan from the project environment:
+Process a saved EMG file from the project environment:
 
-      python scripts/check_ble.py --name LIMBServer
+```powershell
+python src/recording/emg_processing.py --file outputs/recordings/S01/TRIAL/ble/emg.csv
+```
 
-The connected delivery checks and remaining amplifier/timing checks are in
-docs/HARDWARE_VALIDATION.md. Wiring is described in docs/SENSOR_DATA.md.
+This preserves the raw file and exports filtered RMS/MAV features. Samples
+must be regularly spaced; review gaps before processing. For corrected grip
+labels, add `--labels PATH/emg_trial.json`.
+
+Finish recording before starting live simulation. It uses the same camera and
+BLE device. See [troubleshooting](TROUBLESHOOTING.md) for connection problems
+and [sensor setup](SENSOR_DATA.md) for wiring.

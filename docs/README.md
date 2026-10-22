@@ -3,6 +3,8 @@
 - [Setup](../scripts/README.md): install and start the app.
 - [Troubleshooting](TROUBLESHOOTING.md): connection, calibration and live simulation problems.
 - [Recording](RECORDING_GUIDE.md): check signals, record a session and run a grip trial.
+- [Cup transfer protocol](CUP_TRANSFER_PROTOCOL.md): instructions to read to subjects.
+- [Live control](LIVE_CONTROL.md): guided calibration, fusion and recorded replay.
 - [Simulation](SIMULATION.md): arm controls and live input.
 - [Sensors](SENSOR_DATA.md): wiring, sample formats and calibration.
 - [Bluetooth timing](BLUETOOTH_SYNC.md): align sensor data with camera frames.

@@ -6,6 +6,9 @@ venv/
 artifacts/.matplotlib/
 artifacts/models/*
 !artifacts/models/movement_gru.onnx
+!artifacts/models/cup_yolo11n.onnx
+!artifacts/models/README.md
+!artifacts/models/ULTRALYTICS_LICENSE.txt
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

@@ -18,11 +18,22 @@ from oak_camera import FRAME_SIZE, VIDEO_FPS
 class CameraSession:
     """Start and stop files without interrupting the live camera."""
 
-    def __init__(self, cv2, subject: str, side: str, depth_enabled: bool = False):
+    def __init__(
+        self,
+        cv2,
+        subject: str,
+        side: str,
+        depth_enabled: bool = False,
+        *,
+        directory=None,
+        metadata=None,
+    ):
         self.cv2 = cv2
         self.subject = subject
         self.side = side
         self.depth_enabled = depth_enabled
+        self.directory = directory
+        self.metadata = metadata
         self.writer = None
         self.session = None
         self.started = 0.0
@@ -37,7 +48,11 @@ class CameraSession:
         return self.writer is not None
 
     def start(self) -> None:
-        self.session = create_session_directory("oak_pose", self.subject)
+        if self.directory is None:
+            self.session = create_session_directory("oak_pose", self.subject)
+        else:
+            self.session = self.directory
+            self.session.mkdir(parents=True, exist_ok=False)
         writer = self.cv2.VideoWriter(
             str(self.session / "video.mp4"),
             self.cv2.VideoWriter_fourcc(*"mp4v"),
@@ -58,10 +73,11 @@ class CameraSession:
         self.observations = []
         print(f"REC started: {self.session}")
 
-    def add_frame(self, frame, sample, observation) -> None:
+    def add_frame(self, frame, sample, observation, *, host_monotonic_ns=None) -> None:
         if not self.recording:
             return
-        host_monotonic_ns = time.monotonic_ns()
+        if host_monotonic_ns is None:
+            host_monotonic_ns = time.monotonic_ns()
         elapsed = (host_monotonic_ns - self.started_host_monotonic_ns) / 1e9
         self.observations.append(
             {
@@ -105,7 +121,8 @@ class CameraSession:
                     "observations": self.observations,
                     "coordinate_note": (
                         "keypoints_2d are normalized raw-camera x/y; data x/y are raw "
-                        "camera pixels. video.mp4 is mirrored for the operator; depth_m "
+                        "camera pixels. cup_detections bbox_xyxy are raw camera pixels. "
+                        "video.mp4 is mirrored for the operator; depth_m "
                         "is RGB-aligned stereo depth"
                     ),
                     "angle_note": (
@@ -125,6 +142,7 @@ class CameraSession:
         write_metadata(
             self.session,
             {
+                **(experiment_metadata() if self.metadata is None else self.metadata),
                 "source": "oak_pose",
                 "subject": self.subject,
                 "side": self.side,
@@ -138,9 +156,18 @@ class CameraSession:
                 "video_fps": VIDEO_FPS,
                 "stereo_depth_enabled": self.depth_enabled,
                 "video_mirrored": True,
-                "hand_tracking": "selected_arm_nearest_wrist_21_landmarks",
-                "cup_detector": "unavailable_no_model",
-                **experiment_metadata(),
+                "hand_tracking": next(
+                    (
+                        item["hand_tracking_source"]
+                        for item in self.observations
+                        if "hand_tracking_source" in item
+                    ),
+                    "selected_arm_nearest_wrist_21_landmarks",
+                ),
+                "cup_detector": next(
+                    (item["cup_detector"] for item in self.observations if "cup_detector" in item),
+                    "unavailable_no_model",
+                ),
             },
         )
         print(f"REC saved: {self.session} ({len(self.pose_frames)} depth-backed pose frames)")

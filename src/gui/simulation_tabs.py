@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 from datetime import datetime
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import BooleanVar, filedialog, messagebox, ttk
 
 from project_support import (
     DEFAULT_RECORDINGS_DIRECTORY,
@@ -35,7 +35,7 @@ class SimulationTabsMixin:
 
         interactive = self._card(
             tab,
-            2,
+            3,
             "Interactive task simulator",
             "Open the table-and-target scene with five arm actuators and hand controls. "
             "Physics mode uses gravity and position motors; direct mode previews joint poses.",
@@ -49,7 +49,7 @@ class SimulationTabsMixin:
         self.interactive_button.grid(row=2, column=0, sticky="w")
         ttk.Checkbutton(
             interactive,
-            text="Physics mode (gravity and motor torques)",
+            text="Physics mode: gravity and motor speed limits (slower than a person)",
             variable=self.dynamic_simulation,
             style="Card.TCheckbutton",
         ).grid(row=3, column=0, sticky="w", pady=(8, 0))
@@ -75,16 +75,15 @@ class SimulationTabsMixin:
 
         fusion = self._card(
             tab,
-            3,
+            2,
             "Interactive simulator with live sensors",
-            "Open the same table-and-target scene, show the camera monitor, and control "
-            "the arm from the OAK-D plus a shoulder IMU over BLE, "
-            "optional wrist IMU, and camera or EMG grip. Copy the simulator's neutral tabletop "
-            "reference and press L "
-            "to start feedback. Press R to pause and align again.",
+            "1. Connect and open setup. Movement stays paused.\n"
+            "2. Sit upright. Upper arm relaxed, elbow about 90°, open hand at marker 1, thumb up.\n"
+            "3. Follow Align → Relaxed EMG → Firm grip in the setup window.\n"
+            "4. Return the open hand to marker 1 and press Start control.",
         )
         fusion_settings = ttk.Frame(fusion, style="Card.TFrame")
-        fusion_settings.grid(row=2, column=0, sticky="ew")
+        fusion_settings.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         fusion_settings.columnconfigure(0, weight=1)
         ttk.Label(fusion_settings, text="BLE device name", style="Card.TLabel").grid(
             row=0, column=0, sticky="w"
@@ -95,7 +94,7 @@ class SimulationTabsMixin:
         ttk.Button(fusion_settings, text="Change", command=self._edit_ble_device).grid(
             row=1, column=1, padx=(8, 0)
         )
-        ttk.Label(fusion_settings, text="Camera correction", style="Card.TLabel").grid(
+        ttk.Label(fusion_settings, text="Camera correction (0–1)", style="Card.TLabel").grid(
             row=0, column=2, sticky="w", padx=(12, 0)
         )
         ttk.Entry(fusion_settings, textvariable=self.fusion_camera_weight, width=10).grid(
@@ -143,35 +142,84 @@ class SimulationTabsMixin:
             ).grid(row=5, column=column, sticky="w", pady=(4, 0))
         ttk.Label(
             fusion_settings,
-            text="Mount both axes along the limbs; hold still 0.5 s after L.",
+            text="0x6B on upper arm, 0x6A on forearm. Selected axes run along each limb. "
+            "Keep shoulders, hips, elbow and wrist in view.",
             style="Card.TLabel",
         ).grid(row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
         fusion_actions = ttk.Frame(fusion, style="Card.TFrame")
-        fusion_actions.grid(row=3, column=0, sticky="w", pady=(12, 0))
+        fusion_actions.grid(row=2, column=0, sticky="w")
         self.fusion_button = ttk.Button(
             fusion_actions,
-            text="Start live interactive control",
+            text="1. Connect + open live setup",
             style="Accent.TButton",
             command=self.start_live_sensor_fusion,
         )
         self.fusion_button.pack(side="left", padx=(0, 8))
         ttk.Button(
-            fusion_actions,
+            fusion_settings,
             text="Open live BLE graphs",
             command=lambda: self.start_sensor_preview("record_ble_sensors.py"),
-        ).pack(side="left", padx=(0, 8))
+        ).grid(row=7, column=0, sticky="w", pady=(10, 0))
         ttk.Button(
-            fusion_actions,
+            fusion_settings,
             text="Open camera monitor",
             command=self.open_camera_monitor,
-        ).pack(side="left", padx=(0, 14))
+        ).grid(row=7, column=1, sticky="w", padx=8, pady=(10, 0))
         ttk.Checkbutton(
-            fusion_actions,
+            fusion_settings,
             text="Use stereo depth",
             variable=self.fusion_depth,
             style="Card.TCheckbutton",
-        ).pack(side="left")
+        ).grid(row=7, column=2, sticky="w", pady=(10, 0))
+
+        self.replay_button = ttk.Button(
+            fusion,
+            text="Replay a recorded cup trial (no sensors)",
+            command=self.start_recorded_control,
+        )
+        self.replay_button.grid(row=3, column=0, sticky="w", pady=(10, 0))
+        advanced_live = BooleanVar(value=False)
+        ttk.Checkbutton(
+            fusion,
+            text="Live settings (arm, grip source, mounting axes and camera)",
+            variable=advanced_live,
+            command=lambda: (
+                fusion_settings.grid() if advanced_live.get() else fusion_settings.grid_remove()
+            ),
+            style="Card.TCheckbutton",
+        ).grid(row=4, column=0, sticky="w", pady=(10, 0))
+        fusion_settings.grid_remove()
+
+    def start_recorded_control(self) -> None:
+        if self.simulation_python is None:
+            messagebox.showerror("Environment missing", "Run project setup first.")
+            return
+        trial = filedialog.askopenfilename(
+            title="Choose trial.json from a recorded cup trial",
+            initialdir=REPOSITORY_ROOT / DEFAULT_RECORDINGS_DIRECTORY,
+            filetypes=(("Trial metadata", "trial.json"),),
+        )
+        if not trial:
+            return
+        table_arguments = self._table_arguments()
+        if table_arguments is None:
+            return
+        command = [
+            str(self.simulation_python),
+            "-u",
+            str(INTERACTIVE_SIMULATION_SCRIPT),
+            "--replay",
+            trial,
+            "--grip-source",
+            "emg",
+            "--mode",
+            "dynamic" if self.dynamic_simulation.get() else "kinematic",
+            "--camera-weight",
+            self.fusion_camera_weight.get(),
+            *table_arguments,
+        ]
+        self._start_program("Recorded live control", "simulation", command)
 
     def _build_motion_ai_tab(self, tab: ttk.Frame) -> None:
         """Populate movement recognition and camera-pose playback controls."""

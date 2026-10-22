@@ -108,10 +108,10 @@ class SensorFusionTests(unittest.TestCase):
             "accel_g": {"x": 0.0, "y": 1.0, "z": 0.0},
         }
         imu = estimator.update(moved, 0.02)
-        self.assertAlmostEqual(imu["elbow_flexion"], 60.0)
+        self.assertAlmostEqual(imu["elbow_flexion"], 90.0)
         self.assertNotIn("shoulder_rotation_proxy", imu)
         fused = fuse_control_angles(imu, {"elbow_flexion": 50.0}, 0.25)
-        self.assertAlmostEqual(fused["elbow_flexion"], 57.5)
+        self.assertAlmostEqual(fused["elbow_flexion"], 80.0)
 
     def test_tabletop_reference_preserves_pose_and_distinguishes_raise_from_lower(self):
         import math
@@ -240,7 +240,8 @@ class SensorFusionTests(unittest.TestCase):
         sensor["shoulder"]["gyro_dps"]["z"] = -31.0
         for _ in range(10):
             estimate = estimator.update(sensor, 0.1)
-        self.assertEqual(estimate["shoulder_abduction"], 0.0)
+        self.assertEqual(estimate["shoulder_abduction"], -30.0)
+        self.assertEqual(interactive_control_targets(estimate)["shoulder_z"], -5.0)
 
     def test_default_imu_sensitivity_is_time_based_and_reduced(self) -> None:
         def one_second(period: float) -> float:
@@ -360,7 +361,7 @@ class SensorFusionTests(unittest.TestCase):
         self.assertAlmostEqual(sensors["shoulder"]["accel_g"]["z"], 4052 / 4096)
         self.assertAlmostEqual(sensors["shoulder"]["gyro_dps"]["y"], -95 / 65.5)
 
-    def test_camera_angles_are_normalized_before_they_reach_the_robot(self) -> None:
+    def test_measured_angles_are_preserved_until_robot_mapping(self) -> None:
         normalized = camera_control_angles(
             {
                 "elbow_flexion": 130.0,
@@ -372,10 +373,19 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(
             normalized,
             {
-                "elbow_flexion": 60.0,
-                "shoulder_flexion": 0.0,
-                "shoulder_abduction": 0.0,
-                "shoulder_rotation_proxy": 60.0,
+                "elbow_flexion": 130.0,
+                "shoulder_flexion": -12.0,
+                "shoulder_abduction": -28.0,
+                "shoulder_rotation_proxy": 95.0,
+            },
+        )
+        self.assertEqual(
+            interactive_control_targets(normalized),
+            {
+                "elbow_x": 60.0,
+                "shoulder_y": 75.0,
+                "shoulder_z": -5.0,
+                "shoulder_x": -60.0,
             },
         )
 
@@ -432,5 +442,5 @@ class SensorFusionTests(unittest.TestCase):
     def test_anatomical_shoulder_zero_is_converted_to_cad_zero(self) -> None:
         arm_down = interactive_control_targets({"shoulder_flexion": 0.0})
         arm_forward = interactive_control_targets({"shoulder_flexion": 90.0})
-        self.assertEqual(arm_down, {"shoulder_y": 90.0})
+        self.assertEqual(arm_down, {"shoulder_y": 75.0})
         self.assertEqual(arm_forward, {"shoulder_y": 0.0})

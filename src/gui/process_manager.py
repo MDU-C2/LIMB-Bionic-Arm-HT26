@@ -6,10 +6,12 @@ from __future__ import annotations
 import contextlib
 import os
 import queue
+import re
 import signal
 import subprocess
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
@@ -25,6 +27,8 @@ class ManagedProcess:
     kind: str
     process: subprocess.Popen[str]
     stopping: bool = False
+    log_path: Path | None = None
+    output_tail: list[str] = field(default_factory=list)
 
 
 class ProcessManagerMixin:
@@ -120,6 +124,10 @@ class ProcessManagerMixin:
             return False
 
         managed = ManagedProcess(key, name, kind, process)
+        log_name = re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_")
+        managed.log_path = (
+            REPOSITORY_ROOT / "outputs/logs" / f"{datetime.now():%Y%m%d_%H%M%S_%f}_{log_name}.log"
+        )
         self.processes[key] = managed
         count = len(self._active_processes())
         self._set_status(f"{count} program{'s' if count != 1 else ''} running", "running")
@@ -147,9 +155,30 @@ class ProcessManagerMixin:
 
     def _watch_process(self, managed: ManagedProcess) -> None:
         """Wait for a child without touching Tk from the worker thread."""
-        if managed.process.stdout is not None:
-            for line in managed.process.stdout:
-                self.log_queue.put(("line", (managed.key, managed.name, line)))
+        log = None
+        try:
+            if managed.log_path is not None:
+                try:
+                    managed.log_path.parent.mkdir(parents=True, exist_ok=True)
+                    log = managed.log_path.open("w", encoding="utf-8", buffering=1)
+                except OSError:
+                    pass
+            if managed.process.stdout is not None:
+                for line in managed.process.stdout:
+                    managed.output_tail.append(line.rstrip())
+                    managed.output_tail = managed.output_tail[-60:]
+                    if log is not None:
+                        try:
+                            log.write(line)
+                        except OSError:
+                            with contextlib.suppress(OSError):
+                                log.close()
+                            log = None
+                    self.log_queue.put(("line", (managed.key, managed.name, line)))
+        finally:
+            if log is not None:
+                with contextlib.suppress(OSError):
+                    log.close()
         self.log_queue.put(
             ("exit", (managed.key, managed.process, managed.name, managed.process.wait()))
         )
@@ -162,6 +191,8 @@ class ProcessManagerMixin:
                 if event == "line":
                     key, name, line = value
                     self._append_log(f"[{name}] {line}")
+                    if key == "recording:cup_trials" and str(line).startswith("[CUP] "):
+                        self._handle_cup_event(str(line))
                     managed = self.processes.get(key)
                     if (
                         managed is not None
@@ -190,6 +221,15 @@ class ProcessManagerMixin:
                 else:
                     outcome, state = f"failed (code {return_code})", "error"
                 self._append_log(f"[{name} {outcome}]\n")
+                if key == "recording:cup_trials":
+                    self._cup_ready = self._cup_recording = False
+                    self.cup_status.set(
+                        "Subject finished. Enter the next subject ID."
+                        if return_code == 0
+                        else "Recording stopped. Check the error in Activity."
+                    )
+                if return_code and not stopped and managed.kind in ("simulation", "recording"):
+                    self._show_process_failure(managed, return_code)
                 active = self._active_processes()
                 if active:
                     self._set_status(
@@ -210,6 +250,18 @@ class ProcessManagerMixin:
         except queue.Empty:
             pass
         self.after(100, self._drain_log_queue)
+
+    def _show_process_failure(self, managed: ManagedProcess, return_code: int) -> None:
+        errors = [
+            line
+            for line in managed.output_tail
+            if any(word in line.lower() for word in ("error", "failed", "unavailable", "could not"))
+        ]
+        detail = "\n".join(errors[-5:] or managed.output_tail[-8:])[-1800:]
+        log = ""
+        if managed.log_path is not None and managed.log_path.is_file():
+            log = f"\n\nLog: {managed.log_path.relative_to(REPOSITORY_ROOT)}"
+        messagebox.showerror(f"{managed.name} stopped", f"Exit code {return_code}\n\n{detail}{log}")
 
     def stop_program(self) -> None:
         """Gracefully stop every active program after one confirmation."""

@@ -8,6 +8,7 @@ import contextlib
 import threading
 import time
 from collections import deque
+from pathlib import Path
 
 from ble_packets import (
     HIGH_RATE_EMG_HEADER,
@@ -15,6 +16,7 @@ from ble_packets import (
     SENSOR_UUIDS,
     BleRecorder,
 )
+from clock_sync import BleClockSyncClient, ClockSynchronizer
 from emg_protocol import EmgActivationEstimator
 from imu_twist import DEFAULT_TWIST_AXIS
 from sensor_fusion import DualImuArmEstimator
@@ -29,8 +31,12 @@ class BleSensorReader:
         address: str = "",
         shoulder_twist_axis: str = DEFAULT_TWIST_AXIS,
         wrist_twist_axis: str = DEFAULT_TWIST_AXIS,
+        *,
+        synchronize_clock: bool = False,
+        clock=None,
     ) -> None:
         self.device = device
+        self.clock = clock or (lambda: time.monotonic())
         self.address = address
         self.error = "Scanning for BLE device"
         self.status = "Scanning"
@@ -39,6 +45,12 @@ class BleSensorReader:
         self._lock = threading.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task | None = None
+        self.synchronize_clock = synchronize_clock
+        self.clock_sync = ClockSynchronizer()
+        self._recording_lock = threading.Lock()
+        self._recording = None
+        self.recording_error = ""
+        self.connection_generation = 0
         self.decoder = BleRecorder(None, sample_sink=self._samples)
         self.imu_estimator = DualImuArmEstimator(
             shoulder_twist_axis=shoulder_twist_axis, wrist_twist_axis=wrist_twist_axis
@@ -101,15 +113,25 @@ class BleSensorReader:
 
     def latest(self) -> dict:
         with self._lock:
-            imu_fresh = self.imu_time > 0 and time.monotonic() - self.imu_time <= 0.5
+            imu_fresh = self.imu_time > 0 and self.clock() - self.imu_time <= 0.5
             return {
                 "imus": dict(self.sensors) if imu_fresh else {},
                 "imu_angles": dict(self.angles) if imu_fresh and self.angles else None,
                 "imu_time": self.imu_time,
+                "imu_calibrated": all(
+                    role in self.imu_estimator.twist.bias for role in ("shoulder", "wrist")
+                ),
                 "emg_time": self.emg_time,
                 "emg_raw": self.emg_raw,
                 "emg_activation": self.activation,
             }
+
+    def correct_angles(self, camera_angles: object, weight: float) -> dict | None:
+        with self._lock:
+            if self.imu_time <= 0 or self.clock() - self.imu_time > 0.5:
+                return None
+            self.angles = self.imu_estimator.correct_angles(camera_angles, weight) or self.angles
+            return dict(self.angles) if self.angles else None
 
     def correct_rotation(self, camera_proxy: float, weight: float) -> dict | None:
         """Correct axial drift while the acquisition thread keeps processing packets."""
@@ -129,7 +151,7 @@ class BleSensorReader:
             self.activation = None
 
     def notification(self, sensor: str, data: bytes | bytearray) -> None:
-        """Reuse the recording decoder; no session or output files are opened."""
+        """Decode each packet and save it when a trial is active."""
         if sensor == "emg":
             period = 0.01
             if len(data) >= HIGH_RATE_EMG_HEADER.size:
@@ -158,6 +180,53 @@ class BleSensorReader:
                 if flags >> 8 == 1:
                     self._imu_device_time = shoulder_time if flags & 1 else wrist_time
         self.decoder.handle(sensor, bytes(data))
+        with self._recording_lock:
+            if self._recording is not None and not self.recording_error:
+                try:
+                    self._recording.handle(sensor, data)
+                except OSError as error:
+                    self.recording_error = str(error)
+
+    def start_recording(self, session: Path) -> None:
+        """Save packets from this connection without restarting calibration."""
+        with self._recording_lock:
+            if self._recording is not None:
+                raise RuntimeError("A BLE trial is already recording")
+            self.recording_error = ""
+            self._recording = BleRecorder(session, clock_sync=self.clock_sync)
+
+    def calibration_profile(self) -> dict:
+        with self._lock:
+            estimator = self.imu_estimator
+            return {
+                "emg_baseline_adc": self.emg_estimator.baseline,
+                "imu_tilt_offsets": dict(estimator.tilt_offsets),
+                "imu_gyro_bias_z": dict(estimator.gyro_bias_z),
+                "imu_elbow_zero": estimator.elbow_zero,
+                "imu_camera_offsets": dict(estimator.camera_offsets),
+                "imu_reference_angles": dict(estimator.reference_angles),
+                "imu_filtered_accel": dict(estimator.filtered_accel),
+                "imu_yaw_delta": dict(estimator.yaw_delta),
+                "imu_shoulder_twist_deg": estimator.twist.shoulder_angle,
+                "imu_wrist_twist_deg": estimator.twist.wrist_angle,
+                "imu_twist_axes": dict(estimator.twist.axes),
+                "imu_twist_bias_dps": dict(estimator.twist.bias),
+                "connection_generation": self.connection_generation,
+            }
+
+    def stop_recording(self) -> dict:
+        with self._recording_lock:
+            recorder, self._recording = self._recording, None
+            if recorder is None:
+                return {}
+            recorder.close()
+            return {
+                "packet_counts": dict(recorder.counts),
+                "packet_health": recorder.packet_health(),
+                "imu_units": recorder.imu_units,
+                "time_sync": recorder.clock_sync.summary(),
+                "write_error": self.recording_error,
+            }
 
     def calibrate_emg_strength(self) -> bool:
         with self._lock:
@@ -168,7 +237,7 @@ class BleSensorReader:
 
     def graph_data(self) -> dict:
         """Copy recent received samples for the UI; stale streams show no trace."""
-        now = time.monotonic()
+        now = self.clock()
         with self._lock:
             emg_fresh = self.emg_time > 0 and now - self.emg_time <= 0.5
             imu_fresh = self.imu_time > 0 and now - self.imu_time <= 0.5
@@ -192,7 +261,7 @@ class BleSensorReader:
             }
 
     def _samples(self, sensor: str, _sequence: int, channels: list) -> None:
-        now = time.monotonic()
+        now = self.clock()
         with self._lock:
             if sensor == "emg":
                 if self._previous_emg_sequence is not None:
@@ -281,6 +350,9 @@ class BleSensorReader:
                 if target is None:
                     raise RuntimeError(f"{self.device} not found")
                 async with BleakClient(target) as client:
+                    self.clock_sync = ClockSynchronizer()
+                    self.connection_generation += 1
+                    sync_client = None
                     missing = []
                     for sensor in ("imu", "emg"):
                         try:
@@ -296,8 +368,15 @@ class BleSensorReader:
                         raise RuntimeError("; ".join(missing))
                     self.error = "; ".join(missing)
                     self.status = "Connected"
-                    while client.is_connected and not self._stop.is_set():
-                        await asyncio.sleep(0.1)
+                    try:
+                        if self.synchronize_clock:
+                            sync_client = BleClockSyncClient(client, self.clock_sync)
+                            await sync_client.start()
+                        while client.is_connected and not self._stop.is_set():
+                            await asyncio.sleep(0.1)
+                    finally:
+                        if sync_client is not None:
+                            await sync_client.close()
                     if not self._stop.is_set():
                         raise RuntimeError("Disconnected; reconnecting")
             except Exception as error:

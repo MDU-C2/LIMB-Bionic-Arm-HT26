@@ -17,6 +17,7 @@ RECORDING_MODULE_DIR = Path(__file__).resolve().parents[1] / "recording"
 if str(RECORDING_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(RECORDING_MODULE_DIR))
 
+from cup_recording import CupRecordingMixin
 from emg_trials import GripTrial
 from imu_protocol import ImuStreamDecoder
 from project_support import (
@@ -40,7 +41,9 @@ from serial_dashboard import SerialDashboardMixin
 from serial_sensor import SerialSensorReader
 
 
-class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashboardMixin):
+class RecordingTabMixin(
+    CupRecordingMixin, RecordingViewsMixin, RecordingBrowserMixin, SerialDashboardMixin
+):
     """Provide recording configuration, launch actions, and file browsing."""
 
     def _initialize_recording_state(self) -> None:
@@ -86,6 +89,7 @@ class RecordingTabMixin(RecordingViewsMixin, RecordingBrowserMixin, SerialDashbo
         self.recordings_scan_truncated = False
         self.recordings_filter_after: str | None = None
         self._known_serial_ports: tuple[str, ...] = ()
+        self._initialize_cup_recording_state()
 
     def _bind_recording_traces(self) -> None:
         self.recording_program.trace_add("write", lambda *_: self._recording_selection_changed())

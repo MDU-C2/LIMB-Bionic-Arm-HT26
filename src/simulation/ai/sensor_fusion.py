@@ -83,6 +83,8 @@ class DualImuArmEstimator:
         self.elbow_zero = 0.0
         self.active_roles: tuple[str, ...] = ()
         self.reference_angles: dict[str, float] = {}
+        self.camera_offsets: dict[str, float] = {}
+        self.last_angles: dict[str, float] = {}
 
     def reset_calibration(self, reference_angles: object = None) -> None:
         if reference_angles is not None:
@@ -97,6 +99,8 @@ class DualImuArmEstimator:
         self.yaw_delta = {}
         self.elbow_zero = 0.0
         self.active_roles = ()
+        self.camera_offsets = {}
+        self.last_angles = {}
 
     @staticmethod
     def _mounted_tilt(accel: tuple[float, float, float]) -> float:
@@ -225,7 +229,26 @@ class DualImuArmEstimator:
         if wrist_tilt is not None:
             result["elbow_flexion"] = relative_bend if self.reference_angles else abs(relative_bend)
         result.update(rotations)
-        return camera_control_angles(result)
+        for name, offset in self.camera_offsets.items():
+            if name in result:
+                result[name] += offset
+        self.last_angles = camera_control_angles(result)
+        return dict(self.last_angles)
+
+    def correct_angles(self, camera_angles: object, weight: float) -> dict[str, float]:
+        """Anchor the IMU prediction once per fresh camera observation."""
+        measured = camera_control_angles(camera_angles)
+        weight = min(1.0, max(0.0, weight))
+        for name in ("shoulder_flexion", "elbow_flexion", "shoulder_abduction"):
+            if name in measured and name in self.last_angles:
+                correction = weight * (measured[name] - self.last_angles[name])
+                self.camera_offsets[name] = self.camera_offsets.get(name, 0.0) + correction
+                self.last_angles[name] += correction
+        if "shoulder_rotation_proxy" in measured:
+            rotation = self.correct_rotation(measured["shoulder_rotation_proxy"], weight)
+            if rotation is not None:
+                self.last_angles["shoulder_rotation_proxy"] = rotation
+        return dict(self.last_angles)
 
     def correct_rotation(self, camera_proxy: float, weight: float) -> float | None:
         """Anchor axial gyro state to a fresh camera target; preserve relative wrist twist."""
@@ -235,7 +258,7 @@ class DualImuArmEstimator:
 
 
 def camera_control_angles(value: object) -> dict[str, float]:
-    """Keep finite camera angles and enforce the built arm's usable ranges."""
+    """Keep measured angles intact until alignment and fusion are finished."""
     if not isinstance(value, dict):
         return {}
     result: dict[str, float] = {}
@@ -246,20 +269,6 @@ def camera_control_angles(value: object) -> dict[str, float]:
         sample = float(sample)
         if not math.isfinite(sample):
             continue
-        if name == "elbow_flexion":
-            sample = min(60.0, max(0.0, sample))
-        elif name == "shoulder_flexion":
-            sample = min(90.0, max(0.0, sample))
-        elif name == "shoulder_abduction":
-            # Camera geometry defines outward as positive for either selected
-            # arm.  Do not mirror an across-body/adduction estimate into an
-            # outward command.  A signed IMU estimate can therefore move back
-            # toward neutral instead of being reflected to the opposite side.
-            sample = min(40.0, max(0.0, sample))
-        elif name == "shoulder_rotation_proxy":
-            sample = min(60.0, max(-60.0, sample))
-        elif name == "wrist_rotation":
-            sample = min(140.0, max(0.0, sample))
         result[name] = sample
     return result
 
@@ -268,6 +277,8 @@ def fuse_control_angles(
     imu_angles: dict[str, float] | None,
     camera_angles: dict[str, float] | None,
     camera_weight: float = 0.25,
+    *,
+    camera_corrected: bool = False,
 ) -> dict[str, float] | None:
     """Fuse fast IMU motion with camera drift correction in joint-angle space."""
     imu = camera_control_angles(imu_angles)
@@ -279,7 +290,13 @@ def fuse_control_angles(
     for name in CONTROL_NAMES:
         imu_value = imu.get(name)
         camera_value = camera.get(name)
-        if name == "shoulder_rotation_proxy" and imu_value is not None:
+        if camera_corrected and camera_value is not None and weight == 1.0:
+            result[name] = camera_value
+        elif camera_corrected and imu_value is not None:
+            # The camera already corrected this state. Do not blend its held
+            # observation again and suppress motion between camera frames.
+            result[name] = imu_value
+        elif name == "shoulder_rotation_proxy" and imu_value is not None:
             # Fresh camera observations already correct the integrated gyro state.
             # Mixing a held camera angle again would suppress motion between frames.
             result[name] = imu_value
@@ -308,7 +325,7 @@ class ControlAngleSmoother:
         measured = camera_control_angles(angles)
         if not measured:
             return {}
-        dt = min(0.25, max(0.001, float(dt)))
+        dt = min(1.0, max(0.001, float(dt)))
         new_weight = 1.0 - math.exp(-dt / self.time_constant_s)
         result: dict[str, float] = {}
         for name, target in measured.items():
@@ -349,17 +366,17 @@ def interactive_control_targets(angles: object) -> dict[str, float] | None:
         return None
     result: dict[str, float] = {}
     if "elbow_flexion" in fused:
-        result["elbow_x"] = fused["elbow_flexion"]
+        result["elbow_x"] = min(60.0, max(0.0, fused["elbow_flexion"]))
     if "shoulder_flexion" in fused:
-        result["shoulder_y"] = 90.0 - fused["shoulder_flexion"]
+        result["shoulder_y"] = min(75.0, max(0.0, 90.0 - fused["shoulder_flexion"]))
     if "shoulder_abduction" in fused:
-        result["shoulder_z"] = -fused["shoulder_abduction"]
+        result["shoulder_z"] = min(-5.0, max(-40.0, -fused["shoulder_abduction"]))
     if "shoulder_rotation_proxy" in fused:
         # Camera axial-positive is a medial/right movement for the tracked
         # left arm.  The mirrored left-arm URDF uses the opposite joint sign.
-        result["shoulder_x"] = -fused["shoulder_rotation_proxy"]
+        result["shoulder_x"] = min(60.0, max(-60.0, -fused["shoulder_rotation_proxy"]))
     if "wrist_rotation" in fused:
-        result["wrist_rotation"] = fused["wrist_rotation"]
+        result["wrist_rotation"] = min(140.0, max(0.0, fused["wrist_rotation"]))
     return result or None
 
 

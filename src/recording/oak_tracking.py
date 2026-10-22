@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from cup_detection import add_cup_tracking
+from hand_tracking import ArmHandTracker
 from oak_geometry import (
     FINGER_CHAINS,
     HAND_LANDMARK_NAMES,
@@ -90,7 +92,9 @@ def add_hand_tracking(
     return True
 
 
-def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, hands=None):
+def analyze_frame(
+    frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, hands=None, cup_detector=None
+):
     """Track on the raw frame and render a mirrored, readable operator view."""
     height, width = frame.shape[:2]
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -105,6 +109,7 @@ def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, h
         "reference_visible": False,
         "depth_valid": False,
     }
+    add_cup_tracking(frame, output, observation, cup_detector, cv2)
     if not results.pose_landmarks:
         return output, f"No person visible - frame subject, {side} arm and hips", None, observation
 
@@ -187,7 +192,14 @@ def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, h
                     observation["angle_source"] = "stereo"
 
     if hands is not None:
-        hand_results = hands.process(rgb)
+        if isinstance(hands, ArmHandTracker):
+            hand_results = hands.process_for_arm(
+                rgb, selected[f"{side}_wrist"], selected[f"{side}_elbow"]
+            )
+            observation["hand_roi_xyxy"] = hands.roi
+            observation["hand_tracking_source"] = "wrist_crop_full_model"
+        else:
+            hand_results = hands.process(rgb)
         add_hand_tracking(
             output,
             observation,
@@ -208,5 +220,10 @@ def analyze_frame(frame, depth, pose, mp, cv2, np, side: str, intrinsics=None, h
     else:
         source = "stereo" if observation["angle_source"] == "stereo" else "estimated 3D"
         status = f"{side.title()} arm tracked | angles from {source}"
-    status += " | hand/fingers tracked" if observation["hand_visible"] else " | show selected hand"
+    status += (
+        " | hand/fingers tracked"
+        if observation["hand_visible"]
+        else " | hand obscured or not detected"
+    )
+    status += " | cup detected" if observation["cup_visible"] else " | cup not detected"
     return output, status, sample, observation

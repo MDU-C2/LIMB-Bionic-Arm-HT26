@@ -64,9 +64,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Camera hand tracking by default; select EMG when electrodes are ready",
     )
     parser.add_argument("--depth", action="store_true", help="Use OAK-D stereo depth")
+    parser.add_argument("--replay", type=Path, help="Replay a recorded cup trial without hardware")
     parser.add_argument("--table-width-cm", type=float, default=60)
     parser.add_argument("--table-depth-cm", type=float, default=60)
     args = parser.parse_args(argv)
+    if args.replay is not None:
+        args.control = "camera-imu"
     dynamic_mode = args.mode == "dynamic"
     if (args.telemetry_out is not None or args.torque_out is not None) and not dynamic_mode:
         parser.error("--telemetry-out and --torque-out require --mode dynamic")

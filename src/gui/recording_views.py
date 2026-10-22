@@ -23,14 +23,31 @@ class RecordingViewsMixin:
     """Build the recording settings page."""
 
     def _build_recording_tab(self, tab: ttk.Frame) -> None:
-        """Build batch recording controls and an advanced single-recorder path."""
+        """Show cup trials first and keep the other recorders under Advanced."""
         tab.columnconfigure(0, weight=1)
         self._heading(
             tab,
-            "Record a session",
-            "Choose the sensors and camera you need. They use the same subject and trial details.",
+            "Record cup transfers",
+            "Choose a subject, calibrate once and record each cup transfer as a separate trial.",
         )
+        self._build_cup_recording(tab)
+        advanced = ttk.Frame(tab, style="Page.TFrame")
+        self.recording_advanced_panel = advanced
+        advanced.grid(row=4, column=0, sticky="ew")
+        advanced.columnconfigure(0, weight=1)
+        self.recording_advanced_button = ttk.Checkbutton(
+            tab,
+            text="Advanced recording options",
+            variable=self.recording_advanced,
+            command=lambda: (
+                advanced.grid() if self.recording_advanced.get() else advanced.grid_remove()
+            ),
+        )
+        self.recording_advanced_button.grid(row=3, column=0, sticky="w", pady=(0, 10))
+        self._build_advanced_recording_controls(advanced)
+        advanced.grid_remove()
 
+    def _build_advanced_recording_controls(self, tab) -> None:
         source_card = self._card(
             tab,
             2,

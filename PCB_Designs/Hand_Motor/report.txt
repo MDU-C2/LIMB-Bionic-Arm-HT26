@@ -1,13 +1,10 @@
-Information: X-skala begränsad.
-Information: Y-skala begränsad.
-Information: Utmatningskatalogen 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB' skapades.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-F_Cu.gbr'.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-B_Cu.gbr'.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-F_Paste.gbr'.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-B_Paste.gbr'.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-F_Silkscreen.gbr'.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-F_Mask.gbr'.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-B_Mask.gbr'.
-Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-Edge_Cuts.gbr'.
-Skapade Gerber-jobbfil 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\GRB\LIMB_Lowerarm-job.gbrjob'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Cu.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-B_Cu.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Paste.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-B_Paste.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Silkscreen.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Mask.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-B_Mask.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-Edge_Cuts.gbr'.
+Skapade Gerber-jobbfil 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-job.gbrjob'.
 Information: Färdig.

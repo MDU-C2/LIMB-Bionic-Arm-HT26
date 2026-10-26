@@ -589,7 +589,7 @@
     "last_paths": {
       "idf": "",
       "netlist": "",
-      "plot": "../../GRB/",
+      "plot": "Gerber/",
       "specctra_dsn": "",
       "step": "",
       "vrml": ""

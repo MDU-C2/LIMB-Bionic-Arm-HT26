@@ -123,7 +123,7 @@
 			(mirror no)
 			(drillshape 0)
 			(scaleselection 1)
-			(outputdirectory "../../GRB/")
+			(outputdirectory "Gerber/")
 		)
 	)
 	(footprint "User_lib:ESP32-C3-Zero_THT"

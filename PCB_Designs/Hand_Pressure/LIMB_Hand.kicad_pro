@@ -50,7 +50,23 @@
         "silk_text_thickness": 0.1,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.5
+          "border_display_style": 2,
+          "border_hatch_pitch": 0.5,
+          "corner_radius": 0.0,
+          "corner_smoothing": 0,
+          "fill_mode": 0,
+          "hatch_gap": 1.5,
+          "hatch_orientation": 0.0,
+          "hatch_smoothing_level": 0,
+          "hatch_smoothing_value": 0.1,
+          "hatch_thickness": 1.0,
+          "min_clearance": 0.5,
+          "min_island_area": 10.0,
+          "min_thickness": 0.25,
+          "pad_connection": 1,
+          "remove_islands": 0,
+          "thermal_relief_gap": 0.5,
+          "thermal_relief_spoke_width": 0.5
         }
       },
       "diff_pair_dimensions": [
@@ -60,7 +76,28 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "courtyards_overlap|117286695|108325000|0e2fb506-b466-4976-b388-ada81ba14620|d78b75f5-f03a-47f1-aceb-7915187c3cca",
+          ""
+        ],
+        [
+          "courtyards_overlap|118555000|108325000|0e2fb506-b466-4976-b388-ada81ba14620|e062cbc1-ceca-4133-8428-90ea7725d960",
+          ""
+        ],
+        [
+          "courtyards_overlap|121055000|108325000|0e2fb506-b466-4976-b388-ada81ba14620|87f6b339-f16f-4dfb-9730-4447722ef980",
+          ""
+        ],
+        [
+          "courtyards_overlap|123555000|108325000|0e2fb506-b466-4976-b388-ada81ba14620|aa4c73fb-d066-4cbd-9274-34c73192b181",
+          ""
+        ],
+        [
+          "courtyards_overlap|126055000|108325000|0e2fb506-b466-4976-b388-ada81ba14620|3af5025d-253d-4b83-a9f3-2132915b6d56",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -144,7 +181,7 @@
         "min_text_thickness": 0.08,
         "min_through_hole_diameter": 0.3,
         "min_track_width": 0.2,
-        "min_via_annular_width": 0.3,
+        "min_via_annular_width": 0.2,
         "min_via_diameter": 1.4,
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": true
@@ -552,8 +589,9 @@
     "last_paths": {
       "idf": "",
       "netlist": "",
-      "plot": "D:/GRB/Hand/",
+      "plot": "../../GRB/",
       "specctra_dsn": "",
+      "step": "",
       "vrml": ""
     },
     "page_layout_descr_file": ""
@@ -796,7 +834,7 @@
         "uuid": "14a7bb68-d564-4df1-8012-0634cb7c3d63"
       }
     ],
-    "used_designators": "J4",
+    "used_designators": "J4-5,#PWR13,#PWR20",
     "variants": []
   },
   "sheets": [

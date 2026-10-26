@@ -1,0 +1,13 @@
+# =====================================
+# ESP-IDF generated files
+# =====================================
+
+# Generated build directories
+**/build/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temporary files
+*.tmp

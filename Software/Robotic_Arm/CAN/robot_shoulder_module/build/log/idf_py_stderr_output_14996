@@ -1,1 +1,0 @@
-Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=C:\Espressif\tools\python\v5.5.5\venv\Scripts\python.exe -DESP_PLATFORM=1 -DIDF_TARGET=esp32c3 -DCCACHE_ENABLE=1 C:\Universitet\5.Projekt\LIMB-Bionic-Arm-HT26\Software\Robotic_Arm\LIMB-HT25\robot_shoulder_module

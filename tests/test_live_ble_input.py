@@ -406,10 +406,11 @@ class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
 
             async def start_notify(self, uuid, callback):
                 callbacks[uuid] = callback
+                sequence = len(attempts) * 1000
                 if uuid == SENSOR_UUIDS["imu"]:
-                    callback(None, imu_packet())
+                    callback(None, imu_packet(sequence=sequence))
                 else:
-                    callback(None, emg_packet([2048] * 40))
+                    callback(None, emg_packet([2048] * 40, sequence=sequence))
 
         with (
             patch("bleak.BleakClient", side_effect=lambda _target: Client()),
@@ -421,6 +422,10 @@ class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(callbacks), {SENSOR_UUIDS["imu"], SENSOR_UUIDS["emg"]})
         self.assertEqual(reader.latest()["imus"], {})
         self.assertIsNone(reader.latest()["emg_activation"])
+        for health in reader.decoder.packet_health().values():
+            self.assertEqual(health["received_packets"], 2)
+            self.assertEqual(health["missing_packets"], 0)
+            self.assertEqual(health["sequence_gaps"], 0)
 
     async def test_missing_emg_characteristic_does_not_stop_imu(self):
         reader = BleSensorReader(address="test-device")

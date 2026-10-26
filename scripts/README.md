@@ -1,65 +1,51 @@
 # Setup and checks
 
-Run `Setup.bat` once on Windows, then use `Start.bat`.
-Setup installs the project environment, checks the simulation and builds the
-firmware. Flashing is a separate action in the app.
+Run `Setup.bat` once on Windows, or `Setup.command` on macOS/Linux. Setup needs
+internet to install Python and the recording/simulation packages.
 
-On macOS and Linux, use `bash Setup.command` and `bash Start.command`.
-Windows has been tested. The other launchers still need testing.
+Use `Start.bat` or `Start.command` afterwards. Start only launches the installed
+app. It does not install packages, build firmware or require internet. Run Setup
+again explicitly when dependencies change or the environment needs repairing.
 
-The first setup needs internet access and several GB of disk space. Run Setup
-again if installation was interrupted. To install without opening the app:
-
-```powershell
-.\Setup.bat -NoLaunch
-```
-
-Windows environments are stored under `%LOCALAPPDATA%\aurora`. The local
-`.aurora/runtime.json` file records the Python path. If that Windows path has
-spaces or non-ASCII characters, set `AURORA_RUNTIME_ROOT` to a writable ASCII
-path before running Setup. On macOS and Linux, the environment is in `.aurora/`.
-
-To run directly from the repo after setup, select that project Python and run:
+On Windows, the managed Python is under `%LOCALAPPDATA%/aurora/`.
+`.aurora/runtime.json` records its path. On macOS/Linux it is in `.aurora/env/`.
+Select that Python in the editor to run directly:
 
 ```powershell
 python -m aurora.gui.app
 ```
 
-Running `src/aurora/gui/app.py` directly, including the editor's Run button,
-uses the checkout's launcher to select or set up the project environment.
+Running `src/aurora/gui/app.py` directly also selects the saved environment.
+It does not run installation. The managed Windows launcher sets `Library/bin`
+on PATH for native libraries.
 
-The manual environment setup is also available:
+Training and firmware tools are optional. From the project Python:
 
 ```powershell
-micromamba create -f environment.yml
-micromamba run -n aurora python -m pip install -r requirements-setup.txt
-micromamba run -n aurora python -m pip install --no-deps -e .
-micromamba run -n aurora python -m aurora.gui.app
+python -m pip install -r requirements-training.txt
+python -m pip install -r requirements-firmware.txt
 ```
 
-Runtime dependencies are declared in `pyproject.toml`. Training, firmware and
-development tools use its optional dependency groups. The requirements files
-provide those groups to Setup and standalone checks. `environment.yml` creates
-the base Python/native environment; Setup then installs the app and its dependencies
-from the checkout.
+The first firmware build downloads its toolchain. Training and firmware downloads
+are not needed to open the app or record signals. On Windows/Linux, a CPU-only
+PyTorch install can be selected using the index at https://download.pytorch.org/whl/cpu.
 
-An installed wheel includes models, guides, demo trajectories and firmware
-sources. In a checkout, outputs go under that checkout. With a wheel installed,
-outputs go under the directory where the app is launched. Python needs Tk
-support; the managed environment supplies it.
+## Sensor checks
 
-Run these checks from the project environment:
+Close AURORA before a separate BLE/camera check:
 
 ```powershell
 python scripts/check_ble.py --name AURORA
-python scripts/check_dual_imu.py --port COM5 --require-emg
 python scripts/check_oak_camera.py
 python scripts/check_emg_calibration.py --phase grip --interactive --seconds 6
 ```
 
-The COM-port check is for USB diagnostics. Normal recording uses BLE.
-Close the app before running a separate BLE check so it can connect to the ESP32.
+USB diagnostics, when needed:
 
-Run `python scripts/check_project.py` for the software tests. See
-[`tests/`](../tests/README.md) for code style checks.
-Run `python scripts/check_package.py` to build and check an installed copy.
+```powershell
+python scripts/check_dual_imu.py --port COM5 --require-emg
+```
+
+Run `python scripts/check_project.py` for offline checks. Training tests need the
+training packages; style checks are listed in [tests](../tests/README.md).
+`python scripts/check_package.py` checks a built package and its resources.

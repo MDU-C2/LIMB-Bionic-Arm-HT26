@@ -22,7 +22,7 @@ class RecordingViewsMixin:
         self._heading(
             tab,
             "Record cup transfers",
-            "Choose a subject, calibrate once and record each cup transfer as a separate trial.",
+            "Connect camera + BLE, calibrate the subject, then record each cup transfer.",
         )
         self._build_cup_recording(tab)
         advanced = ttk.Frame(tab, style="Page.TFrame")

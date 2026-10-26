@@ -80,6 +80,26 @@ class InteractiveRuntimeTests(unittest.TestCase):
             self.assertAlmostEqual(self.simulator.measured_angles_deg[name], requested, places=4)
         self.simulator.sensor_window.update.assert_called()
 
+    def test_paused_live_setup_initializes_and_refreshes_contact_display(self):
+        simulator = self.simulator
+        simulator.args.control = "camera-imu"
+        simulator.initialize_task()
+        self.assertTrue(all(force == 0 for force in simulator.fingertip_force_n.values()))
+        simulator.live_feedback_active = False
+        simulator.live_sensor_input = Mock()
+        simulator.live_sensor_input.poll.return_value = LiveFusionSnapshot(
+            None, {}, False, False, "Waiting for sensors"
+        )
+        forces = dict.fromkeys(simulator.fingertip_force_n, 0.0)
+        forces["thumb"] = 0.2
+        simulator.target_contact_feedback = Mock(return_value=(set(), forces))
+        before = get_angles_deg(simulator.arm)
+        self.frame()
+        self.assertEqual(simulator.fingertip_force_n, forces)
+        self.assertEqual(get_angles_deg(simulator.arm), before)
+        self.assertIsNone(simulator.grasp_transform)
+        simulator.sensor_window.update.assert_called()
+
     def test_table_dimensions_cup_and_neutral_pose_clear_the_lift_path(self):
         from aurora.simulation.interactive.arm_control import set_shoulder, sync_to_pybullet
         from aurora.simulation.interactive.settings import (

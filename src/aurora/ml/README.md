@@ -22,7 +22,7 @@ python -m aurora.recording.capture_movement --subject-id S01 --side left
 
 Press Space to start and press it again to save. Files go under the subject ID,
 with trial numbers `T001`, `T002` and so on. This profile recorder needs stereo
-depth. The ordinary cup recorder keeps stereo optional.
+depth. Normal cup trials also use stereo for subject calibration and capture.
 
 Profiles use RGB x/y pixels and stereo depth in metres, matching the inherited
 LIMB1 format. Relative MediaPipe z is not measured depth. New files declare their

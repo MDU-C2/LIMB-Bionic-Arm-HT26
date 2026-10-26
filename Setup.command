@@ -34,15 +34,16 @@ case "$(uname -s):$(uname -m)" in
 esac
 
 cd -- "$repository"
-if $start && $launch && [[ -x "$micromamba" && -x "$prefix/bin/python" && -f "$state_directory/ready.json" ]]; then
-    # Preserve normal launch failures; only missing/outdated setup triggers installation.
-    status=0
-    "$micromamba" --no-rc run -p "$prefix" python scripts/setup_project.py --launch || status=$?
-    if [[ $status -ne 10 ]]; then exit "$status"; fi
+if $start; then
+    trap - ERR
+    if [[ ! -x "$prefix/bin/python" ]]; then
+        echo 'Run Setup.command once before using Start.command.'
+        exit 1
+    fi
+    exec "$prefix/bin/python" scripts/setup_project.py --launch
 fi
 
 mkdir -p -- "$state_directory"
-rm -f -- "$state_directory/ready.json"
 if [[ ! -x "$micromamba" ]]; then
     for utility in curl tar bzip2; do
         command -v "$utility" >/dev/null || { echo "Required utility missing: $utility"; exit 1; }

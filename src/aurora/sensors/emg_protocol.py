@@ -102,6 +102,8 @@ class EmgActivationEstimator:
         self._strength_samples = []
         self._strength_sample_time = 0.0
         self.calibration_error = ""
+        self.reference = None
+        self.strong_envelope = None
         self.activation = None
         return True
 
@@ -223,6 +225,9 @@ class EmgActivationEstimator:
                 else:
                     self.reference = strong - threshold
                 self._strength_elapsed = None
+            self.activation = None
+            return None
+        if self.calibration_error:
             self.activation = None
             return None
         self.peak = max(signal, self.peak, threshold)

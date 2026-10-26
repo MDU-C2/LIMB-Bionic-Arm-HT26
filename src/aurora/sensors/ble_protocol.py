@@ -76,6 +76,7 @@ class BleRecorder:
         self.session = session
         self.sample_sink = sample_sink
         self.clock_sync = clock_sync
+        self.connection_generation = None
         self.sensors = DEFAULT_SENSORS if sensors is None else sensors
         self.imu_units = ("device units", "device units")
         self.counts = {name: 0 for name in self.sensors}
@@ -156,6 +157,11 @@ class BleRecorder:
                     {
                         "host_time": host_time,
                         "host_monotonic_ns": host_monotonic_ns,
+                        **(
+                            {"connection_generation": self.connection_generation}
+                            if self.connection_generation is not None
+                            else {}
+                        ),
                         **({"device_time_us": device_time} if device_time is not None else {}),
                         **(
                             {"synced_host_monotonic_ns": synced_time}
@@ -184,8 +190,8 @@ class BleRecorder:
 
     def _track_sequence(self, sensor: str, sequence: int) -> None:
         previous = self.last_sequences.get(sensor)
-        self.last_sequences[sensor] = sequence
         if previous is None:
+            self.last_sequences[sensor] = sequence
             return
         difference = (sequence - previous) & 0xFFFFFFFF
         if difference != 1:
@@ -193,6 +199,12 @@ class BleRecorder:
             # Duplicates, reordered packets and resets are not forward packet loss.
             if 1 < difference < 0x80000000:
                 self.missing_packets[sensor] += difference - 1
+        if 0 < difference < 0x80000000:
+            self.last_sequences[sensor] = sequence
+
+    def reset_sequence_tracking(self) -> None:
+        """Start from the next connection's first packet, keeping the totals."""
+        self.last_sequences.clear()
 
     def packet_health(self) -> dict[str, dict[str, int]]:
         """Report sequence discontinuities separately from malformed packets."""

@@ -9,8 +9,12 @@ and operating-system scheduling jitter appeared as sensor timing jitter.
 
 ## Shared time domain
 
-Each IMU sample carries its own `device_time_us`; each EMG packet carries its
-first sample time and sample period. All use `esp_timer_get_time()`'s clock.
+Each IMU read carries its own `device_time_us`; each EMG packet carries its
+estimated first sample time and nominal sample period. IMU times are taken
+before register reads. EMG time is anchored at the first ADC block read and then
+advanced by retained sample count at the configured rate. These are firmware
+timestamps, not independent hardware measurements of every ADC conversion.
+Clock synchronization cannot detect ADC buffer loss or prove the ADC rate.
 On connection, the host performs repeated four-timestamp exchanges:
 
 ```text
@@ -28,10 +32,15 @@ This corrects normal ESP32 oscillator drift during longer trials. Each BLE node
 has an independent mapping, but all results use the computer's
 `time.monotonic_ns()` clock. OAK-D pose/observation frames now save that same
 absolute `host_monotonic_ns`, so camera and sensor rows can be compared even
-when notifications arrive late or in bursts. Cup trials timestamp the frame on
-the host before tracking; the standalone camera recorder timestamps after tracking.
+when notifications arrive late or in bursts. All camera recorders timestamp host frame receipt before tracking.
 Neither is the exposure time. This shared clock does not by itself establish
 precise physical camera/sensor alignment.
+
+Cup RGB and depth files additionally retain OAK `device_time_ns`. These times
+share the camera's device clock and help match RGB to depth; they are not ESP32
+times or host-aligned timestamps. A saved host receipt time accompanies each
+frame. Tracking uses the closest available depth frame within 20 ms and records
+the difference. Keep this matching uncertainty separate from BLE clock-fit error.
 
 ## Recorded fields
 

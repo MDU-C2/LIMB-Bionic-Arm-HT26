@@ -132,6 +132,7 @@ class ProjectGui(
 
         self._build_header()
         self._build_notebook()
+        self.notebook.select(self.tabs["recording"])
         self._build_activity_panel()
 
         self._refresh_recording_programs()
@@ -151,7 +152,6 @@ class ProjectGui(
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.after(100, self._drain_log_queue)
         self.after(100, self._drain_serial_sensor_events)
-        self.after(500, self._start_ble_dashboard_if_available)
         self.after(100, self._poll_ble_dashboard)
         self.after(1000, self._poll_serial_ports)
 

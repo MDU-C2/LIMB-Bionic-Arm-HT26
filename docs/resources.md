@@ -1,8 +1,7 @@
 # Resources
 
 References for the software and hardware used in AURORA and the earlier LIMB
-project. See [hardware checks](hardware-validation.md) for measurements on the
-current setup and [motors](motor-settings.md) for the arm's motor assignments.
+project. See [motors](motor-settings.md) for the arm's motor assignments.
 
 ## Software and communication
 

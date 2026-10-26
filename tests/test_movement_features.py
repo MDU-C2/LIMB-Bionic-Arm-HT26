@@ -90,6 +90,7 @@ class MovementFeatureTests(unittest.TestCase):
             with (
                 patch.dict("sys.modules", {"cv2": cv2, "mediapipe": mp, "depthai": Mock()}),
                 patch.object(capture_movement, "configure_depthai_runtime"),
+                patch.object(capture_movement, "require_pose_model"),
                 patch.object(
                     capture_movement, "build_pipeline", return_value=(pipeline, video, depth)
                 ) as build,

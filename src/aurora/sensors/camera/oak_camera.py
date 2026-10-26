@@ -38,6 +38,22 @@ def configure_depthai_runtime() -> None:
     )
 
 
+def require_pose_model(mp, complexity: int) -> None:
+    """Fail locally instead of letting MediaPipe download an optional model."""
+    name = ("lite", "full", "heavy")[complexity]
+    model = (
+        Path(mp.__file__).resolve().parent
+        / "modules"
+        / "pose_landmark"
+        / f"pose_landmark_{name}.tflite"
+    )
+    if not model.is_file():
+        raise RuntimeError(
+            f"The {name} pose model is not installed. Use the bundled full model "
+            "(--pose-model 1), or repair the MediaPipe installation with Setup."
+        )
+
+
 def build_pipeline(dai, use_depth: bool = False):
     """Run RGB tracking; add stereo only when explicitly requested."""
     try:
@@ -52,7 +68,8 @@ def build_pipeline(dai, use_depth: bool = False):
     color = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
     color_output = color.requestOutput(
         FRAME_SIZE,
-        type=dai.ImgFrame.Type.BGR888p,
+        # NV12 halves colour traffic. BGR + aligned depth can saturate USB 2.
+        type=dai.ImgFrame.Type.NV12,
         fps=VIDEO_FPS,
         enableUndistortion=use_depth,
     )

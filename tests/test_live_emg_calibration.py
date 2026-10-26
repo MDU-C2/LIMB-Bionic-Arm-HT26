@@ -56,6 +56,21 @@ class LiveEmgCalibrationTests(unittest.TestCase):
         self.feed(3.1, 2)
         self.assertIsNone(self.estimator.reference)
         self.assertIn("No clear grip signal", self.estimator.status)
+        self.assertIsNone(self.feed(1, 2))
+
+    def test_failed_recalibration_does_not_keep_an_old_grip_reference(self):
+        self.feed(1, 2)
+        self.estimator.calibrate_strength()
+        self.feed(3.1, 300)
+        self.assertIsNotNone(self.estimator.reference)
+        self.feed(1, 2)
+        self.estimator.calibrate_strength()
+        self.assertIsNone(self.estimator.reference)
+        self.assertIsNone(self.estimator.strong_envelope)
+        self.feed(3.1, 2)
+        self.assertIsNone(self.estimator.reference)
+        self.assertIsNone(self.feed(1, 300))
+        self.assertIn("No clear grip signal", self.estimator.status)
 
     def test_rest_ignores_notch_settling_after_reset(self):
         self.feed(1, 0, mains=100)

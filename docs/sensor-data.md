@@ -58,14 +58,13 @@ For a terminal-level hardware check that requires valid vectors from both
 sensors, run:
 
 ```powershell
-micromamba run -n aurora python scripts/check_dual_imu.py --port COM5 --require-emg
+python scripts/check_dual_imu.py --port COM5 --require-emg
 ```
 
 ## View readings
 
-The GUI automatically connects over BLE and opens raw EMG and both IMUs'
-acceleration/gyro graphs. **Connect BLE / show graphs** in the header reopens
-them. The header reports connected IMUs and EMG reception. Live activation uses
+**Connect BLE / show graphs** in the header opens raw EMG and both IMUs'
+acceleration/gyro graphs. The header reports connected IMUs and EMG reception. Live activation uses
 a relaxed-muscle baseline; live simulation also has IMU neutral-pose calibration.
 The **USB monitor** on Recording is available for USB diagnostic firmware.
 See the [recording guide](recording-guide.md) for the complete BLE workflow.
@@ -111,8 +110,15 @@ ESP32 sample times onto the camera's host monotonic clock. Use the BLE CSV's
 `synced_host_monotonic_ns` field for alignment. The firmware defaults to BLE
 sensor transport, with 4 kHz EMG and approximately 100 Hz IMU readings.
 
-The recorder remains compatible with older LIMB25 `LIMBServer` packet layouts,
+The recorder remains compatible with older LIMB-HT25 `LIMBServer` packet layouts,
 including its optional piezo characteristic. Piezo is hidden from the current
 GUI because it is not part of this hardware. Old firmware has no time sync, so
 its rows retain arrival timestamps and leave the synchronized timestamp empty. See
 [Bluetooth synchronization](bluetooth-sync.md) for the protocol and fields.
+
+Normal cup capture also saves unmirrored RGB video and lossless RGB-aligned
+stereo depth maps. Subject calibration fits mounting rotations and saves a
+separate aligned IMU copy with each trial. Camera intrinsics and OAK device timestamps are
+saved with them. The OAK and ESP32 device clocks differ; use host-aligned BLE
+times and camera receipt times to compare sources. The
+[recording guide](recording-guide.md) describes the files and limitations.

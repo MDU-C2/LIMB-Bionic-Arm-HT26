@@ -8,11 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from aurora.simulation.dmp.dmp_signal import canonical_phase as canonical_phase
-from aurora.simulation.dmp.dmp_signal import curvature_coupling as curvature_coupling
 from aurora.simulation.dmp.dmp_signal import estimate_derivatives as estimate_derivatives
-from aurora.simulation.dmp.dmp_signal import (
-    learn_curvature_weights_from_demo as learn_curvature_weights_from_demo,
-)
 from aurora.simulation.dmp.dmp_signal import savgol_estimation as savgol_estimation
 
 
@@ -28,7 +24,6 @@ class DMPModel:
     beta_transformation: float
     tau: float
     n_joints: int
-    curvature_weights: np.ndarray | None = None
 
 
 def _rbf_normalized(x: np.ndarray, centers: np.ndarray, widths: np.ndarray) -> np.ndarray:
@@ -175,8 +170,6 @@ def fit(
     alpha_canonical: float,
     alpha_transformation: float,
     beta_transformation: float,
-    *,
-    learn_curvature: bool = False,
 ) -> DMPModel:
     """
     Fit a DMP from a list of joint trajectories.
@@ -184,7 +177,6 @@ def fit(
 
     Args:
         demos: List of trajectories, each with shape `(T, n_joints)`, in radians.
-        learn_curvature: Fit optional cross-joint curvature coupling weights.
 
     Returns:
         DMPModel: the fitted DMP model
@@ -247,17 +239,6 @@ def fit(
         tau=tau,
         n_joints=n_joints,
     )
-    if learn_curvature:
-        fitted_curvature = [
-            learn_curvature_weights_from_demo(
-                demo=demo,
-                model=model,
-                dt=dt,
-                ridge_lambda=ridge_lambda,
-            )
-            for demo in demos
-        ]
-        model.curvature_weights = np.mean(fitted_curvature, axis=0)
     return model
 
 
@@ -315,115 +296,6 @@ def rollout_simple(
         velocity += acceleration * dt
         position += velocity * dt
         generated[step_index] = position
-        time_value += dt
-
-    return generated
-
-
-def rollout_simple_with_coupling(
-    model: DMPModel,
-    q0: np.ndarray,
-    g: np.ndarray,
-    tau: float,
-    dt: float,
-) -> np.ndarray:
-    """Generate an Euler rollout with optional learned curvature coupling."""
-    q0, g, n_steps = _validate_rollout_inputs(model, q0, g, tau, dt)
-    q_gen = np.zeros((n_steps, model.n_joints))
-    q = q0.copy().astype(float)
-    dq = np.zeros_like(q)
-    q_gen[0] = q
-    t = 0.0
-    for k in range(1, n_steps):
-        x = canonical_phase(t, tau=tau, alpha_canonical=model.alpha_canonical)
-
-        psi = np.exp(-model.widths * (x - model.centers) ** 2)
-        psi_norm = psi / (psi.sum() + 1e-10)
-
-        f = x * (model.weights @ psi_norm)
-
-        curvature = np.zeros_like(q)
-        if model.curvature_weights is not None:
-            curvature = curvature_coupling(
-                q,
-                g,
-                x,
-                model.centers,
-                model.widths,
-                model.curvature_weights,
-            )
-
-        ddq = (
-            model.alpha_transformation * model.beta_transformation * (g - q)
-            - model.alpha_transformation * dq
-            + (g - q0) * f
-            + curvature
-        ) / tau**2
-        dq += ddq * dt
-        q += dq * dt
-        q_gen[k] = q
-        t += dt
-
-    return q_gen
-
-
-def rollout_rk4(
-    model: DMPModel,
-    q0: np.ndarray,
-    g: np.ndarray,
-    tau: float,
-    dt: float,
-) -> np.ndarray:
-    """Generate a trajectory with fourth-order Runge-Kutta integration."""
-    q0, goal, step_count = _validate_rollout_inputs(model, q0, g, tau, dt)
-    joint_count = model.n_joints
-
-    position = q0.copy()
-    velocity = np.zeros_like(position)
-    phase = 1.0
-    state = np.concatenate([position, velocity, np.array([phase])])
-
-    generated = np.zeros((step_count, joint_count), dtype=float)
-    generated[0] = position
-
-    # Local references avoid repeated attribute lookups inside the integrator.
-    alpha_c = model.alpha_canonical
-    alpha_z = model.alpha_transformation
-    beta_z = model.beta_transformation
-    centers = model.centers
-    widths = model.widths
-    weights = model.weights
-
-    def forcing(phase_value: float) -> np.ndarray:
-        """Compute the forcing term for every joint at one phase value."""
-        activations = np.exp(-widths * (phase_value - centers) ** 2)
-        normalized = activations / (activations.sum() + 1e-10)
-        return phase_value * (weights @ normalized)
-
-    def state_derivative(_time_value: float, current_state: np.ndarray) -> np.ndarray:
-        """Return position, velocity, and canonical-phase derivatives."""
-        current_position = current_state[:joint_count]
-        current_velocity = current_state[joint_count : 2 * joint_count]
-        current_phase = current_state[2 * joint_count]
-        phase_derivative = -alpha_c * current_phase / tau
-        acceleration = (
-            alpha_z * beta_z * (goal - current_position)
-            - alpha_z * current_velocity
-            + (goal - q0) * forcing(current_phase)
-        ) / tau**2
-        return np.concatenate([current_velocity, acceleration, np.array([phase_derivative])])
-
-    time_value = 0.0
-    for step_index in range(1, step_count):
-        k1 = state_derivative(time_value, state)
-        k2 = state_derivative(time_value + 0.5 * dt, state + 0.5 * dt * k1)
-        k3 = state_derivative(time_value + 0.5 * dt, state + 0.5 * dt * k2)
-        k4 = state_derivative(time_value + dt, state + dt * k3)
-        state += (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
-
-        # Numerical error near the end can otherwise make phase slightly negative.
-        state[2 * joint_count] = max(0.0, state[2 * joint_count])
-        generated[step_index] = state[:joint_count]
         time_value += dt
 
     return generated

@@ -15,8 +15,10 @@ cup markers are not EMG labels. Press **Save reviewed labels** when finished.
 `emg.labels.json` saves intervals in seconds from the first EMG sample, IDs,
 review status and the raw source hash. Drafts cannot train a model. Original
 samples and cues stay unchanged. Video alignment needs synchronized EMG times
-and camera metadata. It uses host frame receipt times, not exposure times;
-saved video can repeat frames.
+and camera metadata. New videos use `frame_times.jsonl` to seek the last frame
+received at or before the selected sample, including repeated encoded frames.
+These are host receipt times, not exposure times. Older videos fall back to
+video playback time and show that limitation.
 
 ## Compare classifiers
 
@@ -29,8 +31,9 @@ python -m aurora.ml.train_emg --data outputs/recordings
 
 Defaults compare LDA, ANN and LSTM with RMS/MAV and all six features. New runs
 go in `outputs/training/` with `training.json`, participant splits, raw/label
-hashes, code hashes, package versions, scores and model bundles. Setup supplies
-PyTorch/ONNX for training; live inference uses NumPy or ONNX Runtime.
+hashes, code hashes, package versions, scores and model bundles. Install the
+optional `requirements-training.txt` packages for PyTorch/ONNX training;
+live inference uses NumPy or ONNX Runtime.
 Successful runs use status `complete`. Older `completed` reports remain readable.
 Interrupted or failed runs keep their files and save that status.
 

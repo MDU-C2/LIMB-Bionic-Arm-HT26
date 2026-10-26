@@ -18,7 +18,7 @@ from aurora.sensors.camera.oak_camera import VIDEO_FPS as VIDEO_FPS
 from aurora.sensors.camera.oak_camera import WINDOW as WINDOW
 from aurora.sensors.camera.oak_camera import build_pipeline as build_pipeline
 from aurora.sensors.camera.oak_camera import configure_depthai_runtime as configure_depthai_runtime
-from aurora.sensors.camera.oak_camera import receive_frame
+from aurora.sensors.camera.oak_camera import receive_frame, require_pose_model
 from aurora.sensors.camera.oak_geometry import ANGLE_LABELS as ANGLE_LABELS
 from aurora.sensors.camera.oak_geometry import FINGER_CHAINS as FINGER_CHAINS
 from aurora.sensors.camera.oak_geometry import HAND_LANDMARK_NAMES as HAND_LANDMARK_NAMES
@@ -219,6 +219,7 @@ def main() -> int:
     hands = None
     cup_detector = None
     try:
+        require_pose_model(mp, args.pose_model)
         pose = mp.solutions.pose.Pose(
             static_image_mode=False,
             model_complexity=args.pose_model,

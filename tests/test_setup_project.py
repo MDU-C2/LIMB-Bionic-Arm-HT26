@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,43 @@ from aurora.gui.project_support import simulation_python_candidates
 
 
 class SetupTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows launcher")
+    def test_start_uses_the_saved_python_without_installation_or_ready_marker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aurora launch ") as temporary:
+            root = Path(temporary)
+            (root / "scripts").mkdir()
+            (root / ".aurora").mkdir()
+            shutil.copy2(ROOT / "scripts/setup.ps1", root / "scripts/setup.ps1")
+            (root / ".aurora/runtime.json").write_text(
+                json.dumps({"prefix": str(Path(sys.executable).parent)}), encoding="utf-8"
+            )
+            (root / "scripts/setup_project.py").write_text(
+                "import pathlib, sys\n"
+                "assert sys.argv[1:] == ['--launch']\n"
+                "pathlib.Path('started.txt').write_text(sys.executable)\n"
+                "raise SystemExit(7)\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts/setup.ps1"),
+                    "-Start",
+                ],
+                cwd=root,
+                env={**os.environ, "AURORA_RUNTIME_ROOT": "invalid setup path"},
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+            self.assertEqual(Path((root / "started.txt").read_text()), Path(sys.executable))
+            self.assertNotIn("Installing", result.stdout)
+
     def test_firmware_uses_the_runtime_when_the_system_temp_path_has_spaces(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -117,46 +155,13 @@ class SetupTests(unittest.TestCase):
             setup_project.verify()
             self.assertIn(call("-c", "import depthai"), checks.call_args_list)
 
-    def test_ready_marker_is_invalidated_by_dependency_changes(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            dependency = root / "requirements.txt"
-            dependency.write_text("numpy==1.26.4\n", encoding="utf-8")
-            marker = root / "ready.json"
-            with (
-                patch.object(setup_project, "ROOT", root),
-                patch.object(setup_project, "INPUTS", ("requirements.txt",)),
-                patch.object(setup_project, "READY", marker),
-            ):
-                self.assertFalse(setup_project.is_ready())
-                marker.write_text(json.dumps({"fingerprint": setup_project.fingerprint()}))
-                self.assertTrue(setup_project.is_ready())
-                dependency.write_text("numpy==2.0.0\n", encoding="utf-8")
-                self.assertFalse(setup_project.is_ready())
-
-    def test_partial_or_corrupt_marker_requires_setup(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            marker = Path(temporary) / "ready.json"
-            with patch.object(setup_project, "READY", marker):
-                for contents in ("", "{", "null", "[]", "{}"):
-                    marker.write_text(contents, encoding="utf-8")
-                    self.assertFalse(setup_project.is_ready())
-
-    def test_fresh_launch_requests_setup_without_starting_app(self) -> None:
-        with (
-            patch.object(setup_project, "is_ready", return_value=False),
-            patch.object(setup_project.subprocess, "call") as launch,
-            patch.dict(os.environ),
-        ):
-            self.assertEqual(setup_project.main(["--launch"]), setup_project.NEEDS_SETUP)
-            launch.assert_not_called()
-
-    def test_ready_launch_preserves_paths_and_app_exit_code(self) -> None:
-        root = ROOT / "clone with spaces and Å"
+    def test_launch_does_not_install_or_verify_dependencies(self) -> None:
+        root = ROOT / "clone with spaces and ?"
         with (
             patch.object(setup_project, "ROOT", root),
-            patch.object(setup_project, "is_ready", return_value=True),
             patch.object(setup_project.subprocess, "call", return_value=7) as launch,
+            patch.object(setup_project, "install") as install,
+            patch.object(setup_project, "verify") as verify,
             patch.dict(os.environ),
         ):
             self.assertEqual(setup_project.main(["--launch"]), 7)
@@ -164,28 +169,18 @@ class SetupTests(unittest.TestCase):
                 [sys.executable, "-m", "aurora.gui.app"],
                 cwd=root,
             )
+            install.assert_not_called()
+            verify.assert_not_called()
             self.assertEqual(os.environ["AURORA_SIMULATION_PYTHON"], sys.executable)
 
-    def test_failed_firmware_build_never_marks_setup_complete(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            state = Path(temporary)
-            marker = state / "ready.json"
-            marker.write_text('{"fingerprint": "old"}')
-            with (
-                patch.object(setup_project, "STATE", state),
-                patch.object(setup_project, "READY", marker),
-                patch.object(setup_project, "verify"),
-                patch.object(setup_project, "run_python") as run,
-            ):
-
-                def fail_build(*arguments, **kwargs):
-                    if arguments[0] == "src/aurora/gui/firmware_workspace.py":
-                        raise OSError("Toolchain download interrupted")
-
-                run.side_effect = fail_build
-                with self.assertRaises(OSError):
-                    setup_project.install()
-                self.assertFalse(marker.exists())
+    def test_setup_does_not_download_training_or_build_firmware(self) -> None:
+        with (
+            patch.object(setup_project, "run_python") as run,
+            patch.object(setup_project, "verify") as verify,
+        ):
+            setup_project.install()
+        run.assert_called_once_with("-m", "pip", "install", "-r", "requirements-setup.txt")
+        verify.assert_called_once_with()
 
     def test_gui_discovers_windows_cached_environment_before_system_python(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

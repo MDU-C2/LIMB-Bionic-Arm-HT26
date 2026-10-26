@@ -11,6 +11,7 @@ from pathlib import Path
 from aurora.json_utils import write_json
 from aurora.recording.common import safe_label, utc_now, write_metadata
 from aurora.recording.oak_session import CameraSession
+from aurora.recording.subject_calibration import export_aligned_imu
 
 PACE_CONDITIONS = ("natural", "slow", "fast")
 TASK_MARKERS = {
@@ -21,11 +22,11 @@ TASK_MARKERS = {
 }
 
 
-def next_trial_number(subject_directory: Path) -> int:
+def next_trial_number(subject_directory: Path, prefix="T") -> int:
     numbers = []
     if subject_directory.is_dir():
         for path in subject_directory.iterdir():
-            match = re.match(r"T(\d+)_", path.name)
+            match = re.match(rf"{re.escape(prefix)}(\d+)_", path.name)
             if path.is_dir() and match:
                 numbers.append(int(match[1]))
     return max(numbers, default=0) + 1
@@ -34,7 +35,7 @@ def next_trial_number(subject_directory: Path) -> int:
 class CupTrialSession:
     """Keep the camera and raw BLE files together under one subject and trial."""
 
-    def __init__(self, output: Path, subject: str, side: str, reader, cv2):
+    def __init__(self, output: Path, subject: str, side: str, reader, cv2, *, camera_metadata=None):
         self.subject = subject
         self.side = side
         self.directory = output / safe_label(subject)
@@ -45,24 +46,35 @@ class CupTrialSession:
         self.started_ns = 0
         self.metadata = {}
         self.calibration = {}
+        self.camera_metadata = dict(camera_metadata or {})
 
     @property
     def active(self) -> bool:
         return self.camera is not None and self.camera.recording
 
-    def start(self, condition: str = "natural") -> None:
+    def start(
+        self,
+        condition: str = "natural",
+        *,
+        protocol=None,
+        mark_start=False,
+        reference=False,
+        reference_path=None,
+        alignment_profile=None,
+    ) -> None:
         if self.active:
             raise RuntimeError("Stop the current trial first")
         if condition not in PACE_CONDITIONS:
             raise ValueError("Choose natural, slow or fast pace")
         data = self.reader.graph_data()
-        if not data["emg"] or len(self.reader.latest()["imus"]) != 2:
+        packet = self.reader.latest()
+        if not data["emg"] or len(packet["imus"]) != 2:
             raise RuntimeError("Wait for EMG and both IMUs before recording")
-        if data["emg_calibration"] != "Grip calibrated":
-            raise RuntimeError("Calibrate relaxed muscle and strong grip before recording")
-        number = next_trial_number(self.directory)
-        trial_id = f"T{number:03d}"
-        self.path = self.directory / f"{trial_id}_{datetime.now():%Y%m%d_%H%M%S_%f}"
+        parent = self.directory / "references" if reference else self.directory
+        prefix = "R" if reference else "T"
+        number = next_trial_number(parent, prefix)
+        trial_id = f"{prefix}{number:03d}"
+        self.path = parent / f"{trial_id}_{datetime.now():%Y%m%d_%H%M%S_%f}"
         self.path.mkdir(parents=True, exist_ok=False)
         (self.path / "ble").mkdir()
         self.started_ns = time.monotonic_ns()
@@ -83,16 +95,32 @@ class CupTrialSession:
             "subject_id": self.subject,
             "side": self.side,
             "trial_id": trial_id,
-            "test_type": "cup_transfer",
-            "protocol_version": 1,
-            "pace_condition": condition,
-            "task_markers": dict(TASK_MARKERS),
+            "test_type": "subject_reference" if reference else "cup_transfer",
+            "protocol_version": 3 if protocol else 1,
+            "protocol": dict(protocol or {}),
+            "pace_condition": None if reference else condition,
+            "task_markers": {} if reference else dict(TASK_MARKERS),
+            "subject_reference": reference_path,
+            "sensor_to_arm_alignment": "fitted" if alignment_profile else "not_estimated",
+            "alignment_profile": alignment_profile,
+            "connection_generation": self.reader.connection_generation,
             "operator_events": [],
+            "cue_events": [],
             "session_id": self.path.name,
             "batch_sources": "camera,ble",
             "camera_position": "in_front_of_subject",
             "pose_model_complexity": 1,
             "stereo_depth_enabled": False,
+            "recording_mode": "raw_with_alignment" if alignment_profile else "raw_signals",
+            "movement_labels": "not_reviewed",
+            "task_completion_verified": False,
+            **self.camera_metadata,
+            "calibration_status": {
+                "imu_bias_ready": bool(packet["imu_calibrated"]),
+                "emg_rest_ready": bool(self.reader.emg_estimator.calibrated),
+                "emg_grip_ready": data["emg_calibration"] == "Grip calibrated",
+                "emg_message": data["emg_calibration"],
+            },
             "started_utc": utc_now(),
             "started_host_monotonic_ns": self.started_ns,
             "trial_started_host_monotonic_ns": self.started_ns,
@@ -105,18 +133,22 @@ class CupTrialSession:
             self.cv2,
             self.subject,
             self.side,
+            depth_enabled=bool(self.metadata["stereo_depth_enabled"]),
             directory=self.path / "camera",
             metadata=self.metadata,
+            raw_video=True,
         )
         try:
             self.camera.start()
             self.reader.start_recording(self.path / "ble")
-            self.mark(1)
+            if mark_start and not reference:
+                self.mark(1)
         except Exception:
             self.stop("Could not start both recording sources", complete=False)
             raise
 
-    def mark(self, marker: int, *, host_monotonic_ns=None) -> None:
+    def mark(self, marker: int, *, host_monotonic_ns=None, source="operator_button") -> None:
+        """Save an explicit observation for advanced callers; normal trials use no markers."""
         if not self.active:
             raise ValueError("Start a trial before marking a task event")
         if str(marker) not in TASK_MARKERS:
@@ -130,14 +162,31 @@ class CupTrialSession:
                 "marker": marker,
                 "host_monotonic_ns": stamp,
                 "time_s": round((stamp - self.started_ns) / 1e9, 4),
-                "source": "operator_button",
+                "source": source,
             }
         )
         write_json(
             self.path / "trial.json", {**self.metadata, "complete": False, "status": "recording"}
         )
 
-    def add_frame(self, live) -> None:
+    def cue(self, name: str, *, host_monotonic_ns=None, **values) -> None:
+        if not self.active:
+            return
+        now = time.monotonic_ns() if host_monotonic_ns is None else host_monotonic_ns
+        self.metadata["cue_events"].append(
+            {
+                "cue": name,
+                "host_monotonic_ns": now,
+                "time_s": round((now - self.started_ns) / 1e9, 4),
+                "source": "recorder_cue",
+                **values,
+            }
+        )
+        write_json(
+            self.path / "trial.json", {**self.metadata, "complete": False, "status": "recording"}
+        )
+
+    def add_frame(self, live, *, save_observation=True) -> None:
         if self.active and live.frame_time_ns >= self.started_ns:
             for key in (
                 "cup_detector",
@@ -152,17 +201,55 @@ class CupTrialSession:
                 live.camera_sample,
                 live.camera_observation,
                 host_monotonic_ns=live.frame_time_ns,
+                frame_sequence=getattr(live, "frame_sequence", None),
+                device_frame_sequence=getattr(live, "device_frame_sequence", None),
+                device_time_ns=getattr(live, "device_time_ns", None),
+                save_observation=save_observation,
+            )
+
+    def add_tracking(self, frame) -> None:
+        if self.active:
+            for key in (
+                "cup_detector",
+                "cup_model_sha256",
+                "cup_confidence_threshold",
+                "hand_tracking_source",
+            ):
+                if key in frame.camera_observation:
+                    self.metadata[key] = frame.camera_observation[key]
+            self.camera.add_observation(
+                frame.camera_sample,
+                frame.camera_observation,
+                host_monotonic_ns=frame.frame_time_ns,
             )
 
     def stop(self, reason: str = "Stopped by operator", *, complete: bool = True) -> Path | None:
         if self.camera is None:
             return None
         camera, self.camera = self.camera, None
+        stopped_ns = time.monotonic_ns()
         health = self.reader.stop_recording()
+        profile = self.metadata.get("alignment_profile")
+        if profile is not None:
+            try:
+                if self.metadata.get("subject_reference_invalidated"):
+                    raise ValueError("BLE reconnected: calibration invalidated; raw IMU data kept")
+                self.metadata["aligned_imu"] = export_aligned_imu(
+                    self.path / "ble/imu.csv",
+                    self.path / "ble/imu_aligned.csv",
+                    profile,
+                    units=health.get("imu_units", ()),
+                )
+            except (OSError, ValueError, KeyError, IndexError) as error:
+                health["alignment_export_error"] = str(error)
         counts = health.get("packet_counts", {})
         complete = bool(
             complete
+            and not self.metadata.get("stream_interrupted")
             and not health.get("write_error")
+            and not health.get("alignment_export_error")
+            and not self.metadata.get("depth_interrupted")
+            and (not self.metadata["stereo_depth_enabled"] or camera.depth_frames)
             and camera.video_frames
             and counts.get("emg")
             and counts.get("imu")
@@ -172,8 +259,14 @@ class CupTrialSession:
             "complete": complete,
             "status": "complete" if complete else "incomplete",
             "stop_reason": reason,
-            "duration_seconds": round((time.monotonic_ns() - self.started_ns) / 1e9, 3),
+            "duration_seconds": round((stopped_ns - self.started_ns) / 1e9, 3),
             "finished_utc": utc_now(),
+            "recording_ended_host_monotonic_ns": stopped_ns,
+            "movement_duration_seconds": round(
+                (stopped_ns - self.metadata["movement_go_host_monotonic_ns"]) / 1e9, 3
+            )
+            if "movement_go_host_monotonic_ns" in self.metadata
+            else None,
         }
         camera.metadata = final
         camera.stop()
@@ -184,6 +277,9 @@ class CupTrialSession:
             "camera_observation_frame_count": len(camera.observations),
             "camera_pose_frame_count": len(camera.pose_frames),
             "camera_video_frame_count": camera.video_frames,
+            "camera_source_frame_count": camera.source_frames,
+            "camera_depth_frame_count": camera.depth_frames,
+            "quality_review_required": True,
             **health,
         }
         write_json(self.path / "trial.json", manifest)

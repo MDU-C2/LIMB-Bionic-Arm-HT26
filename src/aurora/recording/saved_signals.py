@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -38,6 +39,29 @@ class SavedSignals:
 
 def read_json(path: Path) -> dict:
     return read_json_object(path)
+
+
+def video_frame_times(directory: Path):
+    """Read receipt times and encoded indices, including fixed-rate video copies."""
+    path = directory / "frame_times.jsonl"
+    if not path.is_file():
+        return None  # Older annotated videos have no per-frame mapping.
+    with path.open(encoding="utf-8") as source:
+        rows = [json.loads(line) for line in source if line.strip()]
+    stamps, indices = [], []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Video frame mapping entries must be JSON objects.")
+        stamp, index = row.get("host_monotonic_ns"), row.get("video_frame_index")
+        if type(stamp) is not int or stamp <= 0 or type(index) is not int or index < 0:
+            raise ValueError("Video frame mapping needs positive timestamps and frame indices.")
+        if stamps and (stamp <= stamps[-1] or index <= indices[-1]):
+            raise ValueError("Video frame mapping must increase in time and frame index.")
+        stamps.append(stamp)
+        indices.append(index)
+    if not stamps:
+        raise ValueError("Video frame mapping contains no received frames.")
+    return np.asarray(stamps, dtype=np.int64), np.asarray(indices, dtype=np.int64)
 
 
 def source_files(path: Path) -> tuple[list[Path], dict]:
@@ -173,7 +197,14 @@ def load_signals(path: Path, sensor: str = "all") -> SavedSignals:
                 )
                 if not any(row.get(column) is not None for row in selected for column in columns):
                     continue
-                panel = Panel(f"{'Upper arm' if index == 1 else 'Forearm'} {kind}", unit, clock)
+                aligned = source.name == "imu_aligned.csv"
+                if aligned:
+                    unit = "g" if kind == "acceleration" else "dps"
+                panel = Panel(
+                    f"{'Upper arm' if index == 1 else 'Forearm'} {'aligned ' if aligned else ''}{kind}",
+                    unit,
+                    clock,
+                )
                 imu_time = (
                     time_column if ble or time_column != "timestamp_us" else f"{role}_timestamp_us"
                 )

@@ -34,6 +34,39 @@ from aurora.sensors.live_input import installed_pose_model_complexity
 
 
 class RecordingBatchTests(unittest.TestCase):
+    def test_label_review_seeks_the_recorded_frame_instead_of_fixed_fps_time(self):
+        import numpy as np
+
+        from aurora.gui.emg_review import EmgReview
+        from aurora.recording.saved_signals import video_frame_times
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            frames = [
+                {"host_monotonic_ns": 2_000_000_000, "video_frame_index": 0},
+                {"host_monotonic_ns": 2_400_000_000, "video_frame_index": 10},
+                {"host_monotonic_ns": 2_440_000_000, "video_frame_index": 11},
+            ]
+            (directory / "frame_times.jsonl").write_text(
+                "\n".join(json.dumps(row) for row in frames), encoding="utf-8"
+            )
+            review = EmgReview.__new__(EmgReview)
+            review.frame_times = video_frame_times(directory)
+            review.capture = Mock()
+            review.capture.read.return_value = False, None
+            review.host = np.asarray([2_420_000_000])
+            review.seconds = np.asarray([0.0])
+            review.camera_start = 1_900_000_000
+            review.video_label, review.video_status, review.cv2 = Mock(), Mock(), Mock()
+            review._seek(0)
+            review.capture.set.assert_called_once_with(review.cv2.CAP_PROP_POS_FRAMES, 10)
+            frames.reverse()
+            (directory / "frame_times.jsonl").write_text(
+                "\n".join(json.dumps(row) for row in frames), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "increase"):
+                video_frame_times(directory)
+
     def test_label_review_clears_video_outside_the_saved_time_range(self):
         import numpy as np
 
@@ -44,6 +77,7 @@ class RecordingBatchTests(unittest.TestCase):
         review.capture.read.return_value = False, None
         review.host = np.asarray([2_000_000_000, 3_000_000_000])
         review.seconds = np.asarray([0.0, 1.0])
+        review.frame_times = None
         review.video_label, review.video_status, review.cv2 = Mock(), Mock(), Mock()
         for start in (1_000_000_000, 4_000_000_000):
             with self.subTest(camera_start=start):

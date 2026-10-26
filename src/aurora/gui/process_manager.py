@@ -194,9 +194,10 @@ class ProcessManagerMixin:
                 event, value = self.log_queue.get_nowait()
                 if event == "line":
                     key, name, line = value
-                    self._append_log(f"[{name}] {line}")
                     if key == "recording:cup_trials" and str(line).startswith("[CUP] "):
                         self._handle_cup_event(str(line))
+                        continue
+                    self._append_log(f"[{name}] {line}")
                     managed = self.processes.get(key)
                     if (
                         managed is not None
@@ -227,6 +228,12 @@ class ProcessManagerMixin:
                 self._append_log(f"[{name} {outcome}]\n")
                 if key == "recording:cup_trials":
                     self._cup_ready = self._cup_recording = False
+                    self._cup_can_start = self._cup_streams_ready = False
+                    self._cup_can_prepare = self._cup_can_record = False
+                    self._cup_protocol_phase = "ready"
+                    self.cup_cue.set("PREPARE")
+                    self._cup_pace_changed()
+                    self.ble_sensor_connection.set("BLE: not connected")
                     self.cup_status.set(
                         "Subject finished. Enter the next subject ID."
                         if return_code == 0
@@ -249,8 +256,6 @@ class ProcessManagerMixin:
                     # Native USB commonly disappears and returns while the C3
                     # resets. Give Windows time to enumerate the refreshed port.
                     self.after(750, self._refresh_recording_ports)
-                if not active and hasattr(self, "_start_ble_dashboard_if_available"):
-                    self.after(1000, self._start_ble_dashboard_if_available)
         except queue.Empty:
             pass
         self.after(100, self._drain_log_queue)

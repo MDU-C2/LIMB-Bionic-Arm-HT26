@@ -6,22 +6,27 @@ To launch directly, select the project Python and run `python -m aurora.gui.app`
 | Tab | Use |
 | --- | --- |
 | Simulation | Keyboard or live sensor control of the arm |
-| Recording | Calibrate once and record repeated cup transfers per subject |
+| Recording | Record raw signals and repeated cup transfers per subject |
 | Recordings | Browse/plot signals, review EMG labels and compare classifiers |
 | Motion AI | Play saved poses or compare movements |
 | Firmware | Build, flash and monitor the ESP32 |
 | Info | Check installed tools and project files |
 
-The BLE graphs open at startup. The header shows whether both IMUs and EMG
-are receiving. Recording and live simulation take over that connection when
-started. The monitor reconnects after they finish.
+The app opens on Recording. The operator enters the subject ID, connects camera
+and BLE, calibrates the subject, selects a pace and starts each trial. Calibration
+guides arm raises, elbow bends, forearm turns, a static reference and EMG checks.
+Each calibration step waits for **Start step**, then counts down before capture.
+Normal trials require passed checks and valid stereo arm points. Trials default
+to a three-second countdown followed by eight seconds of capture and automatic
+saving. Stereo depth is used throughout this workflow. The countdown is for the operator, who gives the subject the
+start signal. Trial numbers advance automatically. Use **Finish subject** before
+changing participants.
 
-Under Recording, connect camera and BLE, calibrate, then use **Record** and
-**Stop and save** for each cup transfer. Trial numbers advance automatically.
-Use **Finish subject** before changing participant.
+**Connect BLE / show graphs** opens a standalone sensor check. During cup recording,
+use **Signals** to view the same reader without opening another BLE connection.
 
 Use **Guided grip trial** under Advanced recording options to collect repeated rest, grip,
-hold and release phases. Follow the cues on that page. Saved cue times can
+hold and release phases. The operator relays the cues to the subject. Saved cue times can
 be corrected before generating labelled features.
 
 Live simulation uses the Bluetooth name `AURORA`. Follow the setup panel:
@@ -39,7 +44,7 @@ See the [recording guide](../../../docs/recording-guide.md) and
 
 - `app.py`, `app_layout.py`: window and shared controls.
 - `recording_tab.py`, `recording_views.py`, `recording_settings.py`: recording setup.
-- `cup_recording.py`: subject calibration and repeated cup trials.
+- `cup_recording.py`: operator controls for repeated cup trials.
 - `recording_browser.py`: saved files and plots.
 - `emg_review.py`, `emg_tools.py`: label review, classifier comparison and selection.
 - `ble_dashboard.py`, `serial_dashboard.py`, `sensor_window.py`, `sensor_graphs.py`: sensor monitors.

@@ -9,10 +9,10 @@ from aurora.json_utils import write_json
 
 PHASES = (("rest", 3.0), ("grip", 0.5), ("hold", 3.0), ("release", 0.5))
 PROMPTS = {
-    "rest": "Relax your hand",
-    "grip": "Close your hand",
-    "hold": "Keep holding",
-    "release": "Open your hand",
+    "rest": "Subject relaxes the hand",
+    "grip": "Subject closes the hand",
+    "hold": "Subject keeps holding",
+    "release": "Subject opens the hand",
 }
 
 

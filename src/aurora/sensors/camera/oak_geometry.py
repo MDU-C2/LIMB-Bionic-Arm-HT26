@@ -88,6 +88,26 @@ def landmark_ids(mp_pose, side: str) -> dict[str, int]:
     }
 
 
+def elbow_flexion_deg(points, side, np):
+    """Elbow flexion needs the shoulder, elbow and wrist, without a trunk frame."""
+    try:
+        shoulder, elbow, wrist = (
+            np.asarray(points[f"{side}_{name}"], dtype=float)
+            for name in ("shoulder", "elbow", "wrist")
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+    if any(
+        point.shape != (3,) or not np.all(np.isfinite(point)) for point in (shoulder, elbow, wrist)
+    ):
+        return None
+    upper, forearm = elbow - shoulder, wrist - elbow
+    length = np.linalg.norm(upper) * np.linalg.norm(forearm)
+    if length < 1e-10:
+        return None
+    return float(np.degrees(np.arccos(np.clip(np.dot(upper, forearm) / length, -1.0, 1.0))))
+
+
 def arm_angles_deg(points: dict[str, object], side: str, np) -> dict[str, float | None] | None:
     """Oscar's trunk-relative elbow/shoulder geometry from six 3D points.
 
@@ -143,12 +163,8 @@ def arm_angles_deg(points: dict[str, object], side: str, np) -> dict[str, float 
     upper_t[0] *= side_sign
     forearm_t[0] *= side_sign
     elbow_angle = float(np.arccos(np.clip(np.dot(upper_unit, forearm_unit), -1.0, 1.0)))
-    # OSCARR's original independent ``atan2(component, down)`` equations are
-    # exact in their individual anatomical planes, but both become singular
-    # when the arm is horizontal.  At a forward reach, for example, a few
-    # millimetres of lateral pose noise made abduction jump towards 90 deg.
-    # Include the orthogonal component in each denominator so a channel only
-    # reports the portion of elevation that belongs to its own plane.
+    # Include the other elevation component to avoid singularities with a
+    # horizontal arm. Oscar's independent planar equations omit this component.
     flexion = float(np.arctan2(upper_t[2], np.hypot(upper_t[0], upper_t[1])))
     abduction = float(np.arctan2(upper_t[0], np.hypot(upper_t[1], upper_t[2])))
 

@@ -15,9 +15,6 @@ metadata validation and interrupted runs. Fusion checks use synthetic motion.
 Use the checks in `scripts/` for connected devices. Physical grip accuracy and
 sensor placement still need a recording with the electrodes mounted on an arm.
 
-GitHub is configured to run the offline suite and package checks on Windows,
-Linux and macOS, plus code style checks on each push and pull request.
-
 Check code style:
 
 ```powershell

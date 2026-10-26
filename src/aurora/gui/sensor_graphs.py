@@ -12,7 +12,10 @@ from aurora.gui.sensor_plot import draw_traces
 class LiveSignalGraphs:
     """Use the shared sensor reader and refresh charts at most 20 times a second."""
 
-    def __init__(self, parent, calibrate_emg=None, calibrate_strength=None) -> None:
+    def __init__(
+        self, parent, calibrate_emg=None, calibrate_strength=None, *, show_activation=True
+    ) -> None:
+        self.show_activation = show_activation
         self.window = tk.Toplevel(parent)
         self.window.title("AURORA live BLE graphs")
         self.window.geometry("1040x740+550+35")
@@ -49,7 +52,7 @@ class LiveSignalGraphs:
                 )
         tk.Label(
             self.window,
-            text="Live view only. Received samples are shown in order; gaps are counted above.",
+            text="Live view only. Packet totals include earlier gaps; they do not count missing sensors.",
             anchor="w",
             fg="#667085",
         ).grid(row=5, column=0, columnspan=2, sticky="ew", padx=12, pady=8)
@@ -77,7 +80,9 @@ class LiveSignalGraphs:
         self.last_draw = now
         data = reader.graph_data()
         health = data["health"]
-        missing = sum(stream["missing_packets"] for stream in health.values())
+        missing = ", ".join(
+            f"{name.upper()} {stream['missing_packets']}" for name, stream in health.items()
+        )
         errors = sum(stream["decode_errors"] for stream in health.values())
         gaps = sum(stream["sequence_gaps"] for stream in health.values())
         activation = data["activation"]
@@ -88,11 +93,18 @@ class LiveSignalGraphs:
             if envelope is not None
             else ""
         )
+        imu_count = sum(bool(samples) for samples in data["imus"].values())
+        emg_state = "receiving" if data["emg"] else "waiting for samples"
+        grip_status = (
+            f" | grip activation {grip} | {data.get('emg_calibration', '')}" + signal_levels
+            if self.show_activation
+            else ""
+        )
         self.status.set(
-            f"BLE {data['status']} | grip activation {grip} | missing {missing} | "
-            f"sequence gaps {gaps} | decode errors {errors}"
-            + f" | {data.get('emg_calibration', '')}"
-            + signal_levels
+            f"BLE {data['status']} | IMUs {imu_count}/2 | EMG {emg_state} | "
+            f"missed packets (total): {missing} | "
+            f"sequence gaps (total) {gaps} | decode errors {errors}"
+            + grip_status
             + (f" | {data['error']}" if data["error"] else "")
         )
         draw_traces(

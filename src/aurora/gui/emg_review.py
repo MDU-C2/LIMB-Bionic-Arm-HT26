@@ -12,7 +12,7 @@ import numpy as np
 from aurora.json_utils import read_json_object
 from aurora.recording.emg_features import PHASE_NAMES, load_emg
 from aurora.recording.emg_labels import save_labels
-from aurora.recording.saved_signals import Trace, emg_file, with_gaps
+from aurora.recording.saved_signals import Trace, emg_file, video_frame_times, with_gaps
 
 
 class EmgReview:
@@ -31,6 +31,7 @@ class EmgReview:
         self.seconds = (self.times - self.times[0]) / 1e6
         self.capture = None
         self.camera_start = None
+        self.frame_times = None
         self.host = None
         with self.source.open(encoding="utf-8-sig", newline="") as stream:
             stamps = [row.get("synced_host_monotonic_ns", "") for row in csv.DictReader(stream)]
@@ -129,6 +130,11 @@ class EmgReview:
             return
         import cv2
 
+        try:
+            self.frame_times = video_frame_times(directory)
+        except (OSError, ValueError) as error:
+            self.video_status.configure(text=f"Video timestamp mapping unavailable: {error}")
+            return
         self.cv2 = cv2
         self.capture = cv2.VideoCapture(str(directory / "video.mp4"))
         if not self.capture.isOpened():
@@ -143,12 +149,26 @@ class EmgReview:
         from PIL import Image, ImageTk
 
         index = min(len(self.host) - 1, int(np.searchsorted(self.seconds, float(seconds))))
-        video_s = (int(self.host[index]) - self.camera_start) / 1e9
+        host_ns = int(self.host[index])
+        video_s = (host_ns - self.camera_start) / 1e9
         if video_s < 0:
             self.video_label.configure(image="", text="No saved frame at this time.")
             self.video_status.configure(text="This interval is before the saved video.")
             return
-        self.capture.set(self.cv2.CAP_PROP_POS_MSEC, video_s * 1000)
+        if self.frame_times is None:
+            self.capture.set(self.cv2.CAP_PROP_POS_MSEC, video_s * 1000)
+            alignment = "Legacy video time; receipt-to-frame mapping unavailable."
+        else:
+            stamps, frame_indices = self.frame_times
+            # Pick an already received frame; a future frame could suggest early motion.
+            position = int(np.searchsorted(stamps, host_ns, side="right")) - 1
+            if position < 0:
+                self.video_label.configure(image="", text="No saved frame at this time.")
+                self.video_status.configure(text="This interval is before the first saved frame.")
+                return
+            self.capture.set(self.cv2.CAP_PROP_POS_FRAMES, int(frame_indices[position]))
+            age_ms = (host_ns - int(stamps[position])) / 1e6
+            alignment = f"Recorded frame received {age_ms:.1f} ms earlier."
         ok, frame = self.capture.read()
         if not ok:
             self.video_label.configure(image="", text="No saved frame at this time.")
@@ -159,8 +179,8 @@ class EmgReview:
         self.image = ImageTk.PhotoImage(image, master=self.window)
         self.video_label.configure(image=self.image, text="")
         self.video_status.configure(
-            text=f"EMG {float(seconds):.3f} s | video {video_s:.3f} s. "
-            "Alignment uses host receipt times. Video may repeat frames."
+            text=f"EMG {float(seconds):.3f} s. {alignment} "
+            "Camera times mark host receipt, not exposure."
         )
 
     def _select_span(self, start, end):

@@ -38,9 +38,6 @@ class GraspMixin:
 
     def update_grasp(self) -> None:
         """Advance the existing cup interaction and grip logic."""
-        if self.args.control == "camera-imu" and not self.live_feedback_active:
-            self.h_reach_requested = False
-            return
         current_contact_links, self.fingertip_force_n = self.target_contact_feedback()
         self.hand_target_contact = bool(current_contact_links & self.hand_contact_link_indices)
         self.active_fingertips = {
@@ -48,6 +45,9 @@ class GraspMixin:
             for finger, force_n in self.fingertip_force_n.items()
             if force_n >= FINGERTIP_CONTACT_FORCE_N
         }
+        if self.args.control == "camera-imu" and not self.live_feedback_active:
+            self.h_reach_requested = False
+            return
 
         self.h_reach_requested = self.keys[pygame.K_h] or self.bullet_key_down("h")
         if not self.h_reach_requested:

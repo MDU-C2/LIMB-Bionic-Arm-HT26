@@ -15,11 +15,7 @@ class BleDashboardMixin:
         self.ble_reader = None
         self.ble_graphs = None
         self._ble_handoff_pending = False
-        self.ble_sensor_connection = tk.StringVar(value="BLE: starting sensor monitor")
-
-    def _start_ble_dashboard_if_available(self) -> None:
-        if not self._ble_handoff_pending and not self._active_processes():
-            self.open_ble_monitor()
+        self.ble_sensor_connection = tk.StringVar(value="BLE: not connected")
 
     def open_ble_monitor(self) -> None:
         """Show live graphs without creating a recording or opening a COM port."""

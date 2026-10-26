@@ -8,7 +8,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from aurora.gui.project_support import console_python
+from aurora.gui.project_support import console_python, has_python_dependencies
 from aurora.json_utils import read_json_object
 
 
@@ -74,6 +74,16 @@ class EmgToolsMixin:
                 messagebox.showerror("Check training settings", str(error), parent=dialog)
                 return
             python = self.simulation_python or console_python(Path(sys.executable))
+            if any(model in ("ann", "lstm") for model in models) and not has_python_dependencies(
+                python, ("torch", "onnx")
+            ):
+                messagebox.showerror(
+                    "Training packages missing",
+                    "Install requirements-training.txt with the project Python first. "
+                    "LDA can run without these optional packages.",
+                    parent=dialog,
+                )
+                return
             self._start_program(
                 "EMG participant evaluation",
                 "training",

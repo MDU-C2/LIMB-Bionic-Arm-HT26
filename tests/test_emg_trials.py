@@ -33,13 +33,13 @@ class GripTrialTests(unittest.TestCase):
 
     def test_delayed_cue_uses_actual_time_and_keeps_every_phase(self):
         trial = GripTrial(1)
-        self.assertIn("Relax", trial.advance(1_000_000_000))
-        self.assertIn("Close", trial.advance(5_000_000_000))
+        self.assertIn("Subject relaxes", trial.advance(1_000_000_000))
+        self.assertIn("Subject closes", trial.advance(5_000_000_000))
         self.assertEqual(trial.segments[1]["start_s"], 4)
         self.assertIsNone(trial.advance(5_200_000_000))
         self.assertIn("holding", trial.advance(5_500_000_000))
-        self.assertIn("Open", trial.advance(8_500_000_000))
-        self.assertIn("Relax", trial.advance(9_000_000_000))
+        self.assertIn("Subject opens", trial.advance(8_500_000_000))
+        self.assertIn("Subject relaxes", trial.advance(9_000_000_000))
         self.assertIn("finished", trial.advance(12_000_000_000))
         self.assertTrue(trial.complete)
         self.assertEqual(

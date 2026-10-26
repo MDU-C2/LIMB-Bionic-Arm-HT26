@@ -18,6 +18,7 @@ from aurora.sensors.camera.oak_camera import (
     build_pipeline,
     configure_depthai_runtime,
     receive_frame,
+    require_pose_model,
 )
 from aurora.sensors.camera.oak_tracking import analyze_frame
 from aurora.sensors.emg_protocol import EmgActivationEstimator, extract_emg, select_grip_source
@@ -37,12 +38,7 @@ WINDOW = "AURORA | Live camera monitor"
 
 
 def installed_pose_model_complexity(mp) -> int:
-    """Use OSCARR's heavy tracker only when its optional model is installed.
-
-    MediaPipe downloads the heavy model on first use.  Live control must also
-    start on an offline lab machine, so fall back to the full model bundled in
-    the environment instead of triggering a network request at startup.
-    """
+    """Use the heavy pose model if installed, otherwise use the bundled full model."""
     package_directory = Path(mp.__file__).resolve().parent
     heavy_model = package_directory / "modules" / "pose_landmark" / "pose_landmark_heavy.tflite"
     return 2 if heavy_model.is_file() else 1
@@ -63,6 +59,15 @@ class LiveFusionSnapshot:
     emg_activation: float | None = None
     stop_requested: bool = False
     rotation_source: str = "--"
+
+
+@dataclass(frozen=True)
+class CameraFrameSnapshot:
+    frame_sequence: int
+    frame_time_ns: int
+    latest_frame: Any
+    camera_sample: Any
+    camera_observation: dict
 
 
 def _draw_overlay(
@@ -179,6 +184,7 @@ class LiveSensorInput:
         self.latest_frame = None
         self.camera_sample = None
         self.camera_observation = {}
+        self.camera_frame = None
         self.frame_sequence = 0
         self.frame_time_ns = 0
         self.camera_status = "Waiting for OAK-D frame"
@@ -251,6 +257,7 @@ class LiveSensorInput:
             pose_complexity = self.pose_model_complexity
             if pose_complexity is None:
                 pose_complexity = installed_pose_model_complexity(mp)
+            require_pose_model(mp, pose_complexity)
             self.pose = mp.solutions.pose.Pose(
                 static_image_mode=False,
                 model_complexity=pose_complexity,
@@ -362,6 +369,13 @@ class LiveSensorInput:
                 self.camera_observation = observation
                 self.frame_sequence += 1
                 self.accept_camera_observation(observation, now)
+                self.camera_frame = CameraFrameSnapshot(
+                    self.frame_sequence,
+                    frame_time_ns,
+                    self.latest_frame,
+                    self.camera_sample,
+                    observation,
+                )
 
         return self._snapshot()
 

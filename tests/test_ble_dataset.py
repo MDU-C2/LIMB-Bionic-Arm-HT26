@@ -39,6 +39,17 @@ class LabeledBleCaptureTests(unittest.TestCase):
         self.assertEqual(health["emg"]["decode_errors"], 0)
         self.assertEqual(health["imu"]["decode_errors"], 1)
 
+    def test_reordered_packet_does_not_rewind_loss_tracking(self) -> None:
+        recorder = BleRecorder(None, sensors=("emg",))
+        for sequence in (10, 11, 11, 9, 12):
+            recorder.handle("emg", bytearray(CURRENT_EMG_PACKET.pack(0x0101, sequence, 1000, 7)))
+        self.assertEqual(recorder.packet_health()["emg"]["missing_packets"], 0)
+        self.assertEqual(recorder.packet_health()["emg"]["sequence_gaps"], 2)
+        recorder.reset_sequence_tracking()
+        for sequence in (5000, 5001, 5004):
+            recorder.handle("emg", bytearray(CURRENT_EMG_PACKET.pack(0x0101, sequence, 1000, 7)))
+        self.assertEqual(recorder.packet_health()["emg"]["missing_packets"], 2)
+
     def test_sensor_selection_only_creates_requested_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             session = Path(temporary)

@@ -307,7 +307,7 @@ def discover_recording_programs() -> dict[str, Path]:
         return discovered
     for path in source_root.rglob("*.py"):
         if path.name == "record_cup_trials.py":
-            continue  # The cup controls manage this worker's calibration and trial commands.
+            continue  # The cup controls manage this worker's trial commands.
         if not path.name.lower().startswith(RECORDING_ENTRYPOINT_PREFIXES):
             continue
         try:

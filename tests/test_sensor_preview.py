@@ -18,12 +18,38 @@ import numpy as np
 
 import aurora.recording.record_oak_pose as record_oak_pose
 import aurora.recording.record_serial_sensors as record_serial_sensors
+from aurora.gui.sensor_graphs import LiveSignalGraphs
 from aurora.gui.sensor_plot import draw_traces
 from aurora.recording.ble_preview import imu_tilt_degrees, relative_angle
 from aurora.recording.serial_preview import numeric_values
+from aurora.sensors.ble_input import BleSensorReader
+from aurora.sensors.ble_protocol import CURRENT_EMG_PACKET, HIGH_RATE_IMU_PACKET
 
 
 class SensorPreviewTests(unittest.TestCase):
+    def test_packet_totals_do_not_describe_sensor_availability(self):
+        now = [100.0]
+        reader = BleSensorReader(clock=lambda: now[0])
+        for sequence in (1, 4):
+            reader.notification("emg", CURRENT_EMG_PACKET.pack(0x0101, sequence, 1000, 2048))
+        reader.notification("imu", HIGH_RATE_IMU_PACKET.pack(0x0103, 1, 1000, 1000, *([0] * 12)))
+        graphs = LiveSignalGraphs.__new__(LiveSignalGraphs)
+        graphs.window, graphs.status, graphs.zoom_emg, graphs.emg = Mock(), Mock(), Mock(), Mock()
+        graphs.last_draw, graphs.imu = 0, {}
+        graphs.show_activation = False
+        with patch("aurora.gui.sensor_graphs.draw_traces"):
+            graphs.update(reader)
+            text = graphs.status.set.call_args.args[0]
+            self.assertIn("IMUs 2/2 | EMG receiving", text)
+            self.assertIn("missed packets (total): IMU 0, EMG 2", text)
+            self.assertNotIn("grip activation", text)
+            now[0] += 1
+            graphs.last_draw = 0
+            graphs.update(reader)
+            text = graphs.status.set.call_args.args[0]
+            self.assertIn("IMUs 0/2 | EMG waiting for samples", text)
+            self.assertIn("missed packets (total): IMU 0, EMG 2", text)
+
     def test_raw_emg_graph_keeps_small_noise_small_on_the_full_adc_scale(self):
         canvas = Mock()
         canvas.winfo_width.return_value = 600
@@ -127,6 +153,31 @@ class SensorPreviewTests(unittest.TestCase):
         _, _, _, estimated = record_oak_pose.analyze_frame(image, None, pose, mp, cv2, np, "left")
         self.assertEqual(estimated["angle_source"], "mediapipe_world_estimate")
         self.assertAlmostEqual(estimated["angles_deg"]["elbow_flexion"], 90)
+        for index in (4, 5):
+            body.landmark[index].visibility = 0.0
+        _, status, _, hidden = record_oak_pose.analyze_frame(image, None, pose, mp, cv2, np, "left")
+        self.assertTrue(hidden["arm_visible"])
+        self.assertFalse(hidden["reference_visible"])
+        self.assertAlmostEqual(hidden["angles_deg"]["elbow_flexion"], 90)
+        self.assertNotIn("shoulder_flexion", hidden["angles_deg"])
+        self.assertEqual(len(hidden["pose_landmarks"]), len(body.landmark))
+        self.assertEqual(len(hidden["pose_world_landmarks"]), 6)
+        self.assertIn("shoulder angles unavailable", status)
+        _, _, hidden_sample, stereo_hidden = record_oak_pose.analyze_frame(
+            image,
+            np.full((480, 640), 1000, dtype=np.uint16),
+            pose,
+            mp,
+            cv2,
+            np,
+            "left",
+            [[600, 0, 320], [0, 600, 240], [0, 0, 1]],
+        )
+        self.assertEqual(stereo_hidden["angle_source"], "stereo")
+        self.assertIn("elbow_flexion", hidden_sample["angles_deg"])
+        self.assertNotIn("shoulder_flexion", stereo_hidden["angles_deg"])
+        for index in (4, 5):
+            body.landmark[index].visibility = 0.9
         intrinsics = [[600, 0, 320], [0, 600, 240], [0, 0, 1]]
         depth = np.full((480, 640), 1000, dtype=np.uint16)
         _, _, sample, measured = record_oak_pose.analyze_frame(
@@ -360,6 +411,7 @@ class SensorPreviewTests(unittest.TestCase):
         cup_detector.detect.return_value = []
         with (
             patch.object(record_oak_pose, "parse_args", return_value=args),
+            patch.object(record_oak_pose, "require_pose_model"),
             patch.object(record_oak_pose, "CupDetector", return_value=cup_detector),
             patch.object(
                 record_oak_pose,

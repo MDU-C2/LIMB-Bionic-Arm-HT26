@@ -20,6 +20,7 @@ from aurora.sensors.camera.oak_camera import (
     build_pipeline,
     configure_depthai_runtime,
     receive_frame,
+    require_pose_model,
 )
 from aurora.sensors.camera.oak_tracking import analyze_frame
 
@@ -86,6 +87,7 @@ def main(argv=None) -> None:
     import mediapipe as mp
     import numpy as np
 
+    require_pose_model(mp, 1)
     captured: list[dict] = []
     recording = False
     started_ns = 0

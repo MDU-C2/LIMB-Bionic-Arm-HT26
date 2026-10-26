@@ -52,6 +52,7 @@ class BleSensorReader:
         self.clock_sync = ClockSynchronizer()
         self._recording_lock = threading.Lock()
         self._recording = None
+        self._recording_clock_epochs = []
         self.recording_error = ""
         self.connection_generation = 0
         self.decoder = BleRecorder(None, sample_sink=self._samples)
@@ -215,6 +216,20 @@ class BleSensorReader:
                 raise RuntimeError("A BLE trial is already recording")
             self.recording_error = ""
             self._recording = BleRecorder(session, clock_sync=self.clock_sync)
+            self._recording.connection_generation = self.connection_generation
+            self._recording_clock_epochs = [(self.connection_generation, self.clock_sync)]
+
+    def _start_connection(self):
+        # A reconnect needs its own clock fit, including an active raw recording.
+        with self._recording_lock:
+            self.clock_sync = ClockSynchronizer()
+            self.connection_generation += 1
+            self.decoder.reset_sequence_tracking()
+            if self._recording is not None:
+                self._recording.reset_sequence_tracking()
+                self._recording.clock_sync = self.clock_sync
+                self._recording.connection_generation = self.connection_generation
+                self._recording_clock_epochs.append((self.connection_generation, self.clock_sync))
 
     def calibration_profile(self) -> dict:
         with self._lock:
@@ -251,6 +266,10 @@ class BleSensorReader:
                 "packet_health": recorder.packet_health(),
                 "imu_units": recorder.imu_units,
                 "time_sync": recorder.clock_sync.summary(),
+                "time_sync_epochs": [
+                    {"connection_generation": generation, **synchronizer.summary()}
+                    for generation, synchronizer in self._recording_clock_epochs
+                ],
                 "write_error": self.recording_error,
             }
 
@@ -395,8 +414,7 @@ class BleSensorReader:
                 if target is None:
                     raise RuntimeError(f"{self.device} not found")
                 async with BleakClient(target) as client:
-                    self.clock_sync = ClockSynchronizer()
-                    self.connection_generation += 1
+                    self._start_connection()
                     sync_client = None
                     missing = []
                     for sensor in ("imu", "emg"):

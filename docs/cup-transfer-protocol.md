@@ -1,75 +1,72 @@
-# Cup transfer protocol
+# Cup-transfer instructions
 
-Use the same empty cup, table, marker positions and camera position for everyone.
-The table is 60 x 60 cm. Keep the camera in front, with both shoulders, hips,
-the selected arm and all four markers visible. Use subject IDs rather than names.
-Mark the table and chair positions with tape so the setup can be repeated.
+## Setup
 
-## Explain the task
+The subject sits upright at a 60 x 60 cm table with an empty cup. The camera
+faces the subject and includes the shoulders, selected arm, hand and table.
+The hips may be hidden behind the table.
+The subject does not need to see or operate the computer. The operator controls
+recording and gives the start signal.
 
-Say:
-
-> We will record your arm movement and muscle activity while you move this cup.
-> Start with your open hand at marker 1. Reach to the cup at 2, pick it up and
-> place it in the circle at 3. Let go of the cup, then move your empty hand to 4.
-> Keep your trunk still and use the same arm throughout.
-
-The palm faces inward at 1; for the left arm this is toward the subject's right.
-Keep the other arm relaxed beside the body so it does not hide the hips.
-
-Demonstrate once. Let the subject practise before saving trials. Confirm that
-they understand the recording and have agreed to take part.
-
-## Mount and calibrate
-
-1. Place the `0x6B` IMU on the upper arm and `0x6A` on the forearm. Secure both
-   so they do not slip. Keep the selected sensor axes along the arm segments;
-   use the same mounting and signed-axis settings for each subject.
-2. Seat the subject upright. Their hand rests open at 1, thumb up, elbow
-   bent to about 90 degrees and shoulder relaxed. They do not need to copy an exact angle.
-3. Enter the subject ID and arm. Press **Connect camera + BLE**.
-4. Say: “Keep your arm and body still.” Press **Hold still at 1: align IMUs** and wait until
-   the app enables relaxed EMG calibration.
-5. Say: “Keep your hand open and relax the muscle.” Press **Relaxed EMG**.
-6. Say: “When I press this, make a firm grip for three seconds, then relax.”
-   Press **Firm grip**. Repeat this step if the app rejects the signal.
-
-Repeat calibration if an electrode or IMU moves, or Bluetooth reconnects.
-Do not record while calibration is still running.
-
-## Record the three paces
-
-Choose the pace in the app before each trial. Use the same task in all conditions.
-
-| Pace | Say before “go” |
+| Marker | Position or action |
 | --- | --- |
-| Natural | “Move the cup at your own comfortable pace, as you normally would.” |
-| Slow | “Do the same movement more slowly than your normal pace. Keep it continuous.” |
-| Fast | “Do the same movement faster than your normal pace, while keeping control of the cup.” |
+| 1 | Open hand at the starting position, thumb up and elbow comfortably bent |
+| 2 | Cup pickup position |
+| 3 | Cup placement and release circle, to the right of position 2 |
+| 4 | Empty-hand finish position |
 
-Say: “Hand at 1. Ready.” Press **Record** and wait for the recording status,
-then say “Go”. Let the subject complete 1 → 2 → 3 → 4 without extra timing cues.
-Say “finished” after the empty hand
-reaches 4. Press **Stop and save**, or **Mark 4 + save**.
+## Subject instructions
 
-If a second operator is available, they can press **Mark 2** at grasp and
-**Mark 3** at release. These are operator observations; review them against
-the video before using them as training labels.
+Before the cup trials, the subject completes a reference recording under the
+operator's guidance. The subject remains upright and keeps all movements clear
+of the table. The sensors remain fixed. Before each step, the operator positions
+the subject and starts a three-second countdown. The subject begins on the
+operator's GO signal. Preparation between steps has no time limit.
 
-Start with three valid trials per pace and 20 seconds between trials. Rotate
-the pace order across subjects: natural/slow/fast, slow/fast/natural,
-fast/natural/slow. These are collection settings for this protocol; keep them
-fixed once collection starts. Put the cup back at 2 and the hand at 1 before
-the next trial. Do not record the reset movement as part of the transfer.
+1. The upper arm rests beside the body, elbow about 90 degrees, forearm pointing
+   forward and thumb up. The subject holds still for five seconds.
+2. With the elbow angle fixed and thumb up, the subject raises the arm forward
+   first, then lowers it. The movement repeats slowly for ten seconds.
+3. After returning to the starting pose, the subject keeps the upper arm still
+   and bends the elbow further first, then returns. This repeats for ten seconds.
+4. With the elbow about 90 degrees and upper arm still, the subject turns the
+   palm down first, then up, for ten seconds.
+5. The subject returns to the original thumb-up pose and holds still for five
+   seconds. The operator allows time to reset between movements.
+6. With the forearm supported, the subject relaxes the open hand, grips the empty
+   cup and releases it. Relax and grip last five seconds each; release lasts
+   three seconds.
 
-If the cup is dropped, the wrong marker is used or a sensor slips, keep that
-trial and repeat it. Note the reason separately when reviewing the data.
-Finish the subject before changing their ID.
+The operator checks the calibration result before beginning cup trials. A missed
+step, blocked movement or loose sensor requires a new calibration attempt.
 
-The pace field records the instruction, not a measured speed. Older trials
-without this field have unspecified pace. Check actual durations and tracking
-quality during analysis. See the [recording guide](recording-guide.md) for files.
+1. The subject starts with the open hand at position 1. The other arm remains
+   beside the body.
+2. After the operator's start signal, the subject reaches for the cup at 2
+   and grasps it.
+3. The subject moves the cup to 3, places it inside the circle and releases it.
+4. The subject moves the empty hand to 4. This ends the movement.
 
-The four-marker sequence follows Oscar Ågren, *Personalized, Vision-Based Human-Like
-Robotic Arm Control on Real-Time Embedded Systems* (2026), section 7.4.1.
-This version uses three explicit pace conditions and manual trial endings.
+The same movement is recorded at three separate paces:
+
+| Pace | Instruction |
+| --- | --- |
+| Natural | The subject moves at their own comfortable, natural pace. |
+| Slow | The subject moves more slowly than their natural pace, in one continuous movement. |
+| Fast | The subject moves faster than their natural pace while keeping control of the cup. |
+
+One practice attempt is completed before recording. The operator uses a
+three-second countdown and gives the start signal. The default recording window
+is eight seconds after this signal. A longer window is selected before recording
+if needed, especially for slow trials. The subject completes the sequence at the
+requested pace and keeps the empty hand at 4 until the recording ends.
+
+## Repetitions and rest
+
+The subject completes one practice attempt, then three recordings at each pace.
+The operator confirms the requested pace before each attempt. The subject rests
+for at least 20 seconds between recordings. The cup and hand return to their
+starting positions before the next start signal.
+
+If the cup is dropped, the sequence is incorrect or a sensor moves, the operator
+stops the attempt and prepares a repeat. The subject can request a break.

@@ -14,6 +14,7 @@ from aurora.sensors.camera.oak_geometry import (
     camera_point,
     camera_xyz,
     display_pixel,
+    elbow_flexion_deg,
     finger_angles_deg,
     landmark_ids,
     select_hand_near_wrist,
@@ -66,6 +67,11 @@ def add_hand_tracking(
     }
     observation["finger_angles_deg"] = angles
     observation["finger_curl_deg"] = curls
+    if world is not None:
+        observation["hand_world_landmarks"] = {
+            name: [float(point.x), float(point.y), float(point.z)]
+            for name, point in zip(HAND_LANDMARK_NAMES, world.landmark, strict=False)
+        }
     observation["finger_angle_source"] = (
         "mediapipe_hand_world_estimate"
         if world is not None
@@ -111,12 +117,23 @@ def analyze_frame(
     }
     add_cup_tracking(frame, output, observation, cup_detector, cv2)
     if not results.pose_landmarks:
-        return output, f"No person visible - frame subject, {side} arm and hips", None, observation
+        return output, f"No person visible - frame subject, {side} arm and table", None, observation
 
     ids = landmark_ids(mp.solutions.pose, side)
     landmarks = results.pose_landmarks.landmark
     selected = {name: landmarks[index] for name, index in ids.items()}
     observation["person_visible"] = True
+    observation["pose_landmarks"] = [
+        [float(point.x), float(point.y), float(getattr(point, "z", 0)), float(point.visibility)]
+        for point in landmarks
+    ]
+    world = getattr(results, "pose_world_landmarks", None)
+    if world is not None:
+        observation["pose_world_landmarks"] = [
+            [float(point.x), float(point.y), float(point.z)] for point in world.landmark
+        ]
+    observation["pose_landmark_order"] = "mediapipe_pose_index"
+    observation["world_landmark_source"] = "monocular_model_estimate"
     observation["keypoints_2d"] = {
         name: [
             round(float(point.x), 5),
@@ -161,15 +178,39 @@ def analyze_frame(
         }
         observation["depth_valid"] = True
 
+    if world is not None:
+        world_points = {
+            name: [world.landmark[index].x, -world.landmark[index].y, -world.landmark[index].z]
+            for name, index in ids.items()
+        }
+        elbow = elbow_flexion_deg(world_points, side, np)
+        if elbow is not None:
+            observation["angles_deg"] = {"elbow_flexion": elbow}
+            observation["angle_source"] = "mediapipe_world_estimate"
+
+    if sample is not None and intrinsics is not None:
+        arm_points = {
+            name: camera_xyz(point, intrinsics)
+            for name, point in zip(arm_names, arm_depth, strict=True)
+        }
+        sample["keypoints_camera_m"] = arm_points
+        # A visible shoulder line supports the seated reference without hips.
+        other = "right" if side == "left" else "left"
+        opposite = selected[f"{other}_shoulder"]
+        if opposite.visibility >= 0.5:
+            opposite_depth = camera_point(opposite, depth, width, height, np)
+            if opposite_depth is not None:
+                arm_points[f"{other}_shoulder"] = camera_xyz(opposite_depth, intrinsics)
+        elbow = elbow_flexion_deg(arm_points, side, np)
+        if elbow is not None:
+            sample["angles_deg"] = {"elbow_flexion": elbow}
+            observation["angles_deg"] = dict(sample["angles_deg"])
+            observation["angle_source"] = "stereo"
+
     if observation["reference_visible"]:
-        world = getattr(results, "pose_world_landmarks", None)
         if world is not None:
             # MediaPipe world Y increases downward and Z increases away from
             # the camera; use Y up and Z toward the camera for the trunk frame.
-            world_points = {
-                name: [world.landmark[index].x, -world.landmark[index].y, -world.landmark[index].z]
-                for name, index in ids.items()
-            }
             angles = arm_angles_deg(world_points, side, np)
             if angles is not None:
                 observation["angles_deg"] = angles
@@ -214,7 +255,7 @@ def analyze_frame(
         )
 
     if not observation["reference_visible"]:
-        status = f"{side.title()} arm tracked | frame both shoulders and hips for angles"
+        status = f"{side.title()} arm tracked | trunk reference hidden; shoulder angles unavailable"
     elif "angles_deg" not in observation:
         status = f"{side.title()} arm tracked | 3D pose unavailable"
     else:

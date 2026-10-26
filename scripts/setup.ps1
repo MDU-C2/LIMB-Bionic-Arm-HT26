@@ -16,6 +16,22 @@ $env:PYTHONIOENCODING = 'utf-8'
 
 try {
     Set-Location -LiteralPath $repository
+    if ($Start) {
+        $runtimeFile = Join-Path $projectState 'runtime.json'
+        if (-not (Test-Path -LiteralPath $runtimeFile)) {
+            throw 'Run Setup.bat once before using Start.bat.'
+        }
+        $savedRuntime = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json
+        $python = Join-Path $savedRuntime.prefix 'python.exe'
+        if (-not (Test-Path -LiteralPath $python)) {
+            throw 'The project Python is missing. Run Setup.bat to restore it.'
+        }
+        $env:PATH = (Join-Path $savedRuntime.prefix 'Library/bin') + ';' +
+            (Join-Path $savedRuntime.prefix 'Scripts') + ';' + $env:PATH
+        $env:AURORA_SETUP_DIRECTORY = Split-Path -Parent $savedRuntime.prefix
+        & $python $setupScript --launch
+        exit $LASTEXITCODE
+    }
     if (-not [Environment]::Is64BitOperatingSystem -or
         $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or
         $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') {
@@ -46,20 +62,6 @@ try {
     $env:MAMBA_ROOT_PREFIX = Join-Path $stateDirectory 'mamba'
     $env:AURORA_SETUP_DIRECTORY = $stateDirectory
     @{ prefix = $prefix } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $projectState 'runtime.json') -Encoding UTF8
-    $readyFile = Join-Path $stateDirectory 'ready.json'
-
-    if ($Start -and -not $NoLaunch -and (Test-Path -LiteralPath $micromamba) -and
-        (Test-Path -LiteralPath $readyFile) -and
-        (Test-Path -LiteralPath (Join-Path $prefix 'python.exe'))) {
-        & $micromamba --no-rc run -p $prefix python $setupScript --launch
-        $launchExit = $LASTEXITCODE
-        if ($launchExit -ne 10) { exit $launchExit }
-        # Code 10 means dependencies changed or an earlier setup was interrupted.
-    }
-
-    New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
-    # Invalidate readiness before doing any work, including a manual reinstall.
-    if (Test-Path -LiteralPath $readyFile) { Remove-Item -LiteralPath $readyFile }
 
     if (-not (Test-Path -LiteralPath $micromamba)) {
         Write-Host 'Downloading the local Python environment manager...'
@@ -82,7 +84,7 @@ try {
     exit $LASTEXITCODE
 }
 catch {
-    Write-Host "Setup failed: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host 'Check your internet connection and free disk space, then retry.'
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    if (-not $Start) { Write-Host 'Setup needs an internet connection and free disk space.' }
     exit 1
 }

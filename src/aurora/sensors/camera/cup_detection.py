@@ -85,6 +85,8 @@ class CupDetector:
         options = ort.SessionOptions()
         options.intra_op_num_threads = 2
         options.inter_op_num_threads = 1
+        options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        options.add_session_config_entry("session.inter_op.allow_spinning", "0")
         model = model_path.read_bytes()
         self.model_sha256 = hashlib.sha256(model).hexdigest()
         self.session = ort.InferenceSession(

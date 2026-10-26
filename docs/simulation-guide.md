@@ -3,7 +3,7 @@
 Start the GUI and open **Simulation**:
 
 ```powershell
-micromamba run -n aurora python -m aurora.gui.app
+python -m aurora.gui.app
 ```
 
 **Start with keyboard** opens the PyBullet task scene, the compact keyboard
@@ -102,10 +102,8 @@ each option accepts `x`, `y`, `z`, `-x`, `-y`, or `-z`.
 fallback. `--address` can select a known BLE address. Older `--port COM5` commands retain
 legacy serial control for firmware explicitly built with USB transport. That path
 uses **Align and start USB control** and does not use the guided BLE calibration.
-BLE packet
-decoding, fusion, and connection cleanup are checked offline; ESP32/OAK-D live
-operation passed a short connected check; muscle signals and tracked-arm accuracy
-still need validation. See [Hardware validation](hardware-validation.md).
+BLE packet decoding, fusion and connection cleanup are checked offline.
+Muscle signals and mounted-arm tracking accuracy need hardware validation.
 
 **Open camera monitor** in the GUI header shows live OAK-D tracking without
 recording. Close that standalone monitor before starting live interactive

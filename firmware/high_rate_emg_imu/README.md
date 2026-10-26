@@ -16,7 +16,10 @@ The bus also tries SDA/SCL 4/5 and 8/5. Missing IMUs are checked again while
 running. Sensor and transport options are in `include/config.h`.
 
 BLE sends all acquired EMG samples and uses the ESP32 clock for sample times.
-Clock synchronization puts those times on the same clock as the camera.
+Clock synchronization maps those times to the host monotonic clock used for
+camera receipt timestamps. EMG times are reconstructed from the first ADC block
+read and the nominal sample period. This does not establish exact camera exposure
+alignment or detect samples lost inside the ADC buffer.
 USB streaming, when enabled, sends every tenth EMG sample at 400 Hz.
 
 ## Build and flash

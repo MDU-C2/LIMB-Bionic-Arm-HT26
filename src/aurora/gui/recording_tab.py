@@ -60,7 +60,7 @@ class RecordingTabMixin(
         self.recording_grip_trial = tk.BooleanVar(value=False)
         self.recording_grip_repeats = tk.StringVar(value="5")
         self.recording_grip_status = tk.StringVar(
-            value="Follow the grip cues here when recording starts."
+            value="The operator relays the grip cues to the subject."
         )
         self.recording_movement_label = tk.StringVar(value="1")
         self.recording_serial_port = tk.StringVar()

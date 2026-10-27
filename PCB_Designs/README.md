@@ -1,7 +1,7 @@
 PCB designs created for the AURORA project.
-Vad som behövs finnas med i varje PCB fil:
+Each PCB map will contain the following:
   - BOM
-  - Kretsschema
-  - PCB design
-  - Footprint map
-  - Gerber / drill map
+  - A map containing the Gerber and drill files
+  - A map with all needed footprints
+  - Schematic
+  - Design

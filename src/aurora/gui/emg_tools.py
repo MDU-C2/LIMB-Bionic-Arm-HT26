@@ -8,7 +8,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from aurora.gui.project_support import console_python, has_python_dependencies
+from aurora.gui.project_support import console_python
 from aurora.json_utils import read_json_object
 
 
@@ -29,90 +29,7 @@ class EmgToolsMixin:
         )
 
     def _train_emg_dialog(self) -> None:
-        directory = filedialog.askdirectory(
-            title="Choose the folder containing reviewed EMG labels"
-        )
-        if not directory:
-            return
-        dialog = tk.Toplevel(self)
-        dialog.title("AURORA | Compare EMG models")
-        dialog.transient(self)
-        fields = {}
-        rows = (
-            ("Models", "lda ann lstm"),
-            ("Feature sets", "basic full"),
-            ("Epochs", "30"),
-            ("Sequence windows", "4"),
-            ("Personal calibration trials", "0"),
-        )
-        for row, (title, default) in enumerate(rows):
-            ttk.Label(dialog, text=title).grid(row=row, column=0, sticky="w", padx=10, pady=6)
-            fields[title] = tk.StringVar(dialog, value=default)
-            ttk.Entry(dialog, textvariable=fields[title], width=24).grid(row=row, column=1, padx=10)
-        ttk.Label(
-            dialog,
-            text="Needs reviewed labels from at least two subjects.\n"
-            "Calibration uses separate held-out-subject trials.\n"
-            "Results and bundles go to outputs/training. No model is selected automatically.",
-            wraplength=450,
-        ).grid(row=len(rows), column=0, columnspan=2, padx=10, pady=10)
-
-        def start():
-            try:
-                epochs = int(fields["Epochs"].get())
-                length = int(fields["Sequence windows"].get())
-                calibration = int(fields["Personal calibration trials"].get())
-                models = fields["Models"].get().split()
-                features = fields["Feature sets"].get().split()
-                if not (1 <= epochs <= 10000 and 1 <= length <= 20 and calibration >= 0):
-                    raise ValueError("Check epochs, sequence windows and calibration trials.")
-                if not models or not set(models) <= {"lda", "ann", "lstm"}:
-                    raise ValueError("Models: lda, ann, lstm.")
-                if not features or not set(features) <= {"basic", "full"}:
-                    raise ValueError("Feature sets: basic, full.")
-            except ValueError as error:
-                messagebox.showerror("Check training settings", str(error), parent=dialog)
-                return
-            python = self.simulation_python or console_python(Path(sys.executable))
-            if any(model in ("ann", "lstm") for model in models) and not has_python_dependencies(
-                python, ("torch", "onnx")
-            ):
-                messagebox.showerror(
-                    "Training packages missing",
-                    "Install requirements-training.txt with the project Python first. "
-                    "LDA can run without these optional packages.",
-                    parent=dialog,
-                )
-                return
-            self._start_program(
-                "EMG participant evaluation",
-                "training",
-                [
-                    str(python),
-                    "-u",
-                    "-m",
-                    "aurora.ml.train_emg",
-                    "--data",
-                    directory,
-                    "--models",
-                    *models,
-                    "--features",
-                    *features,
-                    "--epochs",
-                    str(epochs),
-                    "--sequence-length",
-                    str(length),
-                    "--calibration-trials",
-                    str(calibration),
-                ],
-                parallel=True,
-                process_key="training:emg",
-            )
-            dialog.destroy()
-
-        ttk.Button(dialog, text="Start comparison", command=start).grid(
-            row=len(rows) + 1, column=0, columnspan=2, pady=10
-        )
+        self.workflow.show_tool("emg_train")
 
     def _select_emg_model(self) -> None:
         filename = filedialog.askopenfilename(
@@ -120,10 +37,11 @@ class EmgToolsMixin:
         )
         if not filename:
             return
-        from aurora.ml.emg_model import EmgModel
-        from aurora.recording.emg_labels import digest
 
-        try:
+        def load(cancelled):
+            from aurora.ml.emg_model import EmgModel
+            from aurora.recording.emg_labels import digest
+
             model = EmgModel(Path(filename).parent, require_review=False)
             evaluation = model.manifest["evaluation"]
             training_path = (model.directory / evaluation["training_file"]).resolve()
@@ -149,9 +67,17 @@ class EmgToolsMixin:
                 "These offline scores do not establish live control accuracy.",
                 "Live use still requires relaxed and strong-grip calibration.",
             ]
-        except (OSError, ValueError, KeyError, TypeError, ImportError) as error:
-            messagebox.showerror("Cannot select this model", str(error))
-            return
+            return model, training_path, candidate, summary
+
+        def ready(result, error):
+            if error is not None:
+                messagebox.showerror("Cannot select this model", str(error))
+                return
+            self._show_emg_model(*result)
+
+        self.background_tasks.submit("emg_model", load, ready)
+
+    def _show_emg_model(self, model, training_path, candidate, summary) -> None:
         dialog = tk.Toplevel(self)
         dialog.title("AURORA | Review EMG model")
         dialog.transient(self)
@@ -191,6 +117,9 @@ class EmgToolsMixin:
                 return
             self.emg_model_path = model.directory
             self.emg_model_label.configure(text=f"EMG model: {candidate}")
+            self.workflow.action_status.set(
+                f"Selected EMG model for the next live session: {candidate}. Rest and grip calibration are still required."
+            )
             self.fusion_grip_source.set("EMG")
             dialog.destroy()
 
@@ -199,3 +128,6 @@ class EmgToolsMixin:
     def _use_amplitude_emg(self) -> None:
         self.emg_model_path = None
         self.emg_model_label.configure(text="EMG model: calibrated amplitude (default)")
+        self.workflow.action_status.set(
+            "Next live session uses calibrated EMG amplitude. Complete rest and deliberate grip calibration before control."
+        )

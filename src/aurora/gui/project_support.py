@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from aurora.paths import (
@@ -42,7 +43,7 @@ POSE_RECORDING_SCRIPT = PACKAGE_DIRECTORY / "simulation" / "pose_playback.py"
 MOVEMENT_RECOGNITION_SCRIPT = PACKAGE_DIRECTORY / "ml" / "recognition.py"
 MOVEMENT_MODEL = MODEL_DIRECTORY / "movement_gru.onnx"
 DEFAULT_RECORDINGS_DIRECTORY = Path("outputs/recordings")
-DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/references")
+DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/movement")
 DEFAULT_SIMULATION_OUTPUT_DIRECTORY = Path("outputs/simulation")
 DOCUMENTATION_FILE = RESOURCE_DIRECTORY / "docs" / "simulation-guide.md"
 GUI_DOCUMENTATION_FILE = GUI_DIR / "README.md"
@@ -66,7 +67,9 @@ RECORDING_EXTENSIONS = {
 }
 RECORDING_ENTRYPOINT_PREFIXES = ("record", "capture")
 RECORDER_DETAILS = {
-    "record_high_rate_serial.py": ("High-rate EMG and dual-IMU USB recorder with aligned CSV."),
+    "record_high_rate_serial.py": (
+        "USB diagnostics with raw lines and per-sample timestamped CSV."
+    ),
     "record_ble_sensors.py": ("Synchronized AURORA BLE recorder for dual-IMU and EMG data."),
     "record_serial_sensors.py": (
         "Serial recorder for newline-delimited JSON and other sensor messages."
@@ -108,12 +111,12 @@ class TabDefinition:
 
 
 TAB_DEFINITIONS = (
-    TabDefinition("simulation", "Simulation", "_build_simulation_tab"),
-    TabDefinition("recording", "Recording", "_build_recording_tab"),
-    TabDefinition("recordings", "Recordings", "_build_recordings_tab"),
-    TabDefinition("motion_ai", "Motion AI", "_build_motion_ai_tab"),
-    TabDefinition("robot", "Firmware", "_build_robot_tab"),
-    TabDefinition("info", "Info", "_build_info_tab"),
+    TabDefinition("connections", "Connect & inspect", "_build_connections_tab"),
+    TabDefinition("recording", "Record", "_build_recording_tab"),
+    TabDefinition("simulation", "Control", "_build_simulation_tab"),
+    TabDefinition("recordings", "Review & export", "_build_recordings_tab"),
+    TabDefinition("advanced", "Advanced Tools", "_build_advanced_tools_tab"),
+    TabDefinition("info", "Help & status", "_build_info_tab"),
 )
 
 
@@ -257,6 +260,7 @@ def simulation_python_candidates() -> list[Path]:
     return unique
 
 
+@lru_cache(maxsize=128)
 def has_python_dependencies(python: Path, modules: tuple[str, ...]) -> bool:
     """Return whether an interpreter imports the requested modules."""
     if not python.is_file():
@@ -279,11 +283,11 @@ def has_python_dependencies(python: Path, modules: tuple[str, ...]) -> bool:
 
 
 def find_simulation_python() -> Path | None:
-    """Find an interpreter that can run simulation and BLE/USB monitoring."""
+    """Find the physics and keyboard-display packages independently of sensors."""
     for candidate in simulation_python_candidates():
         if has_python_dependencies(
             candidate,
-            ("numpy", "scipy", "pybullet", "pygame", "serial", "bleak", "tkinter"),
+            ("numpy", "scipy", "pybullet", "pygame"),
         ):
             return candidate
     return None
@@ -340,6 +344,7 @@ def discover_firmware_projects() -> dict[str, FirmwareProject]:
     return dict(sorted(projects.items()))
 
 
+@lru_cache(maxsize=32)
 def resolve_firmware_tool(project: FirmwareProject) -> tuple[str, ...] | None:
     """Resolve native IDF first, then a project-pinned ESP-IDF PlatformIO."""
     executable = shutil.which(project.executable)

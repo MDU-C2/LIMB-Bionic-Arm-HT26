@@ -16,9 +16,9 @@ from aurora.sensors.camera.oak_camera import DEPTH_SIZE as DEPTH_SIZE
 from aurora.sensors.camera.oak_camera import FRAME_SIZE as FRAME_SIZE
 from aurora.sensors.camera.oak_camera import VIDEO_FPS as VIDEO_FPS
 from aurora.sensors.camera.oak_camera import WINDOW as WINDOW
+from aurora.sensors.camera.oak_camera import PreviewFrames, receive_frame, require_pose_model
 from aurora.sensors.camera.oak_camera import build_pipeline as build_pipeline
 from aurora.sensors.camera.oak_camera import configure_depthai_runtime as configure_depthai_runtime
-from aurora.sensors.camera.oak_camera import receive_frame, require_pose_model
 from aurora.sensors.camera.oak_geometry import ANGLE_LABELS as ANGLE_LABELS
 from aurora.sensors.camera.oak_geometry import FINGER_CHAINS as FINGER_CHAINS
 from aurora.sensors.camera.oak_geometry import HAND_LANDMARK_NAMES as HAND_LANDMARK_NAMES
@@ -171,7 +171,7 @@ def draw_window(frame, status: str, session: CameraSession, cv2, np, observation
 
 
 def main() -> int:
-    enable_ctrl_break_as_interrupt()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     args = parse_args()
     if not math.isfinite(args.duration) or args.duration < 0:
         print("Duration must be finite and non-negative.")
@@ -214,7 +214,7 @@ def main() -> int:
         ):
             controls["toggle"] = True
 
-    latest_depth = None
+    frames = PreviewFrames()
     pose = None
     hands = None
     cup_detector = None
@@ -241,31 +241,35 @@ def main() -> int:
         if getattr(args, "auto_start", False):
             session.start()
         while pipeline.isRunning():
-            if depth_queue is not None:
-                depth_message = depth_queue.tryGet()
-                if depth_message is not None:
-                    latest_depth = depth_message.getFrame()
-            frame_message = video_queue.tryGet()
-            if frame_message is not None:
-                frame, frame_time_ns = receive_frame(frame_message)
-                if frame is not None:
-                    image, status, sample, observation = analyze_frame(
-                        frame,
-                        latest_depth,
-                        pose,
-                        mp,
-                        cv2,
-                        np,
-                        args.side,
-                        intrinsics,
-                        hands,
-                        cup_detector=cup_detector,
-                    )
-                    session.add_frame(image, sample, observation, host_monotonic_ns=frame_time_ns)
-                    canvas, controls["button"] = draw_window(
-                        image, status, session, cv2, np, observation
-                    )
-                    cv2.imshow(WINDOW, canvas)
+            camera, matched = frames.poll(video_queue, depth_queue, receive=receive_frame)
+            if camera is not None:
+                frame, frame_time_ns = camera.latest_frame, camera.frame_time_ns
+                latest_depth = matched.depth_mm if matched is not None else None
+                image, status, sample, observation = analyze_frame(
+                    frame,
+                    latest_depth,
+                    pose,
+                    mp,
+                    cv2,
+                    np,
+                    args.side,
+                    intrinsics,
+                    hands,
+                    cup_detector=cup_detector,
+                )
+                session.add_frame(
+                    image,
+                    sample,
+                    observation,
+                    host_monotonic_ns=frame_time_ns,
+                    frame_sequence=camera.frame_sequence,
+                    device_frame_sequence=camera.device_frame_sequence,
+                    device_time_ns=camera.device_time_ns,
+                )
+                canvas, controls["button"] = draw_window(
+                    image, status, session, cv2, np, observation
+                )
+                cv2.imshow(WINDOW, canvas)
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break

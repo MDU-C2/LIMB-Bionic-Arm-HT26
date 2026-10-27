@@ -105,6 +105,7 @@ class LiveSignalGraphs:
             f"missed packets (total): {missing} | "
             f"sequence gaps (total) {gaps} | decode errors {errors}"
             + grip_status
+            + (" | IMU timing gap: repeat alignment" if data.get("imu_motion_gap") else "")
             + (f" | {data['error']}" if data["error"] else "")
         )
         draw_traces(

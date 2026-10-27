@@ -1,8 +1,9 @@
 # Majd, Christian
-"""Test GUI planning and repository discovery without creating Tk windows."""
+"""Test GUI ownership, discovery and optional native-window shutdown."""
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import os
@@ -28,12 +29,93 @@ from aurora.gui.project_support import (
     resolve_firmware_tool,
 )
 from aurora.gui.recording_tab import DEFAULT_BATCH_SOURCES, DEFAULT_BLE_SENSORS, batch_arguments
+from aurora.gui.serial_dashboard import SerialDashboardMixin
+from aurora.gui.serial_sensor import SerialLine, SerialSensorReader
 from aurora.recording.common import create_session_directory, experiment_metadata
-from aurora.sensors.imu_protocol import i2c_wiring_hint
+from aurora.sensors.imu_protocol import ImuStreamDecoder, i2c_wiring_hint
 from aurora.sensors.live_input import installed_pose_model_complexity
 
 
 class RecordingBatchTests(unittest.TestCase):
+    def test_serial_receipt_precedes_decode_and_each_open_has_a_new_generation(self):
+        reader = SerialSensorReader()
+        clock = [123]
+
+        class Raw(bytes):
+            def decode(self, *args, **kwargs):
+                clock[0] = 999
+                return super().decode(*args, **kwargs)
+
+        class Device:
+            def readline(self):
+                reader._stop.set()
+                return Raw(b"IMU1,1000,0,0,1000,0,0,0\n")
+
+        serial = types.SimpleNamespace(
+            Serial=lambda *args, **kwargs: contextlib.nullcontext(Device()), SerialException=OSError
+        )
+        with (
+            patch.dict(sys.modules, {"serial": serial}),
+            patch("aurora.gui.serial_sensor.time.monotonic_ns", side_effect=lambda: clock[0]),
+        ):
+            for generation, stamp in ((1, 123), (2, 456)):
+                reader._stop.clear()
+                clock[0] = stamp
+                reader._read_loop()
+                connected = reader.events.get_nowait()
+                event, line = reader.events.get_nowait()
+                self.assertEqual(connected[1][2], generation)
+                self.assertEqual(event, "line")
+                self.assertEqual(line.host_monotonic_ns, stamp)
+                self.assertEqual(line.connection_generation, generation)
+                self.assertEqual(reader.events.get_nowait()[0], "stopped")
+
+    def test_serial_line_generation_recovers_even_if_connection_event_was_dropped(self):
+        decoder = ImuStreamDecoder()
+        decoder.feed("IMU1,1000,0,0,1000,0,0,0")
+        events = queue.Queue()
+        events.put(("line", SerialLine("EMG,2000,2048", 1_000_000_000_000, 2)))
+        host = types.SimpleNamespace(
+            serial_imu_decoder=decoder,
+            serial_sensor_reader=types.SimpleNamespace(events=events),
+            imu_monitor=None,
+            latest_serial_sensor_packet=None,
+            _serial_reader_generation=1,
+            _show_serial_sensor_packet=Mock(),
+            after=Mock(),
+            _drain_serial_sensor_events=Mock(),
+        )
+        host._serial_connection_changed = lambda generation: (
+            SerialDashboardMixin._serial_connection_changed(host, generation)
+        )
+        SerialDashboardMixin._drain_serial_sensor_events(host)
+        packet = host._show_serial_sensor_packet.call_args.args[0]
+        self.assertEqual(packet["imus"], {})
+        self.assertEqual(packet["host_monotonic_ns"], 1_000_000_000_000)
+        self.assertTrue(packet["emg"]["connected"])
+
+    def test_close_cancels_child_widget_timers_without_deleting_commands_twice(self):
+        try:
+            window = gui_app.tk.Tk()
+        except gui_app.tk.TclError as error:
+            self.skipTest(f"Native Tk unavailable: {error}")
+        try:
+            window.withdraw()
+            child = gui_app.ttk.Frame(window)
+            child.after(1000, lambda: self.fail("Timer ran after shutdown"))
+            host = types.SimpleNamespace(
+                window=window,
+                _close_processes=lambda: True,
+                _stop_ble_dashboard=lambda: True,
+                _stop_serial_dashboard=lambda: True,
+                background_tasks=Mock(),
+                imu_monitor=None,
+            )
+            gui_app.ProjectGui.close(host)
+        finally:
+            with contextlib.suppress(gui_app.tk.TclError):
+                window.destroy()
+
     def test_label_review_seeks_the_recorded_frame_instead_of_fixed_fps_time(self):
         import numpy as np
 
@@ -132,6 +214,7 @@ class RecordingBatchTests(unittest.TestCase):
                 events.put(("exit", (managed.key, child, managed.name, 1)))
                 manager = types.SimpleNamespace(
                     log_queue=events,
+                    process_exits=queue.Queue(),
                     processes={managed.key: managed},
                     _append_log=Mock(),
                     _show_process_failure=Mock(),
@@ -199,6 +282,32 @@ class RecordingBatchTests(unittest.TestCase):
                 )
             )
         launch.assert_not_called()
+
+    def test_launch_waits_for_serial_port_release(self):
+        manager = types.SimpleNamespace(
+            processes={},
+            _active_processes=lambda: [],
+            _stop_serial_dashboard=Mock(return_value=False),
+            _append_log=Mock(),
+        )
+        with patch("aurora.gui.process_manager.subprocess.Popen") as launch:
+            self.assertFalse(
+                ProcessManagerMixin._start_program(
+                    manager, "Serial recording", "recording", ["python", "recorder.py"]
+                )
+            )
+        launch.assert_not_called()
+
+    def test_log_flood_cannot_discard_process_completion(self):
+        manager = types.SimpleNamespace()
+        ProcessManagerMixin._initialize_process_manager(manager)
+        child = Mock()
+        ProcessManagerMixin._queue_process_event(manager, ("exit", ("job", child, "job", 0)))
+        for index in range(2000):
+            ProcessManagerMixin._queue_process_event(manager, ("line", ("job", "job", str(index))))
+        self.assertEqual(manager.process_exits.get_nowait(), ("exit", ("job", child, "job", 0)))
+        self.assertEqual(manager.log_queue.qsize(), 512)
+        self.assertEqual(manager.log_overruns, 1488)
 
     def test_offline_tools_leave_ble_monitoring_connected(self):
         for kind in ("plot", "processing", "motion_ai"):
@@ -273,28 +382,18 @@ class RecordingBatchTests(unittest.TestCase):
             heavy.touch()
             self.assertEqual(installed_pose_model_complexity(fake_mp), 2)
 
-    def test_gui_relaunch_keeps_spaced_interpreter_path_as_one_argument(self) -> None:
-        simulation_python = ROOT / "environment with spaces" / "python.exe"
+    def test_gui_opens_when_optional_sensor_packages_are_missing(self) -> None:
         with (
             patch("aurora.gui.app.importlib.util.find_spec", return_value=None),
-            patch("aurora.gui.app.find_simulation_python", return_value=simulation_python),
-            patch.object(gui_app.sys, "executable", r"C:\Python313\python.exe"),
-            patch.object(
-                gui_app.sys,
-                "argv",
-                [str((ROOT / "src" / "aurora" / "gui" / "app.py").resolve())],
-            ),
-            patch("aurora.gui.app.subprocess.call", return_value=0) as relaunch,
-            patch.dict(os.environ, {"AURORA_GUI_RELAUNCHED": ""}),
-            self.assertRaises(SystemExit) as exit_context,
+            patch.object(gui_app.sys, "argv", ["aurora"]),
+            patch("aurora.gui.app.subprocess.call") as relaunch,
+            patch("aurora.gui.app.tk.Tk") as create_window,
+            patch("aurora.gui.app.ProjectGui") as create_app,
         ):
             gui_app.main()
-
-        self.assertEqual(exit_context.exception.code, 0)
-        command = relaunch.call_args.args[0]
-        self.assertEqual(command[0], str(simulation_python))
-        self.assertEqual(command[1:3], ["-m", "aurora.gui.app"])
-        self.assertEqual(len(command), 3)
+        relaunch.assert_not_called()
+        create_app.assert_called_once_with(create_window.return_value)
+        create_window.return_value.mainloop.assert_called_once()
 
     def test_default_capture_uses_camera_and_ble_sensors(self) -> None:
         self.assertEqual(

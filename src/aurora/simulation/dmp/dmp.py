@@ -11,6 +11,13 @@ from aurora.simulation.dmp.dmp_signal import canonical_phase as canonical_phase
 from aurora.simulation.dmp.dmp_signal import estimate_derivatives as estimate_derivatives
 from aurora.simulation.dmp.dmp_signal import savgol_estimation as savgol_estimation
 
+SPATIAL_SCALE_EPS_RAD = 0.02
+
+
+def _spatial_scale(displacement, epsilon=SPATIAL_SCALE_EPS_RAD):
+    # Near-equal endpoints retain the demonstrated motion's absolute amplitude.
+    return np.where(np.abs(displacement) < epsilon, 1.0, displacement)
+
 
 @dataclass
 class DMPModel:
@@ -98,7 +105,7 @@ def _compute_f_target(
     q0_joint = float(q_joint[0])
     g_joint = float(q_joint[-1])
     g_minus_q0 = g_joint - q0_joint
-    scale = 1.0 if abs(g_minus_q0) < diff_g_q0_eps else g_minus_q0
+    scale = _spatial_scale(g_minus_q0, diff_g_q0_eps)
 
     f_target = (
         tau**2 * ddq
@@ -210,7 +217,7 @@ def fit(
     phi = _rbf_normalized(phase, centers, widths) * phase[:, None]
 
     ridge_lambda = 1e-6
-    diff_g_q0_eps = 0.02  # About 1.15 degrees when angles are in radians.
+    diff_g_q0_eps = SPATIAL_SCALE_EPS_RAD
     savgol_window_length = 11
     savgol_polyorder = 3
 
@@ -275,6 +282,7 @@ def rollout_simple(
     position = q0.copy()
     velocity = np.zeros_like(position)
     generated[0] = position
+    spatial_scale = _spatial_scale(goal - q0)
 
     time_value = 0.0
     for step_index in range(1, n_steps):
@@ -291,7 +299,7 @@ def rollout_simple(
         acceleration = (
             model.alpha_transformation * model.beta_transformation * (goal - position)
             - model.alpha_transformation * velocity
-            + (goal - q0) * forcing
+            + spatial_scale * forcing
         ) / tau**2
         velocity += acceleration * dt
         position += velocity * dt

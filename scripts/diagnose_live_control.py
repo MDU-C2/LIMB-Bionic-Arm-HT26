@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -25,11 +26,12 @@ def main() -> int:
     parser.add_argument("--depth", action="store_true")
     parser.add_argument("--mode", choices=("kinematic", "dynamic"), default="kinematic")
     parser.add_argument("--address", default="")
+    parser.add_argument("--device", default="AURORA")
     parser.add_argument("--replay", type=Path, help="Use a recorded cup trial instead of hardware")
     parser.add_argument("--out", type=Path, default=ROOT / "outputs/live_control_diagnostic.json")
     args = parser.parse_args()
-    if args.seconds <= 0:
-        parser.error("--seconds must be positive")
+    if not math.isfinite(args.seconds) or args.seconds <= 0:
+        parser.error("--seconds must be finite and positive")
     from aurora.simulation.interactive.runtime import InteractiveSimulator
     from aurora.simulation.interactive.settings import parse_args
 
@@ -44,6 +46,8 @@ def main() -> int:
                 args.mode,
                 "--address",
                 args.address,
+                "--device",
+                args.device,
                 *(["--depth"] if args.depth else []),
                 *(["--replay", str(args.replay)] if args.replay else []),
             ]
@@ -66,9 +70,11 @@ def main() -> int:
             if not simulator.prepare_frame():
                 continue
             simulator.process_events()
-            simulator.update_grasp()
-            simulator.update_arm()
-            simulator.advance_physics()
+            for _ in range(simulator.steps_due):
+                simulator.update_grasp()
+                simulator.update_arm()
+                if not simulator.advance_physics():
+                    break
             simulator.update_camera()
             simulator.draw_hud()
             simulator.update_dashboard()
@@ -112,9 +118,13 @@ def main() -> int:
         report["traceback"] = traceback.format_exc()
         print(report["traceback"], flush=True)
     finally:
-        simulator.close()
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        try:
+            simulator.close()
+        except Exception as error:
+            report["cleanup_error"] = str(error)
+        finally:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return 1 if report["error"] else 0
 
 

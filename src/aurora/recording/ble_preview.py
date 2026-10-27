@@ -47,13 +47,17 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
     windows: dict[str, tk.Toplevel] = {}
     views: dict[str, dict[str, object]] = {}
     status = tk.StringVar(master=root, value=f"Scanning for {args.device}...")
-    command_queue: queue.Queue[str] = queue.Queue()
+    command_queue: queue.Queue[str] = queue.Queue(maxsize=32)
+    command_overruns = 0
 
     emg = [deque(maxlen=400) for _ in range(2)]
     accel = [[deque(maxlen=180) for _axis in range(3)] for _sensor in range(2)]
     gyro = [[deque(maxlen=180) for _axis in range(3)] for _sensor in range(2)]
     piezo = deque(maxlen=300)
     latest_imu: dict[int, list[float]] = {}
+    imu_receipt: dict[int, float] = {}
+    imu_sample_times: dict[int, int] = {}
+    received: dict[str, float] = {}
     tilt_zero: dict[int, tuple[float, float]] = {}
     latest_piezo: float | None = None
     last_packet = 0.0
@@ -103,6 +107,8 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
         """Use the current gravity direction as the displayed neutral pose."""
         updated = 0
         for sensor, values in latest_imu.items():
+            if time.monotonic() - imu_receipt.get(sensor, -math.inf) > 0.5:
+                continue
             tilt = imu_tilt_degrees(values)
             if tilt is not None:
                 tilt_zero[sensor] = tilt
@@ -260,12 +266,16 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
 
     def read_commands() -> None:
         """Receive requests from the GUI without touching Tk from this thread."""
+        nonlocal command_overruns
         for line in sys.stdin:
-            command_queue.put(line.strip())
+            try:
+                command_queue.put_nowait(line.strip())
+            except queue.Full:
+                command_overruns += 1
 
     def drain_commands() -> None:
         try:
-            while True:
+            for _ in range(command_queue.maxsize):
                 command = command_queue.get_nowait().split()
                 if len(command) == 2 and command[0].lower() == "show":
                     show_window(command[1].lower())
@@ -277,27 +287,53 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
 
     def accept(sensor: str, sequence: int, channels: list[list[object]]) -> None:
         nonlocal latest_piezo, last_packet
-        last_packet = time.monotonic()
         previous_sequence = last_sequences.get(sensor)
-        if previous_sequence is not None and sequence != (previous_sequence + 1) & 0xFFFFFFFF:
-            sequence_gaps[sensor] += 1
+        if previous_sequence is not None:
+            distance = (sequence - previous_sequence) & 0xFFFFFFFF
+            if distance != 1:
+                sequence_gaps[sensor] += 1
+            if distance == 0 or distance >= 0x80000000:
+                return
+        last_packet = time.monotonic()
+        received[sensor] = last_packet
         last_sequences[sensor] = sequence
         if sensor == "emg":
             for channel, values in enumerate(channels[:2]):
                 emg[channel].extend(float(value) for value in values)
         elif sensor == "imu":
-            for channel, samples in enumerate(channels[:2]):
-                if samples:
-                    values = [float(value) for value in samples[-1]]
-                    latest_imu[channel] = values
-                    if len(values) >= 6:
-                        for axis in range(3):
-                            accel[channel][axis].append(values[axis])
-                            gyro[channel][axis].append(values[axis + 3])
+            sample_times = getattr(getattr(recorder, "last_packet", None), "sample_times_us", ())
+            for channel in range(2):
+                samples = channels[channel] if channel < len(channels) else []
+                if not samples:
+                    discard_imu(channel)
+                    continue
+                stamp = sample_times[channel] if channel < len(sample_times) else None
+                if stamp is not None:
+                    previous = imu_sample_times.get(channel)
+                    if stamp == previous:
+                        continue
+                    if previous is not None and stamp < previous:
+                        discard_imu(channel)
+                    imu_sample_times[channel] = stamp
+                values = [float(value) for value in samples[-1]]
+                latest_imu[channel] = values
+                imu_receipt[channel] = last_packet
+                if len(values) >= 6:
+                    for axis in range(3):
+                        accel[channel][axis].append(values[axis])
+                        gyro[channel][axis].append(values[axis + 3])
         elif sensor == "piezo" and channels and channels[0]:
             samples = [float(value) for value in channels[0]]
             piezo.extend(samples)
             latest_piezo = sum(samples) / len(samples)
+
+    def discard_imu(channel: int) -> None:
+        latest_imu.pop(channel, None)
+        imu_receipt.pop(channel, None)
+        tilt_zero.pop(channel, None)
+        for traces in (accel[channel], gyro[channel]):
+            for trace in traces:
+                trace.clear()
 
     recorder = recorder_type(None, accept)
 
@@ -313,6 +349,14 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
     def draw() -> None:
         nonlocal rate_started
         now = time.monotonic()
+        for channel, receipt in tuple(imu_receipt.items()):
+            if now - receipt > 0.5:
+                discard_imu(channel)
+        if now - received.get("emg", -math.inf) > 0.5:
+            for channel in emg:
+                channel.clear()
+        if now - received.get("piezo", -math.inf) > 0.5:
+            piezo.clear()
         elapsed = now - rate_started
         if elapsed >= 1.0:
             for name in sensor_uuids:
@@ -365,7 +409,7 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             draw_traces(piezo_view["canvas"], [list(piezo)])
             piezo_view["value"].set(
                 f"Piezo mean: {latest_piezo:.1f} ADC"
-                if latest_piezo is not None
+                if latest_piezo is not None and piezo
                 else "Piezo: waiting for packets"
             )
 
@@ -374,7 +418,8 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             for key, count in recorder.counts.items()
         )
         stale = " (no recent packets)" if last_packet and time.monotonic() - last_packet > 2 else ""
-        status.set(f"Connected: {summary}{stale}")
+        command_status = f"; command overruns {command_overruns}" if command_overruns else ""
+        status.set(f"Connected: IMUs {len(latest_imu)}/2; {summary}{stale}{command_status}")
 
     try:
         scan = (

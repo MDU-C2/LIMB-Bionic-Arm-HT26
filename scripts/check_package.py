@@ -58,7 +58,7 @@ def main() -> int:
             str(wheels),
             cwd=source_root,
         )
-        installation = work / "installed copy"
+        installation = work / "installed copy \u00c5"
         wheel = next(wheels.glob("*.whl"))
         run(
             "-m",
@@ -78,12 +78,30 @@ from aurora.paths import CHECKOUT_DIRECTORY, MODEL_DIRECTORY, PACKAGE_DIRECTORY,
 from aurora.gui.project_support import discover_recording_programs, discover_firmware_projects, DOCUMENTATION_FILE
 assert CHECKOUT_DIRECTORY is None
 assert PACKAGE_DIRECTORY.is_relative_to(pathlib.Path(sys.argv[1]))
+from importlib.metadata import distribution
+entry = next(item for item in distribution('aurora-arm').entry_points if item.name == 'aurora')
+assert entry.load().__module__ == 'aurora.gui.app'
 assert REPOSITORY_ROOT == pathlib.Path.cwd()
 assert DOCUMENTATION_FILE.is_file()
 assert (RESOURCE_DIRECTORY / 'README.md').is_file()
 assert (RESOURCE_DIRECTORY / 'examples/simulation/demo/angles.npz').is_file()
 assert len(discover_recording_programs()) >= 4
 assert len(discover_firmware_projects()) == 1
+from aurora.gui.tool_catalog import TOOLS
+from aurora.gui.workflow_tools import WorkflowTools
+package_arguments = list(sys.argv)
+for tool in TOOLS.values():
+    if not tool.script:
+        continue
+    script = WorkflowTools.script_path(tool.module)
+    assert script.is_file(), script
+    assert script.is_relative_to(RESOURCE_DIRECTORY), script
+    sys.argv = [str(script), '--help']
+    try:
+        runpy.run_path(str(script), run_name='__main__')
+    except SystemExit as error:
+        assert error.code == 0, (script, error.code)
+sys.argv = package_arguments
 for name in ('aurora.ml.train_emg', 'aurora.ml.emg_model', 'aurora.ml.emg_network',
              'aurora.ml.emg_results', 'aurora.gui.emg_review',
              'aurora.recording.emg_labels', 'aurora.sensors.fusion_comparison'):
@@ -130,6 +148,12 @@ assert process() == 0
 assert plot(['--file', str(path), '--spectrum', '--save', 'raw.png']) == 0
 assert plot(['--file', 'emg.filtered.csv', '--save', 'filtered.png']) == 0
 assert hashlib.sha256(path.read_bytes()).digest() == original
+from aurora.gui.tool_jobs import main as export
+from aurora.gui.tool_catalog import arguments_for
+from aurora.paths import RESOURCE_DIRECTORY
+assert export(arguments_for('bundle', {'source': str(path), 'output': 'raw bundle.zip'})) == 0
+assert export(arguments_for('dmp_export', {'source': str(RESOURCE_DIRECTORY / 'examples/simulation/demo'), 'output': 'DMP export'})) == 0
+assert pathlib.Path('DMP export/trajectory.csv').is_file()
 print('Installed raw plotting, spectrum and EMG processing passed.')
 """
         run("-I", "-c", signals, str(installation), cwd=work)

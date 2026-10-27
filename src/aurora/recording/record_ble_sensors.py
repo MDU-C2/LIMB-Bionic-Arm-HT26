@@ -18,6 +18,7 @@ from aurora.recording.common import (
     write_metadata,
 )
 from aurora.recording.emg_trials import GripTrial
+from aurora.recording.packet_writer import PacketWriter
 from aurora.sensors.ble_discovery import find_device
 from aurora.sensors.ble_protocol import CURRENT_EMG_PACKET as CURRENT_EMG_PACKET
 from aurora.sensors.ble_protocol import DEFAULT_SENSORS as DEFAULT_SENSORS
@@ -43,6 +44,12 @@ def parse_args() -> argparse.Namespace:
         "--device", default=os.environ.get("AURORA_BLE_DEVICE", DEFAULT_BLE_DEVICE_NAME)
     )
     parser.add_argument("--address", default="", help="Connect to a known BLE address directly.")
+    parser.add_argument(
+        "--emg-format",
+        choices=("auto", "legacy-prefix", "legacy-fixed"),
+        default="auto",
+        help="Select a headerless EMG layout only for known legacy firmware",
+    )
     parser.add_argument(
         "--preview",
         action="store_true",
@@ -116,7 +123,13 @@ async def record(args: argparse.Namespace) -> int:
         from aurora.recording.ble_preview import run_ble_preview
 
         def preview_recorder(session, sample_sink):
-            return BleRecorder(session, sample_sink, sensors=requested)
+            return BleRecorder(
+                session,
+                sample_sink,
+                sensors=requested,
+                legacy_emg_prefix=getattr(args, "emg_format", "auto") == "legacy-prefix",
+                legacy_emg_fixed=getattr(args, "emg_format", "auto") == "legacy-fixed",
+            )
 
         return await run_ble_preview(
             args,
@@ -153,16 +166,33 @@ async def record(args: argparse.Namespace) -> int:
     capture = LabeledBleCapture(session, dataset_label, args.subject) if dataset_label else None
     clock_sync = ClockSynchronizer()
     recorder = BleRecorder(
-        session,
+        None,
         capture.add_packet if capture is not None else None,
         clock_sync,
         requested,
+        legacy_emg_prefix=getattr(args, "emg_format", "auto") == "legacy-prefix",
+        legacy_emg_fixed=getattr(args, "emg_format", "auto") == "legacy-fixed",
     )
+    writer = PacketWriter(
+        session,
+        clock_sync=clock_sync,
+        connection_generation=0,
+        sensors=requested,
+        legacy_emg_prefix=getattr(args, "emg_format", "auto") == "legacy-prefix",
+        legacy_emg_fixed=getattr(args, "emg_format", "auto") == "legacy-fixed",
+    )
+
+    def notification(sensor, data):
+        receipt_ns = time.monotonic_ns()
+        writer.handle(sensor, data, host_monotonic_ns=receipt_ns)
+        recorder.handle(sensor, data, host_monotonic_ns=receipt_ns)
+
     started = time.monotonic()
     subscribed: list[str] = []
     unavailable: dict[str, str] = {}
     sync_client: BleClockSyncClient | None = None
     grip_summary: dict = {}
+    capture_completed = False
     last_emg_count = 0
     last_emg_time = started
     print(f"Saving to {session}")
@@ -184,7 +214,7 @@ async def record(args: argparse.Namespace) -> int:
                 try:
                     await client.start_notify(
                         uuid,
-                        lambda _sender, data, name=sensor: recorder.handle(name, data),
+                        lambda _sender, data, name=sensor: notification(name, data),
                     )
                     subscribed.append(sensor)
                     print(f"Recording {sensor.upper()}")
@@ -252,10 +282,12 @@ async def record(args: argparse.Namespace) -> int:
                     if capture.seconds_since_progress > 10.0:
                         print("No complete EMG window for 10 seconds; capture is incomplete.")
                         break
+            capture_completed = True
     finally:
         if sync_client is not None:
             await sync_client.close()
         recorder.close()
+        writer.close()
         if grip_trial is not None:
             grip_summary = grip_trial.save(session, time.monotonic_ns())
         if capture is not None:
@@ -275,7 +307,20 @@ async def record(args: argparse.Namespace) -> int:
                 "time_sync": clock_sync.summary(),
                 "duration_seconds": round(time.monotonic() - started, 3),
                 "packet_counts": recorder.counts,
+                "emg_format": getattr(args, "emg_format", "auto"),
                 "packet_health": recorder.packet_health(),
+                "raw_recording": writer.summary(),
+                "capture_complete": capture_completed
+                and bool(subscribed)
+                and not writer.error
+                and not writer.queue_overruns
+                and all(
+                    not item["decode_errors"]
+                    and not item["missing_packets"]
+                    and not item["sample_time_gaps"]
+                    and not item["gyro_saturation_samples"]
+                    for item in recorder.packet_health().values()
+                ),
                 **experiment_metadata(),
                 **({"labeled_capture": capture.summary()} if capture is not None else {}),
                 **({"grip_trial": grip_summary} if grip_trial is not None else {}),
@@ -283,6 +328,9 @@ async def record(args: argparse.Namespace) -> int:
         )
 
     print(f"Saved BLE session to {session}")
+    if writer.error:
+        print(writer.error)
+        return 1
     if grip_trial is not None and (not grip_trial.complete or not grip_summary["features_saved"]):
         print("Grip trial incomplete. Raw samples and cue times were saved.")
         return 1
@@ -294,7 +342,7 @@ async def record(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """Run the asynchronous recorder with clean Ctrl+C handling."""
-    enable_ctrl_break_as_interrupt()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     args = parse_args()
     try:
         from bleak.exc import BleakError

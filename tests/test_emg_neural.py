@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -19,6 +20,10 @@ from aurora.ml.train_emg import fit_model
 from aurora.sensors.emg_window import EmgWindowSettings
 
 
+@unittest.skipUnless(
+    all(importlib.util.find_spec(name) for name in ("torch", "onnx")),
+    "Optional neural training requires torch and onnx",
+)
 class EmgNeuralTests(unittest.TestCase):
     def test_full_comparison_in_a_fresh_process_isolates_neural_training(self):
         from test_emg_learning import recording

@@ -117,6 +117,7 @@ def export_features(
     window_ms: float = 200.0,
     overlap_ms: float = 50.0,
     noise_threshold_adc: float = 5.0,
+    output_directory: Path | None = None,
 ) -> dict:
     """Keep complete windows inside one phase and preserve their amplitude."""
     labels = json.loads(labels_file.read_text(encoding="utf-8"))
@@ -158,7 +159,7 @@ def export_features(
     )
     rms = vectors[:, 0]
     size = int(rate * window_ms / 1000)
-    output = emg_file.with_name("emg_trial_features.csv")
+    output = (output_directory or emg_file.parent) / "emg_trial_features.csv"
     counts = dict.fromkeys(PHASE_NAMES, 0)
     levels: dict[str, list[float]] = {phase: [] for phase in PHASE_NAMES}
     rows = []

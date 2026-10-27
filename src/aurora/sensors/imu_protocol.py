@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from typing import Any
 
 from aurora.sensors.serial_protocol import parse_sensor_line
@@ -30,24 +31,39 @@ class ImuStreamDecoder:
         self.reset()
 
     def reset(self) -> None:
+        self.connection_generation = getattr(self, "connection_generation", 0) + 1
         self.identities: dict[int, int] = {}
         self.samples: dict[int, dict[str, tuple[int, int, int]]] = {}
         self.sequence = 0
         self.jonas_imus: dict[str, dict[str, Any]] = {}
         self.jonas_emg: dict[str, Any] = {}
+        self.latest_time_us: int | None = None
+        self.legacy_receipts: dict[int, int] = {}
 
-    def feed(self, text: str) -> dict[str, Any] | None:
+    def feed(self, text: str, *, host_monotonic_ns=None) -> dict[str, Any] | None:
         """Consume one serial line and return a complete packet when available."""
+        receipt_ns = time.monotonic_ns() if host_monotonic_ns is None else host_monotonic_ns
         line = text.strip()
         jonas = parse_sensor_line(line)
         if jonas is not None:
             sensor, timestamp, values = jonas
+            # Each cached channel retains its own device acquisition time. A
+            # device clock reset invalidates the cache rather than extending it.
+            if self.latest_time_us is not None and timestamp < self.latest_time_us - 500_000:
+                self.reset()
+            self.latest_time_us = max(timestamp, self.latest_time_us or timestamp)
+            role = "shoulder" if sensor == "imu1" else "wrist"
+            previous = self.jonas_emg if sensor == "emg" else self.jonas_imus.get(role, {})
+            if "sample_time_us" in previous and timestamp <= previous["sample_time_us"]:
+                return None
             if sensor == "emg":
                 self.jonas_emg = {
                     "connected": True,
                     "gpio": 0,
                     "adc_channel": 0,
                     "adc_raw": values[0],
+                    "sample_time_us": timestamp,
+                    "host_monotonic_ns": receipt_ns,
                 }
             else:
                 role = "shoulder" if sensor == "imu1" else "wrist"
@@ -55,6 +71,8 @@ class ImuStreamDecoder:
                     "connected": True,
                     "model": "LSM6DSO32",
                     "address": "0x6B" if sensor == "imu1" else "0x6A",
+                    "sample_time_us": timestamp,
+                    "host_monotonic_ns": receipt_ns,
                     "accel_g": dict(
                         zip(("x", "y", "z"), (value / 1000 for value in values[:3]), strict=False)
                     ),
@@ -68,8 +86,19 @@ class ImuStreamDecoder:
                 "sample_time_us": timestamp,
                 "sequence": self.sequence,
                 "updated_sensor": sensor,
-                "imus": self.jonas_imus.copy(),
-                "emg": self.jonas_emg.copy(),
+                "connection_generation": self.connection_generation,
+                "imus": {
+                    role: {
+                        **value,
+                        "connected": 0 <= self.latest_time_us - value["sample_time_us"] <= 500_000,
+                    }
+                    for role, value in self.jonas_imus.items()
+                },
+                "emg": {
+                    **self.jonas_emg,
+                    "connected": bool(self.jonas_emg)
+                    and 0 <= self.latest_time_us - self.jonas_emg["sample_time_us"] <= 500_000,
+                },
             }
             self.sequence = (self.sequence + 1) & 0xFFFFFFFF
             return packet
@@ -111,12 +140,12 @@ class ImuStreamDecoder:
         self.samples.setdefault(sensor_id, {})[kind] = values
         if kind != "gyro" or "acc" not in self.samples[sensor_id]:
             return None
-
-        packet = self._packet()
+        self.legacy_receipts[sensor_id] = receipt_ns
+        packet = self._packet(receipt_ns)
         self.sequence = (self.sequence + 1) & 0xFFFFFFFF
         return packet
 
-    def _packet(self) -> dict[str, Any]:
+    def _packet(self, now_ns) -> dict[str, Any]:
         imus: dict[str, dict[str, Any]] = {}
         for sensor_id, role, address in (
             (1, "shoulder", "0x6B"),
@@ -128,12 +157,14 @@ class ImuStreamDecoder:
             identity = self.identities.get(sensor_id)
             complete = accel is not None and gyro is not None
             has_signal = bool(complete and any((*accel, *gyro)))
-            connected = identity in (None, 0x6C) and has_signal
+            receipt = self.legacy_receipts.get(sensor_id, 0)
+            connected = identity in (None, 0x6C) and has_signal and now_ns - receipt <= 500_000_000
             sensor: dict[str, Any] = {
                 "connected": connected,
                 "model": "LSM6DSO32",
                 "address": address,
                 "serial_format": "legacy_text",
+                "host_monotonic_ns": receipt,
             }
             if connected and accel is not None and gyro is not None:
                 sensor["accel_g"] = {
@@ -222,7 +253,17 @@ def normalize_imu(value: object, role: str) -> dict[str, Any]:
         result["accel_g"] = accel
     if gyro is not None:
         result["gyro_dps"] = gyro
-    for key in ("temperature_c", "sda_pin", "scl_pin", "error"):
+    for key in (
+        "temperature_c",
+        "sda_pin",
+        "scl_pin",
+        "error",
+        "sample_time_us",
+        "host_monotonic_ns",
+        "connection_generation",
+        "gyro_saturated",
+        "validity",
+    ):
         if key in value:
             result[key] = value[key]
     if connected and (accel is None or gyro is None):

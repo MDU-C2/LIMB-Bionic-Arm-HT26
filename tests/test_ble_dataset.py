@@ -26,6 +26,50 @@ from aurora.recording.record_ble_sensors import (
 
 
 class LabeledBleCaptureTests(unittest.TestCase):
+    def test_legacy_windows_cross_sequence_wrap_without_losing_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            root = Path(temporary)
+            capture = LabeledBleCapture(root, "1", "S01")
+            capture.start()
+            recorder = BleRecorder(root, capture.add_packet, legacy_emg_fixed=True)
+            try:
+                for sequence in range(0xFFFFFFFA, 0xFFFFFFFA + 10):
+                    wire = sequence & 0xFFFFFFFF
+                    recorder.handle("emg", struct.pack("<40HI", *([2048] * 40), wire))
+                    recorder.handle("imu", struct.pack("<9fI", *([0] * 9), wire))
+            finally:
+                recorder.close()
+            for sensor, count in (("emg", 400), ("imu", 10)):
+                self.assertEqual(capture.sequence_gaps[sensor], 0)
+                self.assertEqual(len(capture.windows[sensor][0]), 1)
+                self.assertEqual(len(capture.windows[sensor][0][0][1]), count)
+            with (root / "emg.csv").open() as source:
+                self.assertEqual(sum(1 for _ in csv.DictReader(source)), 400)
+            self.assertFalse(capture.summary()["movement_label_verified"])
+
+    def test_legacy_duplicate_and_reordered_packets_stay_raw_without_rewinding_windows(self):
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            root = Path(temporary)
+            capture = LabeledBleCapture(root, "1", "S01")
+            capture.start()
+            recorder = BleRecorder(root, capture.add_packet, legacy_emg_fixed=True)
+            sequences = (*range(5), 4, 3, *range(5, 20))
+            try:
+                for sequence in sequences:
+                    recorder.handle("emg", struct.pack("<40HI", *([sequence] * 40), sequence))
+            finally:
+                recorder.close()
+            self.assertEqual(capture.sequence_gaps["emg"], 2)
+            self.assertEqual(capture.last_sequences["emg"], 19)
+            windows = capture.windows["emg"][0]
+            self.assertEqual(len(windows), 1)
+            self.assertEqual(
+                windows[0][1], [sequence for sequence in range(5, 15) for _ in range(40)]
+            )
+            with (root / "emg.csv").open() as source:
+                self.assertEqual(sum(1 for _ in csv.DictReader(source)), len(sequences) * 40)
+            self.assertFalse(capture.complete)
+
     def test_packet_health_tracks_loss_wraparound_and_decode_failure(self) -> None:
         recorder = BleRecorder(None, sensors=("emg", "imu"))
         for sequence in (0xFFFFFFFF, 0, 3, 3, 2):
@@ -106,7 +150,7 @@ class LabeledBleCaptureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
             session = Path(temporary)
             capture = LabeledBleCapture(session, "1", "S01")
-            recorder = BleRecorder(session, capture.add_packet)
+            recorder = BleRecorder(session, capture.add_packet, legacy_emg_fixed=True)
             capture.start()
             for sequence in range(800):
                 recorder.handle(
@@ -285,6 +329,7 @@ class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
             subject="S01",
             duration=0.0,
             dataset_label="1",
+            emg_format="legacy-fixed",
         )
         with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
             with (

@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from aurora.sensors.fusion import anatomical_reference_angles, interactive_control_targets
+from aurora.sensors.fusion import anatomical_reference_angles
 from aurora.sensors.replay_input import RecordedSensorInput
 from aurora.simulation.interactive.settings import LIVE_ALIGNMENT_POSE_DEG
 
@@ -26,7 +26,7 @@ def check(trial: Path, output: Path) -> dict:
         while stamp <= live.duration:
             snapshot = live.advance_to(stamp)
             angles = snapshot.angles or {}
-            targets = interactive_control_targets(angles) or {}
+            targets = snapshot.robot_targets or {}
             if not all(math.isfinite(value) for value in (*angles.values(), *targets.values())):
                 raise ValueError("Non-finite angle in replay")
             rows.append(

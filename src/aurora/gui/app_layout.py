@@ -84,7 +84,7 @@ class AppLayoutMixin:
         )
         ttk.Label(
             header,
-            text="Simulation, dual-IMU capture, camera fusion, and firmware",
+            text="Connect, inspect, calibrate, record or control, then review",
             style="HeaderSub.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
         self.status_label = tk.Label(

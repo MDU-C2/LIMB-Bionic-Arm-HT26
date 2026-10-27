@@ -44,6 +44,8 @@ class CameraSession:
         self.source_frames = 0
         self.writer = None
         self.session = None
+        self._finalized = False
+        self._closing = False
         self.started = 0.0
         self.started_host_monotonic_ns = 0
         self.started_utc = ""
@@ -53,9 +55,21 @@ class CameraSession:
 
     @property
     def recording(self) -> bool:
-        return self.writer is not None
+        return self.writer is not None and not self._closing
 
     def start(self) -> None:
+        if self.session is not None and not self._finalized:
+            raise RuntimeError(
+                "Finish closing the previous camera recording before starting another"
+            )
+        origin = (self.metadata or {}).get("trial_started_host_monotonic_ns", time.monotonic_ns())
+        if type(origin) is not int or origin <= 0:
+            raise ValueError("Camera recording needs a positive host monotonic start time")
+        self.started_host_monotonic_ns = origin
+        self.started = origin / 1e9
+        self.started_utc = utc_now()
+        self.video_frames = self.source_frames = self.depth_frames = 0
+        self.pose_frames, self.observations = [], []
         if self.directory is None:
             self.session = create_session_directory("oak_pose", self.subject)
         else:
@@ -74,31 +88,27 @@ class CameraSession:
             self.session = None
             raise RuntimeError("Could not open video.mp4 in the selected output folder")
         self.writer = writer
-        if self.raw_video:
-            try:
-                self.frame_times = (self.session / "frame_times.jsonl").open(
+        self._finalized = False
+        self._closing = False
+        try:
+            self.frame_times = (self.session / "frame_times.jsonl").open(
+                "w", encoding="utf-8", buffering=1
+            )
+            if self.raw_video and self.depth_enabled:
+                (self.session / "depth").mkdir()
+                self.depth_times = (self.session / "depth_times.jsonl").open(
                     "w", encoding="utf-8", buffering=1
                 )
-                if self.depth_enabled:
-                    (self.session / "depth").mkdir()
-                    self.depth_times = (self.session / "depth_times.jsonl").open(
-                        "w", encoding="utf-8", buffering=1
-                    )
-            except OSError:
-                writer.release()
-                self.writer = None
-                if self.frame_times is not None:
-                    self.frame_times.close()
-                    self.frame_times = None
-                raise
-        self.started_host_monotonic_ns = time.monotonic_ns()
-        self.started = self.started_host_monotonic_ns / 1e9
-        self.started_utc = utc_now()
-        self.video_frames = 0
-        self.source_frames = 0
-        self.depth_frames = 0
-        self.pose_frames = []
-        self.observations = []
+        except Exception as error:
+            self.metadata = {
+                **(self.metadata or {}),
+                "complete": False,
+                "status": "incomplete",
+                "start_error": str(error),
+            }
+            with contextlib.suppress(Exception):
+                self.stop()
+            raise
         print(f"REC started: {self.session}")
 
     def add_observation(self, sample, observation, *, host_monotonic_ns: int) -> None:
@@ -169,7 +179,11 @@ class CameraSession:
 
     def add_depth(self, frame) -> None:
         """Keep received depth maps lossless; pose processing must not replace them."""
-        if self.depth_times is None or frame.frame_time_ns < self.started_host_monotonic_ns:
+        if (
+            self._closing
+            or self.depth_times is None
+            or frame.frame_time_ns < self.started_host_monotonic_ns
+        ):
             return
         if frame.depth_mm.ndim != 2 or frame.depth_mm.dtype != "uint16":
             raise ValueError("Depth recording requires a two-dimensional uint16 millimetre map")
@@ -198,19 +212,27 @@ class CameraSession:
         self.depth_frames += 1
 
     def stop(self) -> None:
-        if not self.recording:
+        if self.session is None or self._finalized:
             return
+        self._closing = True
         elapsed = time.monotonic() - self.started
-        writer, self.writer = self.writer, None
-        try:
-            writer.release()
-        finally:
-            if self.frame_times is not None:
-                self.frame_times.close()
-                self.frame_times = None
-            if self.depth_times is not None:
-                self.depth_times.close()
-                self.depth_times = None
+        errors = []
+        for name, method in (
+            ("writer", "release"),
+            ("frame_times", "close"),
+            ("depth_times", "close"),
+        ):
+            resource = getattr(self, name)
+            if resource is None:
+                continue
+            try:
+                getattr(resource, method)()
+            except Exception as error:
+                errors.append(f"{name}: {error}")
+            else:
+                setattr(self, name, None)
+        if errors:
+            raise RuntimeError("; ".join(errors))
         pose_path = self.session / "pose.json"
         write_json(
             pose_path,
@@ -228,7 +250,7 @@ class CameraSession:
                 else None,
                 "video_kind": "raw_rgb" if self.raw_video else "annotated_preview",
                 "video_mirrored": not self.raw_video,
-                "frame_times_file": "frame_times.jsonl" if self.raw_video else None,
+                "frame_times_file": "frame_times.jsonl",
                 "coordinate_system": "rgb_pixels_stereo_depth",
                 "timestamp_reference": FRAME_TIMESTAMP_REFERENCE,
                 "side": self.side,
@@ -273,7 +295,7 @@ class CameraSession:
                 if self.raw_video and self.depth_enabled
                 else None,
                 "video_kind": "raw_rgb" if self.raw_video else "annotated_preview",
-                "frame_times_file": "frame_times.jsonl" if self.raw_video else None,
+                "frame_times_file": "frame_times.jsonl",
                 "video_fps": VIDEO_FPS,
                 "stereo_depth_enabled": self.depth_enabled,
                 "video_mirrored": not self.raw_video,
@@ -291,4 +313,5 @@ class CameraSession:
                 ),
             },
         )
+        self._finalized = True
         print(f"REC saved: {self.session} ({len(self.pose_frames)} depth-backed pose frames)")

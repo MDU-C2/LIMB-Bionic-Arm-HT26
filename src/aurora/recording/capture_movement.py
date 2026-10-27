@@ -13,10 +13,16 @@ from datetime import datetime
 from pathlib import Path
 
 from aurora.paths import RECORDINGS_DIRECTORY
-from aurora.recording.common import safe_label, utc_now
+from aurora.recording.common import (
+    enable_ctrl_break_as_interrupt,
+    safe_label,
+    utc_now,
+    verify_subject_files,
+)
 from aurora.sensors.camera.hand_tracking import ArmHandTracker
 from aurora.sensors.camera.oak_camera import (
     FRAME_TIMESTAMP_REFERENCE,
+    PreviewFrames,
     build_pipeline,
     configure_depthai_runtime,
     receive_frame,
@@ -60,6 +66,7 @@ def next_trial_number(folder: Path) -> int:
 def save_capture(folder: Path, subject_id: str, side: str, frames: list[dict]) -> Path:
     if not frames:
         raise ValueError("No depth-backed movement frames to save")
+    verify_subject_files(folder.glob("T*_*.json"), subject_id)
     folder.mkdir(parents=True, exist_ok=True)
     trial_id = f"T{next_trial_number(folder):03d}"
     path = folder / f"{trial_id}_{datetime.now():%Y%m%d_%H%M%S_%f}.json"
@@ -81,6 +88,7 @@ def save_capture(folder: Path, subject_id: str, side: str, frames: list[dict]) -
 
 def main(argv=None) -> None:
     args = arguments(argv)
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     configure_depthai_runtime()
     import cv2
     import depthai as dai
@@ -92,7 +100,7 @@ def main(argv=None) -> None:
     recording = False
     started_ns = 0
     pipeline, video_queue, depth_queue = build_pipeline(dai, use_depth=True)
-    depth = None
+    frames = PreviewFrames()
     try:
         with (
             mp.solutions.pose.Pose(model_complexity=1, min_detection_confidence=0.5) as pose,
@@ -100,16 +108,14 @@ def main(argv=None) -> None:
         ):
             pipeline.start()
             while pipeline.isRunning():
-                depth_message = depth_queue.tryGet()
-                if depth_message is not None:
-                    depth = depth_message.getFrame()
-                message = video_queue.tryGet()
-                if message is None:
+                camera, matched = frames.poll(video_queue, depth_queue, receive=receive_frame)
+                if camera is None:
+                    if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
+                        return
                     time.sleep(0.005)
                     continue
-                frame, stamp = receive_frame(message)
-                if frame is None:
-                    continue
+                frame, stamp = camera.latest_frame, camera.frame_time_ns
+                depth = matched.depth_mm if matched is not None else None
                 image, _status, sample, observation = analyze_frame(
                     frame, depth, pose, mp, cv2, np, args.side, hands=hands
                 )

@@ -19,10 +19,32 @@ from aurora.sensors.camera.cup_detection import (
     prepare_frame,
 )
 from aurora.sensors.camera.hand_tracking import ArmHandTracker, restore_hand_coordinates, wrist_crop
+from aurora.sensors.camera.oak_geometry import arm_angles_deg
 from aurora.sensors.camera.oak_tracking import analyze_frame
 
 
 class VisionTrackingTests(unittest.TestCase):
+    def test_camera_angles_follow_the_trunk_when_the_whole_body_moves(self):
+        from scipy.spatial.transform import Rotation
+
+        points = dict(
+            left_shoulder=[1, 1, 0],
+            right_shoulder=[-1, 1, 0],
+            left_hip=[1, 0, 0],
+            right_hip=[-1, 0, 0],
+            left_elbow=[1.2, 0.3, 0.4],
+            left_wrist=[1.1, 0.5, 1.1],
+            right_elbow=[-1.2, 0.3, 0.4],
+            right_wrist=[-1.1, 0.5, 1.1],
+        )
+        rotation = Rotation.from_euler("xyz", [30, -20, 50], degrees=True).as_matrix()
+        moved = {name: rotation @ value + [2, -3, 1] for name, value in points.items()}
+        for side in ("left", "right"):
+            reference = arm_angles_deg(points, side, np)
+            measured = arm_angles_deg(moved, side, np)
+            for name in reference:
+                self.assertAlmostEqual(measured[name], reference[name], places=9)
+
     def test_letterbox_preserves_colour_and_aspect_ratio(self):
         frame = np.full((100, 200, 3), (10, 20, 30), dtype=np.uint8)
         tensor, scale, padding = prepare_frame(frame, (640, 640), cv2, np)

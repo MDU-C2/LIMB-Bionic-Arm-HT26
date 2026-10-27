@@ -23,8 +23,8 @@ Power the ESP32 and connect to `AURORA` through the app. The ESP32 can use
 a separate USB power source while sending data over BLE. Earlier LIMB firmware
 advertising `LIMBServer` is also supported.
 
-The Recording tab saves raw EMG, IMU and camera data for each cup transfer. The Simulation tab runs the arm with keyboard or live sensor control.
-The Firmware tab builds and flashes the ESP32. See the
+Record saves raw EMG, IMU and camera data for each cup transfer. Control runs the arm with keyboard, live sensors or recorded replay. Review & export opens saved signals and derived outputs.
+Advanced Tools contains training, DMP/manual joints, diagnostics and firmware. See the
 [recording guide](docs/recording-guide.md) and
 [simulation guide](docs/simulation-guide.md) for the controls and calibration steps.
 

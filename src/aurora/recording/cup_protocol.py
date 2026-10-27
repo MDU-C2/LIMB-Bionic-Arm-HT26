@@ -61,8 +61,9 @@ REFERENCE_STEPS = (
 class CupReferenceGuide:
     """Wait for the operator before timing each saved reference movement."""
 
-    def __init__(self, *, clock=None):
+    def __init__(self, *, clock=None, steps=REFERENCE_STEPS):
         self.clock = clock or time.monotonic_ns
+        self.steps = steps
         self.phase = "reference_prepare"
         self.phase_started_ns = self.clock()
         self.step = 0
@@ -87,9 +88,7 @@ class CupReferenceGuide:
             return
         now = self.clock()
         duration = (
-            COUNTDOWN_SECONDS
-            if self.phase == "reference_countdown"
-            else REFERENCE_STEPS[self.step][1]
+            COUNTDOWN_SECONDS if self.phase == "reference_countdown" else self.steps[self.step][1]
         )
         if self.active and (now - self.phase_started_ns) / 1e9 >= duration:
             self.phase_started_ns = now
@@ -97,7 +96,7 @@ class CupReferenceGuide:
                 self.phase = "reference"
                 return
             self.step += 1
-            if self.step == len(REFERENCE_STEPS):
+            if self.step == len(self.steps):
                 self.completed = True
                 self.phase = "ready"
             else:
@@ -114,10 +113,10 @@ class CupReferenceGuide:
                 START_POSE,
             )
         else:
-            cue, duration, instruction = REFERENCE_STEPS[self.step]
+            cue, duration, instruction = self.steps[self.step]
         prompt = "Operator guides each step. Raw signals and video are saved."
         if self.phase == "reference_prepare":
-            cue = f"{self.step + 1}/{len(REFERENCE_STEPS)}: {cue}"
+            cue = f"{self.step + 1}/{len(self.steps)}: {cue}"
             prompt = "Read the instruction and position the subject. Press Start step when ready."
             remaining = 0
         elif self.phase == "reference_countdown":

@@ -57,10 +57,10 @@ The forearm calculation projects common gyro motion onto its axis at the measure
 elbow bend before subtracting it. Upper-arm camera observations correct the gyro
 state once per new frame, so IMU movement is retained between observations.
 
-The gyros use decoded degrees/s and device sample timing, rather than copying
-HT25's rad/s conversion into the current packet path. Half a second of rest
-establishes gyro bias. Stored commands stay within the ranges above to avoid
-integration beyond a stop delaying reverse motion. Upper-arm drift can be
+The gyros use decoded degrees/s and device sample timing. Functional calibration
+fits mounting rotations and gyro bias from the still reference. Configured-axis
+diagnostics use a half-second rest baseline. Integrated human measurements remain
+unclipped; command mapping applies the robot ranges above. Upper-arm drift can be
 corrected by camera; the old camera mapping has no forearm-twist observation.
 Wrist drift therefore needs recalibration. Q/E and Left/Right provide manual
 fallback for unavailable twist targets. See [mounting checks](simulation-guide.md#mounting-and-twist-calibration).

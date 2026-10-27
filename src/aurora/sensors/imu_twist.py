@@ -54,13 +54,21 @@ class ImuTwistEstimator:
         return vector[bend], sign * vector[length], sign * lateral_sign * vector[lateral]
 
     def update(
-        self, gyros: dict[str, tuple[float, float, float]], dt: float, bend_rad: float = 0.0
+        self,
+        gyros: dict[str, tuple[float, float, float]],
+        dt: float,
+        bend_rad: float = 0.0,
+        *,
+        sample_dt_s: dict[str, float] | None = None,
     ) -> dict[str, float]:
         """Use degrees/s and elapsed sample time; hold still for the rest baseline."""
         if not math.isfinite(dt) or dt <= 0 or dt > 0.5:
             self.reset()
             return {}
         rates: dict[str, tuple[float, float, float]] = {}
+        role_dt = {
+            role: dt if sample_dt_s is None else sample_dt_s.get(role, 0.0) for role in self.axes
+        }
         for role in self.axes:
             gyro = gyros.get(role)
             if gyro is None:
@@ -72,14 +80,19 @@ class ImuTwistEstimator:
                     self.camera_aligned = False
                 continue
             if role not in self.bias:
+                elapsed = role_dt[role]
+                if elapsed <= 0:
+                    continue
                 # Moving during calibration must not become the resting gyro bias.
                 if max(abs(value) for value in gyro) > 5.0:
                     self.baseline_time[role] = 0.0
                     self.baseline_sum[role] = (0.0, 0.0, 0.0)
                     continue
-                duration = self.baseline_time.get(role, 0.0) + dt
+                duration = self.baseline_time.get(role, 0.0) + elapsed
                 previous = self.baseline_sum.get(role, (0.0, 0.0, 0.0))
-                total = tuple(old + value * dt for old, value in zip(previous, gyro, strict=True))
+                total = tuple(
+                    old + value * elapsed for old, value in zip(previous, gyro, strict=True)
+                )
                 self.baseline_time[role], self.baseline_sum[role] = duration, total
                 if duration + 1e-9 >= self.baseline_s:
                     self.bias[role] = tuple(value / duration for value in total)
@@ -93,7 +106,7 @@ class ImuTwistEstimator:
             shoulder_rate = rates.get("shoulder", (0.0, 0.0, 0.0))[1]
             if abs(shoulder_rate) <= self.deadzone_dps:
                 shoulder_rate = 0.0
-            self.shoulder_angle += shoulder_rate * dt
+            self.shoulder_angle += shoulder_rate * role_dt["shoulder"]
             # The camera's medial-positive proxy has the opposite left-CAD sign.
             result["shoulder_rotation_proxy"] = -self.shoulder_angle
         dual_ready = all(role in self.bias for role in self.axes)
@@ -106,10 +119,12 @@ class ImuTwistEstimator:
                 shared_rate = upper_gyro[1] * math.cos(bend_rad) + upper_gyro[2] * math.sin(
                     bend_rad
                 )
-                relative_rate = forearm_gyro[1] - shared_rate
-                if abs(relative_rate) <= self.deadzone_dps:
-                    relative_rate = 0.0
-                self.wrist_angle += relative_rate * dt
+                # Integrate each acquired channel once. Held upper-arm samples
+                # must not be integrated again on a forearm-only notification.
+                if abs(forearm_gyro[1] - shared_rate) > self.deadzone_dps:
+                    self.wrist_angle += (
+                        forearm_gyro[1] * role_dt["wrist"] - shared_rate * role_dt["shoulder"]
+                    )
             else:
                 self.wrist_angle = self.wrist_home
             result["wrist_rotation"] = self.wrist_angle

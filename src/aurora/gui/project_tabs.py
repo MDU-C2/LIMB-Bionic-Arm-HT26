@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, ttk
 
 from aurora.gui.project_support import (
@@ -12,15 +14,14 @@ from aurora.gui.project_support import (
     GUI_DOCUMENTATION_FILE,
     INK,
     INTERACTIVE_SIMULATION_SCRIPT,
-    MOVEMENT_MODEL,
     MOVEMENT_RECOGNITION_SCRIPT,
+    console_python,
     discover_firmware_projects,
     display_path,
     environment_name,
     find_simulation_python,
     firmware_command,
     resolve_firmware_tool,
-    serial_ports,
 )
 from aurora.gui.project_support import has_python_dependencies as _has_python_dependencies
 from aurora.paths import RESOURCE_DIRECTORY
@@ -156,11 +157,6 @@ class ProjectTabsMixin:
         else:
             self.firmware_project.set("")
 
-        ports = serial_ports()
-        current_port = self.serial_port.get()
-        self.port_box.configure(values=ports)
-        if not current_port and ports:
-            self.serial_port.set(ports[0])
         self._firmware_selection_changed()
 
     def _firmware_selection_changed(self) -> None:
@@ -178,7 +174,7 @@ class ProjectTabsMixin:
             self.firmware_status.configure(
                 text=(
                     f"{project.system} project found, but its build tool is missing. "
-                    "Run Setup.bat (Windows) or Setup.command (macOS/Linux), "
+                    "Install the optional firmware tools from the setup notes, "
                     "then press Refresh."
                 )
             )
@@ -194,8 +190,8 @@ class ProjectTabsMixin:
         if command is None:
             messagebox.showerror(
                 "Tool unavailable",
-                "Run Setup.bat (Windows) or Setup.command (macOS/Linux) to "
-                f"install the build tool for {project.system}.",
+                f"The build tool for {project.system} is missing. "
+                "Install the optional firmware tools from the setup notes, then press Refresh.",
             )
             return
 
@@ -208,9 +204,6 @@ class ProjectTabsMixin:
             f"Flash {display_path(project.directory)} to {port}?",
         ):
             return
-
-        if action in {"flash", "monitor"}:
-            self._stop_serial_dashboard()
 
         self._start_program(
             f"Firmware {action}",
@@ -228,11 +221,8 @@ class ProjectTabsMixin:
         )
         motion_ai_ready = (
             MOVEMENT_RECOGNITION_SCRIPT.is_file()
-            and MOVEMENT_MODEL.is_file()
+            and self.movement_model_path.is_file()
             and self.movement_ai_ready
-        )
-        self.motion_ai_status.set(
-            "Model ready" if motion_ai_ready else "Model or ONNX Runtime missing"
         )
         active_processes = self._active_processes()
         active = ", ".join(item.name for item in active_processes) or "None"
@@ -259,12 +249,12 @@ class ProjectTabsMixin:
             "Paths inside the repository are stored relative to the project root. "
             "The GUI can run from any clone location without path edits.",
             "",
-            "SUPPORTED ENTRY POINTS\n",
-            "Simulation: interactive task scene with keyboard or live camera + IMU + EMG control",
-            "Motion AI: pose-recording playback and GRU profile recognition",
-            "Recording: BLE EMG and both IMUs, with repeated camera cup-transfer trials",
-            "Firmware: ESP-IDF projects built and flashed through the project environment",
-            "Recording settings are passed to record*.py and capture*.py programs",
+            "WORKFLOWS\n",
+            "Connect & inspect: BLE, USB and camera signals before calibration",
+            "Record: subject calibration, practice and separate cup trials",
+            "Control: keyboard, guided live input and recorded sensor replay",
+            "Review & export: plots, EMG processing, reviewed labels and lossless bundles",
+            "Advanced Tools: movement profiles, EMG models, DMPs, raw capture, diagnostics and firmware",
         ]
         self.info_text.configure(state="normal")
         self.info_text.delete("1.0", "end")
@@ -273,11 +263,9 @@ class ProjectTabsMixin:
 
     def _refresh_all(self) -> None:
         """Refresh every discovery-backed area of the launcher."""
-        self.simulation_python = find_simulation_python()
-        self.movement_ai_ready = bool(
-            self.simulation_python
-            and _has_python_dependencies(self.simulation_python, ("numpy", "onnxruntime"))
-        )
+        _has_python_dependencies.cache_clear()
+        resolve_firmware_tool.cache_clear()
+        self._refresh_capabilities()
         self._refresh_recording_programs()
         self._refresh_recording_ports()
         self._refresh_recordings()
@@ -288,3 +276,35 @@ class ProjectTabsMixin:
         elif not self._active_processes():
             self._set_status("Ready", "ready")
         self._append_log("Project status refreshed.\n")
+
+    def _refresh_capabilities(self) -> None:
+        self.capability_status = "Checking optional capabilities..."
+
+        def check(cancelled):
+            python = find_simulation_python()
+            movement = bool(
+                not cancelled.is_set()
+                and _has_python_dependencies(
+                    console_python(Path(sys.executable)), ("numpy", "onnxruntime")
+                )
+            )
+            return python, movement
+
+        def ready(result, error):
+            if error is not None:
+                self.capability_status = f"Capability check failed: {error}"
+            else:
+                self.simulation_python, self.movement_ai_ready = result
+                self.capability_status = (
+                    "Simulation ready"
+                    if self.simulation_python
+                    else "Simulation packages missing; see Setup and checks"
+                )
+            self._refresh_info()
+            self._update_controls()
+            if not self._active_processes():
+                self._set_status(
+                    self.capability_status, "ready" if self.simulation_python else "warning"
+                )
+
+        self.background_tasks.submit("capabilities", check, ready)

@@ -49,3 +49,29 @@ python scripts/check_dual_imu.py --port COM5 --require-emg
 Run `python scripts/check_project.py` for offline checks. Training tests need the
 training packages; style checks are listed in [tests](../tests/README.md).
 `python scripts/check_package.py` checks a built package and its resources.
+
+To use the saved Windows environment from PowerShell:
+
+```powershell
+$runtimePrefix = (Get-Content -Raw .aurora/runtime.json | ConvertFrom-Json).prefix
+$env:PATH = "$runtimePrefix/Library/bin;$env:PATH"
+& "$runtimePrefix/python.exe" -m aurora.gui.app
+& "$runtimePrefix/python.exe" scripts/check_project.py
+& "$runtimePrefix/python.exe" scripts/check_package.py
+```
+
+The default check suite covers runtime software without connected devices.
+`--suite training` requires the optional training packages; `--suite all` includes
+both suites. A missing training prerequisite is reported separately.
+
+`benchmark_runtime.py --output outputs/diagnostics/runtime.json --ui --physics-gui`
+compares synthetic sensor processing, queued recording, DIRECT/GUI physics and
+Tk responsiveness. Use `--inference-only` in a separate process to time camera
+models on blank images. These runs report host costs, CPU time, memory and latency
+percentiles. They do not measure BLE transport, camera capture or tracking accuracy.
+Add `--keyboard-gui` to compare the complete keyboard frontend with display
+updates disabled/enabled, or `--ui --browser-files 2000` to stress the browser.
+
+The package base needs NumPy and SciPy. Optional groups are `simulation`, `sensors`,
+`camera`, `inference`, `plots`, `training`, `firmware` and `dev`. Setup installs the
+normal recording/simulation groups. Ordinary Start never installs missing groups.

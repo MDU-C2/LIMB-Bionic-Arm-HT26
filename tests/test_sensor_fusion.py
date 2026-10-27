@@ -232,7 +232,7 @@ class SensorFusionTests(unittest.TestCase):
         self.assertEqual(estimate["shoulder_abduction"], -30.0)
         self.assertEqual(interactive_control_targets(estimate)["shoulder_z"], -5.0)
 
-    def test_default_imu_sensitivity_is_time_based_and_reduced(self) -> None:
+    def test_default_imu_rates_remain_human_degrees_per_second(self) -> None:
         def one_second(period: float) -> float:
             estimator = DualImuArmEstimator(alpha=0.0)
             sensor = {
@@ -251,7 +251,7 @@ class SensorFusionTests(unittest.TestCase):
 
         slow_stream = one_second(0.2)
         fast_stream = one_second(0.02)
-        self.assertAlmostEqual(slow_stream, 18.0, places=3)
+        self.assertAlmostEqual(slow_stream, 40.0, places=3)
         self.assertAlmostEqual(fast_stream, slow_stream, places=3)
 
     def test_camera_abduction_and_corrected_gyro_twist_are_preserved(self) -> None:

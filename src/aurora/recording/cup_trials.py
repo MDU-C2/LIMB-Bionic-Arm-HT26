@@ -6,10 +6,11 @@ from __future__ import annotations
 import re
 import time
 from datetime import datetime
+from itertools import chain
 from pathlib import Path
 
 from aurora.json_utils import write_json
-from aurora.recording.common import safe_label, utc_now, write_metadata
+from aurora.recording.common import safe_label, utc_now, verify_subject_files, write_metadata
 from aurora.recording.oak_session import CameraSession
 from aurora.recording.subject_calibration import export_aligned_imu
 
@@ -36,21 +37,39 @@ class CupTrialSession:
     """Keep the camera and raw BLE files together under one subject and trial."""
 
     def __init__(self, output: Path, subject: str, side: str, reader, cv2, *, camera_metadata=None):
+        if not subject.strip() or safe_label(subject) != subject:
+            raise ValueError("Use a subject ID such as S01, with letters, numbers, - or _.")
         self.subject = subject
         self.side = side
         self.directory = output / safe_label(subject)
+        verify_subject_files(
+            chain(
+                self.directory.glob("T*/trial.json"),
+                self.directory.glob("references/R*/trial.json"),
+            ),
+            subject,
+        )
         self.reader = reader
         self.cv2 = cv2
         self.camera = None
         self.path = None
         self.started_ns = 0
         self.metadata = {}
+        self._stopped_health = None
         self.calibration = {}
         self.camera_metadata = dict(camera_metadata or {})
 
     @property
     def active(self) -> bool:
-        return self.camera is not None and self.camera.recording
+        return self.camera is not None
+
+    @property
+    def stopping(self) -> bool:
+        return self.active and "recording_ended_host_monotonic_ns" in self.metadata
+
+    @property
+    def recording(self) -> bool:
+        return self.active and not self.stopping and self.camera.recording
 
     def start(
         self,
@@ -66,6 +85,7 @@ class CupTrialSession:
             raise RuntimeError("Stop the current trial first")
         if condition not in PACE_CONDITIONS:
             raise ValueError("Choose natural, slow or fast pace")
+        self._stopped_health = None
         data = self.reader.graph_data()
         packet = self.reader.latest()
         if not data["emg"] or len(packet["imus"]) != 2:
@@ -104,6 +124,7 @@ class CupTrialSession:
             "sensor_to_arm_alignment": "fitted" if alignment_profile else "not_estimated",
             "alignment_profile": alignment_profile,
             "connection_generation": self.reader.connection_generation,
+            "mounting_session_id": self.reader.mounting_session_id,
             "operator_events": [],
             "cue_events": [],
             "session_id": self.path.name,
@@ -118,7 +139,7 @@ class CupTrialSession:
             "calibration_status": {
                 "imu_bias_ready": bool(packet["imu_calibrated"]),
                 "emg_rest_ready": bool(self.reader.emg_estimator.calibrated),
-                "emg_grip_ready": data["emg_calibration"] == "Grip calibrated",
+                "emg_grip_ready": data["emg_calibration_state"]["phase"] == "ready",
                 "emg_message": data["emg_calibration"],
             },
             "started_utc": utc_now(),
@@ -226,11 +247,20 @@ class CupTrialSession:
     def stop(self, reason: str = "Stopped by operator", *, complete: bool = True) -> Path | None:
         if self.camera is None:
             return None
-        camera, self.camera = self.camera, None
-        stopped_ns = time.monotonic_ns()
-        health = self.reader.stop_recording()
+        camera = self.camera
+        stopped_ns = self.metadata.setdefault(
+            "recording_ended_host_monotonic_ns", time.monotonic_ns()
+        )
+        errors = []
+        try:
+            if self._stopped_health is None:
+                self._stopped_health = self.reader.stop_recording()
+            health = dict(self._stopped_health)
+        except Exception as error:
+            errors.append(f"BLE recording: {error}")
+            health = {"write_error": str(error)}
         profile = self.metadata.get("alignment_profile")
-        if profile is not None:
+        if profile is not None and not errors and not self.metadata.get("aligned_imu"):
             try:
                 if self.metadata.get("subject_reference_invalidated"):
                     raise ValueError("BLE reconnected: calibration invalidated; raw IMU data kept")
@@ -243,8 +273,30 @@ class CupTrialSession:
             except (OSError, ValueError, KeyError, IndexError) as error:
                 health["alignment_export_error"] = str(error)
         counts = health.get("packet_counts", {})
+        capture = self.metadata.get("capture_health", {})
+        raw_losses = any(
+            capture.get(key, 0)
+            for key in (
+                "raw_frame_queue_overruns",
+                "depth_frame_queue_overruns",
+                "camera_sequence_gaps",
+                "depth_sequence_gaps",
+                "camera_error",
+            )
+        ) or any(
+            sensor.get("missing_packets", 0)
+            or sensor.get("decode_errors", 0)
+            or sensor.get("sample_time_gaps", 0)
+            or sensor.get("gyro_saturation_samples", 0)
+            for sensor in health.get("packet_health", {}).values()
+        )
         complete = bool(
             complete
+            and not errors
+            and not self.metadata.get("capture_stop_failed")
+            and not raw_losses
+            and not health.get("raw_packet_queue_overruns")
+            and not health.get("device_clock_resets")
             and not self.metadata.get("stream_interrupted")
             and not health.get("write_error")
             and not health.get("alignment_export_error")
@@ -269,8 +321,25 @@ class CupTrialSession:
             else None,
         }
         camera.metadata = final
-        camera.stop()
-        write_metadata(self.path / "ble", {"source": "ble", **final, **health})
+        try:
+            camera.stop()
+        except Exception as error:
+            errors.append(f"Camera recording: {error}")
+        if errors:
+            self.metadata["capture_stop_failed"] = True
+            self.metadata["shutdown_error"] = "; ".join(errors)
+            final.update(
+                complete=False,
+                status="incomplete",
+                capture_stop_failed=True,
+                shutdown_error=self.metadata["shutdown_error"],
+            )
+        try:
+            write_metadata(self.path / "ble", {"source": "ble", **final, **health})
+        except Exception as error:
+            errors.append(f"BLE metadata: {error}")
+            self.metadata["capture_stop_failed"] = True
+            final.update(complete=False, status="incomplete", capture_stop_failed=True)
         manifest = {
             **final,
             "sources": {"ble": "ble", "camera": "camera"},
@@ -283,4 +352,7 @@ class CupTrialSession:
             **health,
         }
         write_json(self.path / "trial.json", manifest)
+        if errors:
+            raise RuntimeError("; ".join(errors))
+        self.camera = None
         return self.path

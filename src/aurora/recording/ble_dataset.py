@@ -107,11 +107,17 @@ class LabeledBleCapture:
         if not self.started or sensor not in SAMPLES_PER_WINDOW:
             return
         previous = self.last_sequences.get(sensor)
-        if previous is not None and sequence != previous + 1:
-            self.sequence_gaps[sensor] += 1
-            for key in tuple(self.states):
-                if key[0] == sensor:
-                    self.states[key] = WindowState()
+        if previous is not None:
+            distance = (sequence - previous) & 0xFFFFFFFF
+            if distance != 1:
+                self.sequence_gaps[sensor] += 1
+                for key in tuple(self.states):
+                    if key[0] == sensor:
+                        self.states[key] = WindowState()
+            if distance == 0 or distance >= 0x80000000:
+                return
+            # Keep window boundaries continuous when the wire counter wraps.
+            sequence = previous + distance
         self.last_sequences[sensor] = sequence
         if sensor == "emg" and any(len(values) > 1 for values in channels):
             self._add_emg_samples(sequence, channels)
@@ -270,6 +276,8 @@ class LabeledBleCapture:
         return {
             "capture_id": self.capture_id,
             "movement_label": self.label,
+            "label_source": "operator_cue",
+            "movement_label_verified": False,
             "rest_label": REST_LABEL,
             "window_count": WINDOW_COUNT,
             "rest_windows_each_end": REST_WINDOWS,

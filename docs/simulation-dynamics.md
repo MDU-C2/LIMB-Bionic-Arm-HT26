@@ -43,7 +43,7 @@ needed before using torque or payload results for hardware decisions.
 
 ## Modes and commands
 
-The GUI's **Simulation** tab has a Physics mode checkbox. In Physics mode,
+The GUI's **Control** tab has a **Motor physics** checkbox. In that mode,
 the target is held by a constraint and its mass affects the arm. The dashboard
 shows current PyBullet motor effort, a ten-second graph for all five arm
 motors, and estimated shoulder gravity torque. The graph is simulation output;

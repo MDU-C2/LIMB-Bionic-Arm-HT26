@@ -1,6 +1,6 @@
 # Simulation
 
-Start the GUI and open **Simulation**:
+Start the GUI and open **Control**:
 
 ```powershell
 python -m aurora.gui.app
@@ -33,7 +33,7 @@ mounted to the left of the centered table. See [Joint limits](joint-limits.md)
 for the source of every movement range and the camera-to-CAD zero conversion.
 
 **Connect + open live setup** opens the scene paused, the camera view and a
-step-by-step calibration panel. Follow **Align starting pose → Relaxed EMG →
+step-by-step calibration panel. Follow **Mounting movements → Relaxed EMG →
 Firm grip → Start interactive control**. The [live control guide](live-control.md)
 explains arm placement, fusion and offline replay.
 
@@ -49,13 +49,14 @@ without updates, and reconnecting invalidates the guided calibration.
 
 ### Mounting and twist calibration
 
-Fix IMU1 (`0x6B`) to the upper arm and IMU2 (`0x6A`) to the forearm. Select
-signed longitudinal sensor axes in Simulation; the default is Y for each board.
-Keep their bend axes consistent. The camera provides trunk-relative pose and
-corrects the mounted IMU estimate. Sensor distance is not needed for angle control.
+Fix IMU1 (`0x6B`) to the upper arm and IMU2 (`0x6A`) to the forearm. Stereo setup
+fits their mounting rotations through isolated movements. Without stereo depth,
+diagnostic setup uses the signed longitudinal axes in advanced settings; the
+default is Y for each board. The camera provides trunk-relative pose and corrects
+the mounted IMU estimate. Sensor distance is not needed for angle control.
 
-Calibrate with the hand open at marker 1, thumb up and elbow comfortably bent.
-The guide waits for a still pose and then an IMU rest baseline. After calibration,
+Begin with the hand open at marker 1, thumb up and elbow about 90 degrees.
+Follow still, raise, bend, turn and return, then the two EMG steps. After calibration,
 check isolated elbow bending, arm raising, sideways motion and forearm twist.
 Pause and correct mounting/settings if a direction is wrong. The tilt and twist
 mapping remains an approximation; forearm axial drift has no camera correction.
@@ -93,7 +94,7 @@ processing; the default DepthAI v3 preset caused X_LINK_ERROR on the connected
 RVC2 OAK-D. RGB-only remains available by clearing **Use stereo depth**.
 
 ```bash
-python -m aurora.simulation.live_control --device AURORA
+python -m aurora.simulation.live_control --device AURORA --depth --subject S01
 ```
 
 `--shoulder-twist-axis y --wrist-twist-axis y` selects the default mounting;
@@ -109,11 +110,11 @@ Muscle signals and mounted-arm tracking accuracy need hardware validation.
 recording. Close that standalone monitor before starting live interactive
 control because only one process can own the camera.
 
-The **Motion AI** tab can play compatible OAK-D pose recordings and run the
+**Advanced Tools → Movement profiles** can play compatible OAK-D pose recordings and run the
 experimental movement-recognition model.
 
 The tabletop defaults to **60 × 60 cm**, with the cup placed above its surface.
-Change **Tabletop width × depth (cm)** in Simulation to match another surface;
+Change **Tabletop width × depth (cm)** in Control to match another surface;
 the keyboard and live simulator use the same dimensions. CLI equivalents are
 `--table-width-cm 60 --table-depth-cm 60`.
 
@@ -131,7 +132,6 @@ panel with the open hand at marker 1, then press **Start interactive control**.
 Press `R` to pause and reset. `L` and `K` advance the current setup step.
 Press `Q` in the camera window to stop. See [Sensor data](sensor-data.md) for wiring.
 
-Calibration anchors camera and IMU angles to the displayed joint pose. A matched
-bent elbow therefore stays bent instead of being reset to zero; raising/lowering
-and bending/extending use signed changes around this reference. Relative wrist
+Calibration keeps measured anatomical angles. Retargeting stores a separate
+offset from the human reference to the displayed robot pose. Relative wrist
 twist uses the calibrated elbow angle when subtracting shared upper-arm rotation.

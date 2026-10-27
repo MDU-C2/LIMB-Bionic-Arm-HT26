@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--address", default="")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--side", choices=("left", "right"), default="left")
+    parser.add_argument("--subject", default="diagnostic")
     parser.add_argument("--camera-weight", type=float, default=0.25)
     parser.add_argument("--shoulder-twist-axis", choices=TWIST_AXES, default=DEFAULT_TWIST_AXIS)
     parser.add_argument("--wrist-twist-axis", choices=TWIST_AXES, default=DEFAULT_TWIST_AXIS)
@@ -56,6 +57,8 @@ def main() -> int:
         str(args.baud),
         "--side",
         args.side,
+        "--subject",
+        args.subject,
         "--camera-weight",
         str(args.camera_weight),
         "--table-width-cm",
@@ -64,10 +67,8 @@ def main() -> int:
         str(args.table_depth_cm),
         "--grip-source",
         args.grip_source,
-        "--shoulder-twist-axis",
-        args.shoulder_twist_axis,
-        "--wrist-twist-axis",
-        args.wrist_twist_axis,
+        f"--shoulder-twist-axis={args.shoulder_twist_axis}",
+        f"--wrist-twist-axis={args.wrist_twist_axis}",
     ]
     if args.port:
         command += ["--port", args.port]

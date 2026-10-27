@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from aurora.json_utils import read_json_object, write_json
-from aurora.recording.common import DEFAULT_OUTPUT, enable_ctrl_break_as_interrupt
+from aurora.recording.common import DEFAULT_OUTPUT, enable_ctrl_break_as_interrupt, safe_label
 from aurora.recording.cup_input import CupSensorInput
 from aurora.recording.cup_protocol import (
     BASELINE_SECONDS,
@@ -158,7 +158,11 @@ class CupRecorder:
         recording = ""
         if self.trials.active:
             elapsed = (time.monotonic_ns() - self.trials.started_ns) / 1e9
-            recording = f"Recording {self.trials.metadata['trial_id']} ({elapsed:.1f} s) | "
+            recording = (
+                f"Saving {self.trials.metadata['trial_id']}; retry Stop if cleanup failed | "
+                if self.trials.stopping
+                else f"Recording {self.trials.metadata['trial_id']} ({elapsed:.1f} s) | "
+            )
         depth_enabled = self.trials.camera_metadata.get("stereo_depth_enabled", False)
         depth_receiving = hasattr(self.live, "depth_receiving") and self.live.depth_receiving()
         stereo = (
@@ -166,6 +170,7 @@ class CupRecorder:
         )
         alignment_ready = bool(
             self.alignment_profile
+            and not packet.get("imu_motion_gap")
             and self.alignment_profile.get("status") == "passed"
             and self.alignment_profile.get("connection_generation")
             == self.live.reader.connection_generation
@@ -187,7 +192,8 @@ class CupRecorder:
         return {
             "ready": bool(camera and imu and emg),
             "streams_ready": bool(imu and emg),
-            "recording": self.trials.active,
+            "recording": self.trials.recording,
+            "saving": self.trials.stopping,
             "protocol": self.guide.view(),
             "saved_counts": dict(self.saved_counts),
             "can_start": available,
@@ -301,7 +307,7 @@ class CupRecorder:
             self.trials.metadata["reference_checks"] = {
                 "imu_zero_ready": bool(self.live.reader.latest()["imu_calibrated"]),
                 "emg_rest_ready": bool(self.live.reader.emg_estimator.calibrated),
-                "emg_grip_ready": data["emg_calibration"] == "Grip calibrated",
+                "emg_grip_ready": data["emg_calibration_state"]["phase"] == "ready",
                 "emg_message": data["emg_calibration"],
             }
         path = self.trials.stop(reason, complete=complete)
@@ -342,6 +348,10 @@ class CupRecorder:
             if manifest["complete"]:
                 self.reference_path = path.relative_to(self.trials.directory).as_posix()
                 self.alignment_profile = profile if checks["sensor_to_arm_ready"] else None
+                if self.alignment_profile is not None:
+                    self.live.reader.apply_alignment(
+                        profile, subject_id=self.args.subject, side=self.args.side
+                    )
             self.guide = self.new_trial_guide()
         else:
             self.last_saved = manifest["trial_id"]
@@ -504,6 +514,8 @@ class CupRecorder:
         emit("protocol", **data)
 
     def advance_protocol(self):
+        if self.trials.stopping:
+            return
         self.guide.tick()
         if isinstance(self.guide, CupReferenceGuide) and self.guide.completed:
             self.stop_trial("Subject reference sequence finished")
@@ -729,7 +741,9 @@ def main() -> int:
         parser.error(
             "Participant recordings require stereo depth. Use --raw-only for RGB diagnostics."
         )
-    if not args.subject.strip() or any(
+    if not args.subject.strip() or safe_label(args.subject) != args.subject:
+        parser.error("Use a subject ID such as S01, with letters, numbers, - or _.")
+    if any(
         not math.isfinite(v) or v < 0
         for v in (args.duration, args.baseline, args.countdown, args.rest)
     ):

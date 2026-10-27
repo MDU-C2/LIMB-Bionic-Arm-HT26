@@ -62,10 +62,9 @@ def available_ports() -> list[str]:
     return [port.device for port in list_ports.comports()]
 
 
-def main() -> int:
+def record(args, *, source="serial", sample_exporter=None) -> int:
     """Read serial lines and keep both decoded JSON and original bytes."""
-    enable_ctrl_break_as_interrupt()
-    args = parse_args()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     try:
         import serial
     except ImportError:
@@ -82,10 +81,13 @@ def main() -> int:
         return 2
 
     preview_window = getattr(args, "preview_window", False)
-    preview_mode = args.preview or preview_window
-    session = None if preview_mode else create_session_directory("serial", args.subject)
+    preview_mode = getattr(args, "preview", False) or preview_window
+    session = None if preview_mode else create_session_directory(source, args.subject)
     output_path = None if session is None else session / "serial.jsonl"
-    started = time.monotonic()
+    started = None
+    started_host_ns = None
+    capture_error = ""
+    result = 0
     lines_written = 0
     print(f"{'Previewing' if preview_mode else 'Recording'} {args.port} at {args.baud} baud")
     if session is not None:
@@ -107,22 +109,25 @@ def main() -> int:
         with serial.Serial(args.port, args.baud, timeout=0.2) as device:
             output = output_path.open("w", encoding="utf-8", buffering=1) if output_path else None
             try:
+                started = time.monotonic()
+                started_host_ns = time.monotonic_ns()
                 while args.duration == 0 or time.monotonic() - started < args.duration:
                     if preview is not None and not preview.refresh():
                         break
                     raw = device.readline()
                     if not raw:
                         continue
+                    receipt_ns, receipt_utc = time.monotonic_ns(), utc_now()
                     text = raw.decode("utf-8", errors="replace").strip()
                     if preview_mode:
-                        timestamp = utc_now()
+                        timestamp = receipt_utc
                         print(f"[{timestamp}] {text}")
                         if preview is not None:
                             preview.add_line(timestamp, text)
                         continue
                     record: dict[str, object] = {
-                        "host_time": utc_now(),
-                        "host_monotonic_ns": time.monotonic_ns(),
+                        "host_time": receipt_utc,
+                        "host_monotonic_ns": receipt_ns,
                         "text": text,
                         "raw_base64": base64.b64encode(raw).decode("ascii"),
                     }
@@ -137,29 +142,60 @@ def main() -> int:
                     output.close()
     except KeyboardInterrupt:
         print("Stopping serial recording...")
-    except serial.SerialException as error:
+    except (serial.SerialException, OSError) as error:
+        capture_error = str(error)
         print(f"Serial recording failed: {error}")
-        return 1
+        result = 1
     finally:
         if preview is not None:
-            preview.close()
+            try:
+                preview.close()
+            except Exception as error:
+                capture_error = str(error)
+                result = 1
+        stopped = time.monotonic()
+        ended_host_ns = time.monotonic_ns()
         if session is not None:
-            write_metadata(
-                session,
-                {
-                    "source": "serial",
-                    "subject_id": args.subject,
-                    "port": args.port,
-                    "baud": args.baud,
-                    "duration_seconds": round(time.monotonic() - started, 3),
-                    "messages": lines_written,
-                    **experiment_metadata(),
-                },
-            )
+            exported = {}
+            if sample_exporter is not None and output_path.is_file():
+                try:
+                    exported = sample_exporter(session)
+                except (OSError, ValueError) as error:
+                    capture_error = str(error)
+                    result = 1
+            try:
+                write_metadata(
+                    session,
+                    {
+                        "source": source,
+                        "subject_id": args.subject,
+                        "port": args.port,
+                        "baud": args.baud,
+                        "duration_seconds": round(stopped - started, 3)
+                        if started is not None
+                        else 0,
+                        "started_host_monotonic_ns": started_host_ns,
+                        "ended_host_monotonic_ns": ended_host_ns,
+                        "messages": lines_written,
+                        "capture_complete": not capture_error and lines_written > 0,
+                        "capture_error": capture_error,
+                        "clock_domain": "host_monotonic_ns",
+                        "timestamp_reference": "host_line_receipt_before_decoding",
+                        **experiment_metadata(),
+                        **exported,
+                    },
+                )
+            except OSError as error:
+                print(f"Could not finalize serial metadata: {error}")
+                result = 1
 
-    if output_path is not None:
+    if output_path is not None and output_path.is_file():
         print(f"Saved {lines_written} messages to {output_path}")
-    return 0
+    return result
+
+
+def main() -> int:
+    return record(parse_args())
 
 
 if __name__ == "__main__":

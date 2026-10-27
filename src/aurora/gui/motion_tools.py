@@ -3,15 +3,19 @@
 
 from __future__ import annotations
 
+import math
+import sys
+import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from aurora.gui.project_support import (
     DEFAULT_RECORDINGS_DIRECTORY,
     DEFAULT_REFERENCE_DIRECTORY,
+    MOVEMENT_MODEL,
     MOVEMENT_RECOGNITION_SCRIPT,
-    POSE_RECORDING_SCRIPT,
     REPOSITORY_ROOT,
+    console_python,
     display_path,
     project_path,
 )
@@ -25,8 +29,8 @@ class MotionToolsMixin:
         tab.columnconfigure(0, weight=1)
         self._heading(
             tab,
-            "Motion AI",
-            "Inspect a camera pose recording, compare it with references, or play it on the arm.",
+            "Camera movement profiles (research)",
+            "Capture profiles, compare whole movements and review training runs. This is separate from EMG grip recognition.",
         )
 
         recording = self._card(
@@ -46,6 +50,19 @@ class MotionToolsMixin:
             text="Browse",
             command=self._browse_motion_recording,
         ).grid(row=0, column=1, padx=(8, 0))
+        shortcuts = ttk.Frame(recording, style="Card.TFrame")
+        shortcuts.grid(row=7, column=0, sticky="w", pady=8)
+        for title, path in (
+            ("Use captured profiles", REPOSITORY_ROOT / DEFAULT_REFERENCE_DIRECTORY),
+            ("Use inherited LIMB1 profiles", REPOSITORY_ROOT / "data/legacy/limb1/training"),
+        ):
+            ttk.Button(
+                shortcuts,
+                text=title,
+                command=lambda path=path: self.motion_references.set(str(path)),
+                state="normal" if path.is_dir() else "disabled",
+            ).pack(side="left", padx=4)
+        ttk.Label(shortcuts, text="Unavailable folders stay disabled.").pack(side="left", padx=8)
 
         recognition = self._card(
             tab,
@@ -76,6 +93,25 @@ class MotionToolsMixin:
             textvariable=self.motion_ai_status,
             style="CardText.TLabel",
         ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+        self.movement_model_path = MOVEMENT_MODEL
+        self.movement_model_status = tk.StringVar(self, value="Bundled movement-profile model")
+        self.movement_threshold = tk.StringVar(self, value="0.51")
+        model_row = ttk.Frame(recognition, style="Card.TFrame")
+        model_row.grid(row=5, column=0, sticky="w", pady=8)
+        ttk.Button(
+            model_row, text="Review / select movement model", command=self._select_movement_model
+        ).pack(side="left", padx=4)
+        ttk.Button(
+            model_row, text="Use bundled model", command=self._use_bundled_movement_model
+        ).pack(side="left", padx=4)
+        ttk.Label(model_row, text="Unknown-distance threshold").pack(side="left", padx=6)
+        ttk.Entry(model_row, textvariable=self.movement_threshold, width=8).pack(side="left")
+        ttk.Label(
+            recognition,
+            textvariable=self.movement_model_status,
+            wraplength=780,
+            style="CardText.TLabel",
+        ).grid(row=6, column=0, sticky="w")
 
         playback = self._card(
             tab,
@@ -142,39 +178,109 @@ class MotionToolsMixin:
         if not references.is_dir():
             messagebox.showerror("References not found", f"Folder not found:\n{references}")
             return
-        if self.simulation_python is None or not self.movement_ai_ready:
+        if not self.movement_ai_ready:
             messagebox.showerror(
                 "Motion AI unavailable",
-                "Run Setup.bat (Windows) or Setup.command (macOS/Linux), then refresh Info.",
+                "Run Setup, then Refresh status under Help & status.",
             )
             return
+        try:
+            threshold = float(self.movement_threshold.get())
+            if not math.isfinite(threshold) or threshold <= 0:
+                raise ValueError("Unknown-distance threshold must be positive and finite.")
+        except ValueError as error:
+            messagebox.showerror("Check recognition settings", str(error))
+            return
         command = [
-            str(self.simulation_python),
+            str(console_python(Path(sys.executable))),
             "-u",
             str(MOVEMENT_RECOGNITION_SCRIPT),
             str(recording.resolve()),
             "--references",
             str(references.resolve()),
+            "--model",
+            str(self.movement_model_path),
+            "--threshold",
+            str(threshold),
         ]
         self._start_program("Movement recognition", "motion_ai", command)
 
-    def start_pose_playback(self) -> None:
-        """Play a camera pose recording on the limited arm model."""
-        recording = self._selected_motion_recording()
-        if recording is None:
+    def _use_bundled_movement_model(self):
+        self.movement_model_path = MOVEMENT_MODEL
+        self.movement_model_status.set("Bundled movement-profile model; used for the next analysis")
+        self._update_controls()
+        self._refresh_info()
+
+    def _select_movement_model(self):
+        selected = filedialog.askopenfilename(
+            title="Choose a movement ONNX model from a completed training run",
+            filetypes=(("Movement model", "*.onnx"),),
+        )
+        if not selected:
             return
-        if self.simulation_python is None:
-            messagebox.showerror(
-                "Simulation environment missing",
-                "Run Setup.bat (Windows) or Setup.command (macOS/Linux), then refresh Info.",
+
+        def load(cancelled):
+            from aurora.json_utils import read_json_object
+            from aurora.ml.experiment import verify_model_manifest
+            from aurora.ml.features import PREPROCESSING
+            from aurora.ml.recognition import MovementRecognizer
+            from aurora.recording.emg_labels import digest
+
+            model = Path(selected).resolve()
+            manifest_path = model.with_suffix(".json")
+            if not manifest_path.is_file():
+                manifest_path = model.parent / "training.json"
+            manifest = read_json_object(manifest_path)
+            if manifest.get("status") not in {"complete", "inherited"} or manifest.get(
+                "artifacts", {}
+            ).get(model.name) != digest(model):
+                raise ValueError(
+                    "Select a model with a matching completed training manifest or inherited model sidecar."
+                )
+            if any(
+                manifest.get("preprocessing", {}).get(key) != value
+                for key, value in PREPROCESSING.items()
+            ):
+                raise ValueError("The model preprocessing does not match movement profiles.")
+            verify_model_manifest(model)
+            MovementRecognizer(model)
+            return model, manifest, manifest_path
+
+        def ready(result, error):
+            if error:
+                messagebox.showerror("Cannot select movement model", str(error))
+                return
+            model, manifest, manifest_path = result
+            dialog = tk.Toplevel(self)
+            dialog.title("AURORA | Review movement model")
+            ttk.Label(
+                dialog,
+                text=f"Model: {model.name}\nStatus: {manifest['status']}\nSplit: {manifest.get('split_method', 'inherited baseline')}\n{manifest.get('results', {})}\n\nProfile identification is not EMG classification or anatomical accuracy.\nSelection applies to the next analysis and preserves the bundled model.",
+                padding=15,
+                wraplength=580,
+            ).pack()
+            ttk.Button(
+                dialog,
+                text="Open training / provenance",
+                command=lambda: self._open_existing(manifest_path),
+            ).pack(pady=6)
+
+            def select():
+                self.movement_model_path = model
+                self.movement_model_status.set(f"Selected for next profile analysis: {model}")
+                self._update_controls()
+                self._refresh_info()
+                dialog.destroy()
+
+            ttk.Button(dialog, text="Use for movement-profile recognition", command=select).pack(
+                pady=10
             )
-            return
-        command = [
-            str(self.simulation_python),
-            "-u",
-            str(POSE_RECORDING_SCRIPT),
-            str(recording.resolve()),
-        ]
-        if self.loop_pose_playback.get():
-            command.append("--loop")
-        self._start_program("Pose recording playback", "motion_ai", command)
+
+        self.background_tasks.submit("movement_model", load, ready)
+
+    def start_pose_playback(self) -> None:
+        recording = self._selected_motion_recording()
+        if recording is not None:
+            self.workflow.show_tool(
+                "pose_play", {"recording": str(recording), "loop": self.loop_pose_playback.get()}
+            )

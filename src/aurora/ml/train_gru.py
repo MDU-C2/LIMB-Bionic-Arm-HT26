@@ -234,7 +234,7 @@ def main(argv=None):
         help="New run folder for models, training.json and the metrics plot",
     )
     args = parser.parse_args(argv)
-    enable_ctrl_break_as_interrupt()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     if args.epochs < 1 or args.seed < 0 or args.seed > 2**32 - 1:
         parser.error("Use at least one epoch and a seed between 0 and 4294967295")
     random.seed(args.seed)
@@ -406,6 +406,7 @@ def main(argv=None):
             subprocess.run(
                 [sys.executable, "-m", "aurora.ml.training_plot", str(output / "training.json")],
                 cwd=REPOSITORY_ROOT,
+                stdin=subprocess.DEVNULL,
                 check=True,
             )
         except (OSError, subprocess.CalledProcessError) as error:

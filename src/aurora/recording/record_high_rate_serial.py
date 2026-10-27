@@ -1,22 +1,16 @@
 # Jonas Gerne, Majd
-"""Record high-rate USB EMG and dual IMUs into an aligned CSV."""
+"""Record USB diagnostics and export each timestamped sensor measurement."""
 
 from __future__ import annotations
 
 import argparse
-import math
+import csv
+import json
 import os
-import signal
-import time
 
-from aurora.recording.common import (
-    create_session_directory,
-    enable_ctrl_break_as_interrupt,
-    env_float,
-    experiment_metadata,
-    write_metadata,
-)
-from aurora.sensors.serial_protocol import merge_samples, parse_sensor_line, save_csv
+from aurora.recording.common import env_float
+from aurora.recording.record_serial_sensors import record
+from aurora.sensors.serial_protocol import AXES, COLUMNS, parse_sensor_line
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,87 +29,76 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    enable_ctrl_break_as_interrupt()
-    args = parse_args()
-    if not args.port or args.baud <= 0 or not math.isfinite(args.duration) or args.duration < 0:
-        print("Provide a serial port, positive baud rate, and finite non-negative duration.")
-        return 2
-    try:
-        import serial
-    except ImportError:
-        print("Install pyserial to record the USB stream.")
-        return 2
-
-    samples: dict[str, list[tuple[int, tuple[int | float, ...]]]] = {
-        "emg": [],
-        "imu1": [],
-        "imu2": [],
-    }
-    device_to_host_offset_ns: int | None = None
-    stopping = False
-
-    def request_stop(_number: int, _frame: object) -> None:
-        nonlocal stopping
-        stopping = True
-
-    for name in ("SIGINT", "SIGTERM"):
-        if hasattr(signal, name):
-            signal.signal(getattr(signal, name), request_stop)
-    started = time.monotonic()
-    try:
-        with serial.Serial(args.port, args.baud, timeout=0.2) as device:
-            session = create_session_directory("high_rate_serial", args.subject)
-            print(f"Recording {args.port} to {session}; stop with Ctrl+C")
-            with (session / "raw_serial.txt").open("w", encoding="utf-8") as raw_output:
-                try:
-                    while not stopping and (
-                        args.duration == 0 or time.monotonic() - started < args.duration
-                    ):
-                        raw = device.readline()
-                        if not raw:
-                            continue
-                        line = raw.decode("utf-8", errors="replace").strip()
-                        raw_output.write(line + "\n")
-                        parsed = parse_sensor_line(line)
-                        if parsed is not None:
-                            sensor, timestamp, values = parsed
-                            samples[sensor].append((timestamp, values))
-                            observed_offset_ns = time.monotonic_ns() - timestamp * 1000
-                            if (
-                                device_to_host_offset_ns is None
-                                or observed_offset_ns < device_to_host_offset_ns
-                            ):
-                                device_to_host_offset_ns = observed_offset_ns
-                except KeyboardInterrupt:
-                    print("Stopping recording...")
-    except (serial.SerialException, OSError) as error:
-        print(f"Serial recording failed: {error}")
-        return 1
-
-    rows = merge_samples(samples)
-    if device_to_host_offset_ns is not None:
-        for row in rows:
-            row["host_monotonic_ns"] = int(row["timestamp_us"]) * 1000 + device_to_host_offset_ns
-    save_csv(session / "recording.csv", rows)
-    write_metadata(
-        session,
-        {
-            "source": "high_rate_serial",
-            "subject_id": args.subject,
-            "port": args.port,
-            "baud": args.baud,
-            "duration_seconds": round(time.monotonic() - started, 3),
-            "clock_domain": "host_monotonic_ns",
-            "device_to_host_monotonic_offset_ns": device_to_host_offset_ns,
-            "clock_alignment": "minimum USB receive delay; approximate",
-            "samples": {sensor: len(values) for sensor, values in samples.items()},
-            "rows": len(rows),
-            **experiment_metadata(),
-        },
+def export_samples(session):
+    """Stream derived rows after capture closes; never hold a trial in memory."""
+    counts = dict.fromkeys(("emg", "imu1", "imu2"), 0)
+    quality = dict.fromkeys(
+        ("duplicates", "reordered_samples", "device_clock_resets", "invalid_sensor_lines"), 0
     )
-    print(f"Saved {len(rows)} aligned rows to {session / 'recording.csv'}")
-    return 0
+    previous, origin, epoch = {}, None, 0
+    with (
+        (session / "serial.jsonl").open(encoding="utf-8") as source,
+        (session / "recording.csv").open("w", newline="", encoding="utf-8") as output,
+        (session / "raw_serial.txt").open("w", encoding="utf-8") as text_output,
+    ):
+        writer = csv.DictWriter(
+            output, fieldnames=(*COLUMNS, "host_time", "device_clock_epoch"), delimiter=";"
+        )
+        writer.writeheader()
+        for line in source:
+            record = json.loads(line)
+            text_output.write(record["text"] + "\n")
+            parsed = parse_sensor_line(record["text"])
+            if parsed is None:
+                if record["text"].split(",", 1)[0].upper() in ("EMG", "IMU1", "IMU2"):
+                    quality["invalid_sensor_lines"] += 1
+                continue
+            sensor, stamp, values = parsed
+            last = previous.get(sensor)
+            if last is not None:
+                if stamp < last - 500_000:
+                    epoch += 1
+                    previous.clear()
+                    origin = None
+                    quality["device_clock_resets"] += 1
+                elif stamp == last:
+                    quality["duplicates"] += 1
+                elif stamp < last:
+                    quality["reordered_samples"] += 1
+            previous[sensor] = stamp
+            if origin is None:
+                origin = stamp
+            row = dict(
+                timestamp_us=stamp,
+                timestamp_s=(stamp - origin) / 1e6,
+                host_monotonic_ns=record["host_monotonic_ns"],
+                host_time=record["host_time"],
+                device_clock_epoch=epoch,
+            )
+            if sensor == "emg":
+                row["emg_raw"] = values[0]
+            else:
+                row[f"{sensor}_timestamp_us"] = stamp
+                row.update(
+                    {f"{sensor}_{axis}": value for axis, value in zip(AXES, values, strict=True)}
+                )
+            writer.writerow(row)
+            counts[sensor] += 1
+    return dict(
+        samples=counts,
+        rows=sum(counts.values()),
+        sample_quality=quality,
+        recording_mode="diagnostic_raw_serial",
+        csv_layout="one_row_per_received_measurement",
+        imu_units=["mg", "mdps"],
+        sample_data_complete=bool(sum(counts.values())) and not any(quality.values()),
+        clock_alignment="device sample times and measured host line receipt; no clock fit",
+        transport_loss="not observable from unsequenced USB lines",
+    )
+
+
+def main() -> int:
+    return record(parse_args(), source="high_rate_serial", sample_exporter=export_samples)
 
 
 if __name__ == "__main__":

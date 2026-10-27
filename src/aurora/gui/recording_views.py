@@ -25,21 +25,24 @@ class RecordingViewsMixin:
             "Connect camera + BLE, calibrate the subject, then record each cup transfer.",
         )
         self._build_cup_recording(tab)
-        advanced = ttk.Frame(tab, style="Page.TFrame")
-        self.recording_advanced_panel = advanced
-        advanced.grid(row=4, column=0, sticky="ew")
-        advanced.columnconfigure(0, weight=1)
-        self.recording_advanced_button = ttk.Checkbutton(
+        self.recording_advanced_button = ttk.Button(
             tab,
-            text="Advanced recording options",
-            variable=self.recording_advanced,
-            command=lambda: (
-                advanced.grid() if self.recording_advanced.get() else advanced.grid_remove()
-            ),
+            text="Raw signals and guided grip trials (Advanced Tools)",
+            command=lambda: self.workflow.open_advanced("raw"),
         )
         self.recording_advanced_button.grid(row=3, column=0, sticky="w", pady=(0, 10))
-        self._build_advanced_recording_controls(advanced)
-        advanced.grid_remove()
+        ttk.Label(tab, text="Choose the cup-trial output folder", style="PageSub.TLabel").grid(
+            row=4, column=0, sticky="w"
+        )
+        output = ttk.Frame(tab, style="Page.TFrame")
+        output.grid(row=5, column=0, sticky="ew", pady=6)
+        output.columnconfigure(0, weight=1)
+        self.workflow.bind_context(ttk.Entry(output, textvariable=self.recording_output)).grid(
+            row=0, column=0, sticky="ew"
+        )
+        self.workflow.bind_context(
+            ttk.Button(output, text="Browse", command=self._browse_recording_output)
+        ).grid(row=0, column=1, padx=6)
 
     def _build_advanced_recording_controls(self, tab) -> None:
         source_card = self._card(
@@ -86,7 +89,10 @@ class RecordingViewsMixin:
             ttk.Label(session_row, text=label, style="Card.TLabel").grid(
                 row=0, column=column, sticky="w", padx=(12 if column else 0, 0)
             )
-            ttk.Entry(session_row, textvariable=variable).grid(
+            entry = ttk.Entry(session_row, textvariable=variable)
+            if variable is self.recording_subject:
+                self.workflow.bind_context(entry)
+            entry.grid(
                 row=1, column=column, sticky="ew", padx=(12 if column else 0, 0), pady=(4, 0)
             )
         ttk.Label(session_row, text="Test type", style="Card.TLabel").grid(
@@ -106,11 +112,13 @@ class RecordingViewsMixin:
         ttk.Label(device_row, text="Camera arm", style="Card.TLabel").grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Combobox(
-            device_row,
-            textvariable=self.recording_camera_side,
-            values=("left", "right"),
-            state="readonly",
+        self.workflow.bind_context(
+            ttk.Combobox(
+                device_row,
+                textvariable=self.recording_camera_side,
+                values=("left", "right"),
+                state="readonly",
+            )
         ).grid(row=1, column=0, sticky="ew", pady=(4, 0))
         ttk.Button(
             device_row,
@@ -193,21 +201,54 @@ class RecordingViewsMixin:
         option_row.columnconfigure(0, weight=1)
         ttk.Label(
             option_row,
-            text="OAK-D options (for example --depth or --pose-model 2)",
+            text="Camera settings",
             style="Card.TLabel",
         ).grid(row=0, column=0, sticky="w")
-        ttk.Entry(option_row, textvariable=self.recording_arguments).grid(
-            row=1, column=0, sticky="ew", pady=(4, 0)
+        camera = ttk.Frame(option_row, style="Card.TFrame")
+        camera.grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Checkbutton(camera, text="Stereo depth", variable=self.recording_camera_depth).pack(
+            side="left", padx=6
         )
+        ttk.Label(camera, text="Pose detail").pack(side="left", padx=6)
+        ttk.Combobox(
+            camera,
+            textvariable=self.recording_pose_model,
+            values=("Fast", "Balanced", "Detailed"),
+            state="readonly",
+            width=12,
+        ).pack(side="left")
+        legacy = ttk.Frame(option_row, style="Card.TFrame")
+        legacy.grid(row=2, column=0, sticky="w", pady=8)
+        ttk.Checkbutton(
+            legacy,
+            text="Legacy labeled BLE windows (operator cues)",
+            variable=self.recording_ble_dataset,
+        ).pack(side="left")
+        ttk.Label(legacy, text="Movement label").pack(side="left", padx=6)
+        ttk.Entry(legacy, textvariable=self.recording_movement_label, width=8).pack(side="left")
+        ttk.Label(
+            option_row,
+            text="Raw BLE EMG compatibility: auto = current/timestamped formats; legacy choices require known firmware.",
+            wraplength=790,
+        ).grid(row=3, column=0, sticky="w")
+        ttk.Combobox(
+            option_row,
+            textvariable=self.recording_emg_format,
+            values=("auto", "legacy-fixed", "legacy-prefix"),
+            state="readonly",
+            width=20,
+        ).grid(row=4, column=0, sticky="w", pady=4)
 
         output_row = ttk.Frame(settings, style="Card.TFrame")
         output_row.grid(row=6, column=0, sticky="ew", pady=(0, 12))
         output_row.columnconfigure(1, weight=1)
         ttk.Label(output_row, text="Output", style="Card.TLabel").grid(row=0, column=0, padx=(0, 8))
-        ttk.Entry(output_row, textvariable=self.recording_output).grid(row=0, column=1, sticky="ew")
-        ttk.Button(output_row, text="Browse", command=self._browse_recording_output).grid(
-            row=0, column=2, padx=(8, 0)
+        self.workflow.bind_context(ttk.Entry(output_row, textvariable=self.recording_output)).grid(
+            row=0, column=1, sticky="ew"
         )
+        self.workflow.bind_context(
+            ttk.Button(output_row, text="Browse", command=self._browse_recording_output)
+        ).grid(row=0, column=2, padx=(8, 0))
 
         action_row = ttk.Frame(settings, style="Card.TFrame")
         action_row.grid(row=7, column=0, sticky="w")
@@ -229,19 +270,19 @@ class RecordingViewsMixin:
         ttk.Button(
             action_row,
             text="Open output folder",
-            command=self._open_recordings_root,
+            command=self.workflow.open_capture_output,
         ).pack(side="left")
 
         advanced = self._card(
             tab,
             4,
-            "Advanced single recorder",
-            "Run one recording tool with extra options.",
+            "Individual capture tools",
+            "Choose a named workflow. Movement profiles and cup trials open their own guided settings.",
         )
         program_row = ttk.Frame(advanced, style="Card.TFrame")
         program_row.grid(row=2, column=0, sticky="ew")
         program_row.columnconfigure(1, weight=1)
-        ttk.Label(program_row, text="Program", style="Card.TLabel").grid(
+        ttk.Label(program_row, text="Capture", style="Card.TLabel").grid(
             row=0, column=0, padx=(0, 8)
         )
         self.recording_program_box = ttk.Combobox(
@@ -256,7 +297,7 @@ class RecordingViewsMixin:
         )
         self.recording_preview_button.grid(row=0, column=3, padx=(8, 0))
         self.single_record_button = ttk.Button(
-            program_row, text="Run selected", command=self.start_single_recording
+            program_row, text="Open / start capture", command=self.start_single_recording
         )
         self.single_record_button.grid(row=0, column=4, padx=(8, 0))
         self.recording_program_status = ttk.Label(
@@ -270,6 +311,7 @@ class RecordingViewsMixin:
         selected = filedialog.askdirectory(title="Select recording output", initialdir=initial)
         if selected:
             self.recording_output.set(display_path(Path(selected)))
+            self.recordings_root.set(self.recording_output.get())
             self._refresh_recordings()
 
     def _open_recording_guide(self) -> None:

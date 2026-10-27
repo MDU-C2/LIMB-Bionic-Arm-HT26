@@ -6,6 +6,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import queue
 import struct
 import tempfile
@@ -73,6 +74,62 @@ def recorder_args(**values):
 
 
 class CupRecordingTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Case-insensitive Windows paths")
+    def test_a_subject_case_collision_cannot_mix_participant_identities(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reader = prepared_reader()
+            first = CupTrialSession(root, "S01", "left", reader, Mock())
+            first.start()
+            first.stop(complete=False)
+            before = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+            with self.assertRaisesRegex(ValueError, "exact subject ID"):
+                CupTrialSession(root, "s01", "left", reader, Mock())
+            self.assertEqual(
+                {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}, before
+            )
+
+    def test_a_subject_id_cannot_be_silently_changed_to_another_folder_label(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(ValueError, "subject ID"):
+                CupTrialSession(root, "A B", "left", prepared_reader(), Mock())
+            self.assertFalse(list(root.iterdir()))
+
+    def test_failed_ble_stop_closes_camera_and_keeps_trial_for_cleanup_retry(self):
+        reader = prepared_reader()
+        with tempfile.TemporaryDirectory() as temporary:
+            trial = CupTrialSession(Path(temporary), "S01", "left", reader, Mock())
+            trial.start()
+            camera = trial.camera
+            real_stop = reader.stop_recording
+            try:
+                with (
+                    patch.object(
+                        reader, "stop_recording", side_effect=RuntimeError("writer timeout")
+                    ),
+                    self.assertRaisesRegex(RuntimeError, "writer timeout"),
+                ):
+                    trial.stop()
+                self.assertTrue(trial.active)
+                self.assertFalse(trial.recording)
+                self.assertTrue(trial.stopping)
+                self.assertFalse(camera.recording)
+                manifest = json.loads((trial.path / "trial.json").read_text())
+                self.assertFalse(manifest["complete"])
+                self.assertEqual(manifest["status"], "incomplete")
+                self.assertIn("writer timeout", manifest["shutdown_error"])
+                with self.assertRaisesRegex(RuntimeError, "current trial"):
+                    trial.start()
+                original_end = manifest["recording_ended_host_monotonic_ns"]
+                trial.stop()
+                self.assertFalse(trial.active)
+                final = json.loads((trial.path / "trial.json").read_text())
+                self.assertEqual(final["recording_ended_host_monotonic_ns"], original_end)
+                self.assertFalse(final["complete"])
+            finally:
+                real_stop()
+
     def test_calibration_can_start_during_a_tracking_miss_but_trials_still_need_alignment(self):
         live = SimpleNamespace(
             reader=prepared_reader(),
@@ -246,7 +303,7 @@ class CupRecordingTests(unittest.TestCase):
                     device_time_ns=now[0],
                 )
                 live._publish_frame(frame)
-                live._publish_depth(CupDepthFrame(sequence[0], now[0], now[0], depth))
+                live._publish_depth(CupDepthFrame(sequence[0] // 4, now[0], now[0], depth))
                 live.observations.append(frame)
                 live.tracking_frame = frame
 
@@ -303,6 +360,8 @@ class CupRecordingTests(unittest.TestCase):
                     "imu",
                     HIGH_RATE_IMU_PACKET.pack(0x103, sequence[0], device_us, device_us, *values),
                 )
+                if sequence[0] % 100 == 0:
+                    live.reader.flush_recording()
                 if sequence[0] % 4 == 0:
                     publish_camera(stage, index)
                 recorder.collect_frames()
@@ -424,6 +483,8 @@ class CupRecordingTests(unittest.TestCase):
                         for index in range(40)
                     ]
                     feed_samples(reader, sequence, samples)
+                    if sequence % 100 == 0:
+                        reader.flush_recording()
                     live.frame_time_ns = now[0]
                     if sequence % 4 == 0:
                         recorder.trials.add_frame(
@@ -1235,6 +1296,10 @@ class CupProtocolTests(unittest.TestCase):
         process = Mock(stdout=io.StringIO("Starting\nRuntimeError: camera unavailable\n"))
         process.wait.return_value = 1
         manager = SimpleNamespace(log_queue=queue.Queue())
+        ProcessManagerMixin._initialize_process_manager(manager)
+        manager._queue_process_event = lambda event: ProcessManagerMixin._queue_process_event(
+            manager, event
+        )
         with tempfile.TemporaryDirectory() as temporary:
             managed = ManagedProcess(
                 "sim",
@@ -1248,7 +1313,7 @@ class CupProtocolTests(unittest.TestCase):
             self.assertEqual(managed.output_tail[-1], "RuntimeError: camera unavailable")
             self.assertEqual(manager.log_queue.get()[0], "line")
             self.assertEqual(manager.log_queue.get()[0], "line")
-            self.assertEqual(manager.log_queue.get()[0], "exit")
+            self.assertEqual(manager.process_exits.get()[0], "exit")
 
 
 if __name__ == "__main__":

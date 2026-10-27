@@ -45,12 +45,7 @@ class PhysicsMixin:
                 client=p,
                 use_motors=True,
             )
-            physics_steps = max(
-                1,
-                min(6, round(self.loop_dt_s * SIMULATION_FREQUENCY_HZ)),
-            )
-            for _ in range(physics_steps):
-                p.stepSimulation()
+            p.stepSimulation()
         else:
             # Direct preview keeps the light finger links visually stable.
             p.stepSimulation()
@@ -76,10 +71,9 @@ class PhysicsMixin:
                 self.measured_motor_torque[name] = 0.0
 
         self.frame_number += 1
+        self.simulation_time_s = self.frame_number / SIMULATION_FREQUENCY_HZ
         if self.dynamic_mode:
             self.torque_graph.append(self.measured_motor_torque)
-        if self.frame_number % 6 == 0:
-            self.torque_graph.redraw(self.dynamic_mode)
         if self.dynamic_mode and self.frame_number % 12 == 0:
             commanded_q, _, _ = self.dynamics.joint_state()
             column_for_joint = {joint: column for column, joint in enumerate(self.dynamics.joints)}
@@ -90,7 +84,12 @@ class PhysicsMixin:
             self.physics_snapshot = self.dynamics.snapshot(
                 commanded_positions=commanded_q,
                 payload_kg=TARGET_NORMAL_MASS_KG if self.grasp_constraint is not None else 0.0,
-                time_s=self.frame_number / SIMULATION_FREQUENCY_HZ,
+                time_s=self.simulation_time_s,
+            )
+            self.physics_snapshot.update(
+                wall_time_s=self.wall_time_s,
+                physics_time_s=self.simulation_time_s,
+                physics_backlog_s=self.step_clock.pending_s,
             )
             if self.telemetry_file is not None:
                 self.telemetry_file.write(json.dumps(self.physics_snapshot) + "\n")

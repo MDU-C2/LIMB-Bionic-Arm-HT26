@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from collections import deque
 from pathlib import Path
 
@@ -138,15 +140,73 @@ class EmgModel:
 
 
 class LiveEmgClassifier:
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, *, background=False):
         self.model = EmgModel(directory)
+        self.background = background
+        self.condition = threading.Condition()
+        self.worker = None
+        self.stopping = False
+        self.generation = 0
+        self.pending = None
+        self.skipped_windows = 0
+        self.error = ""
         self.reset()
 
     def reset(self) -> None:
         self.stream = EmgWindowStream(self.model.settings)
         self.history: deque = deque(maxlen=self.model.sequence_length)
-        self.phase: str | None = None
-        self.confidence: float | None = None
+        with self.condition:
+            self.generation += 1
+            self.pending = None
+            self._prediction = (None, None, 0.0)
+
+    @property
+    def phase(self):
+        phase, _confidence, stamp = self._prediction
+        return phase if not self.background or time.monotonic() - stamp <= 0.5 else None
+
+    @property
+    def confidence(self):
+        return self._prediction[1] if self.phase is not None else None
+
+    def _predict(self, features, generation, stamp):
+        try:
+            scores = self.model.predict(features)[0]
+            prediction = (PHASE_NAMES[int(np.argmax(scores))], float(np.max(scores)), stamp)
+            error = ""
+        except Exception as failure:
+            prediction, error = (None, None, stamp), f"EMG model inference failed: {failure}"
+        with self.condition:
+            if generation == self.generation and not self.stopping:
+                self._prediction, self.error = prediction, error
+
+    def _run(self):
+        while True:
+            with self.condition:
+                self.condition.wait_for(lambda: self.stopping or self.pending is not None)
+                if self.stopping:
+                    return
+                features, generation, stamp = self.pending
+                self.pending = None
+            self._predict(features, generation, stamp)
+
+    def close(self, timeout=3.0):
+        with self.condition:
+            self.stopping = True
+            self.pending = None
+            self.condition.notify_all()
+        if self.worker is not None:
+            self.worker.join(timeout)
+            if self.worker.is_alive():
+                return False
+            self.worker = None
+        return True
+
+    def reopen(self):
+        if self.worker is not None and self.worker.is_alive():
+            raise RuntimeError("Previous EMG inference worker is still stopping")
+        self.stopping = False
+        self.reset()
 
     def update(self, raw: float) -> None:
         if not np.isfinite(raw) or not 0 <= raw <= 4095:
@@ -158,14 +218,27 @@ class LiveEmgClassifier:
         _start, vector = emitted
         if vector is None:
             self.history.clear()
-            self.phase = self.confidence = None
+            with self.condition:
+                self.generation += 1
+                self.pending = None
+                self._prediction = (None, None, 0.0)
             return
         self.history.append(vector)
         if len(self.history) == self.model.sequence_length:
-            self.phase = self.confidence = None
-            scores = self.model.predict(np.asarray([self.history]))[0]
-            self.phase = PHASE_NAMES[int(np.argmax(scores))]
-            self.confidence = float(np.max(scores))
+            features, stamp = np.asarray([self.history]), time.monotonic()
+            if not self.background:
+                self._predict(features, self.generation, stamp)
+                return
+            with self.condition:
+                if self.stopping:
+                    return
+                if self.pending is not None:
+                    self.skipped_windows += 1
+                self.pending = features, self.generation, stamp
+                if self.worker is None:
+                    self.worker = threading.Thread(target=self._run, daemon=True)
+                    self.worker.start()
+                self.condition.notify()
 
     def grip(self, activation: float | None) -> float | None:
         # Phase describes intent; the calibrated amplitude still sets grip strength.

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import sys
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -12,7 +11,6 @@ from aurora.gui.emg_tools import EmgToolsMixin
 from aurora.gui.project_support import (
     RECORDING_EXTENSIONS,
     REPOSITORY_ROOT,
-    console_python,
     display_path,
     project_path,
 )
@@ -80,7 +78,7 @@ class RecordingBrowserMixin(EmgToolsMixin):
         ttk.Button(bottom, text="Open folder", command=self._open_recordings_root).grid(
             row=0, column=1, padx=(8, 0)
         )
-        ttk.Button(bottom, text="Plot signals", command=self._plot_selected_recording).grid(
+        ttk.Button(bottom, text="Plot / export image", command=self._plot_selected_recording).grid(
             row=0, column=2, padx=(8, 0)
         )
         ttk.Button(
@@ -95,14 +93,17 @@ class RecordingBrowserMixin(EmgToolsMixin):
         ttk.Button(bottom, text="Review EMG labels", command=self._review_selected_emg).grid(
             row=1, column=3, padx=(8, 0), pady=(8, 0)
         )
-        ttk.Button(bottom, text="Compare EMG models", command=self._train_emg_dialog).grid(
-            row=2, column=3, padx=(8, 0), pady=(8, 0)
-        )
+        ttk.Button(
+            bottom,
+            text="EMG model tools (Advanced)",
+            command=lambda: self.workflow.open_advanced("emg"),
+        ).grid(row=2, column=3, padx=(8, 0), pady=(8, 0))
         ttk.Label(
             bottom,
             text="Plot the raw signals first. Processing saves separate files.",
             style="PageSub.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self.workflow.build_review_actions(bottom)
 
     def _browse_recordings_root(self) -> None:
         current = project_path(self.recordings_root.get())
@@ -113,36 +114,51 @@ class RecordingBrowserMixin(EmgToolsMixin):
             self._refresh_recordings()
 
     def _refresh_recordings(self) -> None:
-        self.recording_files = []
-        self.recording_metadata.clear()
-        self.recordings_scan_error = ""
-        self.recordings_scan_truncated = False
         root_value = self.recordings_root.get().strip()
-        if not root_value:
-            self.recordings_scan_error = "Choose a recordings folder"
-            self._render_recordings()
-            return
-        root = project_path(root_value)
-        if root.is_dir():
-            try:
-                for path in root.rglob("*"):
-                    try:
-                        if not path.is_file() or path.suffix.lower() not in RECORDING_EXTENSIONS:
+        root = project_path(root_value) if root_value else None
+        self.recordings_status.configure(text="Scanning recordings...")
+
+        def scan(cancelled):
+            files, metadata, error, truncated = [], {}, "", False
+            exists = root is not None and root.is_dir()
+            if exists:
+                try:
+                    for path in root.rglob("*"):
+                        if cancelled.is_set():
+                            return None
+                        try:
+                            if (
+                                path.suffix.lower() not in RECORDING_EXTENSIONS
+                                or not path.is_file()
+                            ):
+                                continue
+                            stat = path.stat()
+                        except OSError:
                             continue
-                        stat = path.stat()
-                    except OSError:
-                        continue
-                    self.recording_files.append(path)
-                    self.recording_metadata[path] = (stat.st_size, stat.st_mtime)
-                    if len(self.recording_files) >= 2000:
-                        self.recordings_scan_truncated = True
-                        break
-                self.recording_files.sort(
-                    key=lambda path: self.recording_metadata[path][1], reverse=True
-                )
-            except OSError as error:
-                self.recordings_scan_error = f"Could not read folder: {error}"
-        self._render_recordings()
+                        files.append(path)
+                        metadata[path] = (stat.st_size, stat.st_mtime)
+                        if len(files) >= 2000:
+                            truncated = True
+                            break
+                    files.sort(key=lambda path: metadata[path][1], reverse=True)
+                except OSError as failure:
+                    error = f"Could not read folder: {failure}"
+            return files, metadata, error, truncated, exists
+
+        def ready(result, error):
+            if error is not None:
+                self.recordings_scan_error = f"Could not scan folder: {error}"
+            else:
+                (
+                    self.recording_files,
+                    self.recording_metadata,
+                    self.recordings_scan_error,
+                    self.recordings_scan_truncated,
+                    self._recording_root_exists,
+                ) = result
+            self._render_recordings()
+
+        self.background_tasks.submit("recordings", scan, ready)
 
     def _schedule_recordings_filter(self) -> None:
         if self.recordings_filter_after is not None:
@@ -156,6 +172,11 @@ class RecordingBrowserMixin(EmgToolsMixin):
     def _render_recordings(self) -> None:
         if not hasattr(self, "recordings_tree"):
             return
+        selected_paths = {
+            self.recording_tree_paths[item]
+            for item in self.recordings_tree.selection()
+            if item in self.recording_tree_paths
+        }
         self.recordings_tree.delete(*self.recordings_tree.get_children())
         self.recording_tree_paths.clear()
         root_value = self.recordings_root.get().strip()
@@ -180,11 +201,13 @@ class RecordingBrowserMixin(EmgToolsMixin):
                 values=(path.suffix.lstrip(".").upper(), self._format_size(size_bytes), modified),
             )
             self.recording_tree_paths[item] = path
+            if path in selected_paths:
+                self.recordings_tree.selection_add(item)
         if self.recordings_scan_error:
             message = self.recordings_scan_error
         elif root is None:
             message = "Choose a recordings folder"
-        elif not root.is_dir():
+        elif not getattr(self, "_recording_root_exists", False):
             message = f"Folder does not exist yet: {display_path(root)}"
         elif not self.recording_files:
             message = "No supported recordings found"
@@ -215,45 +238,10 @@ class RecordingBrowserMixin(EmgToolsMixin):
             self._open_existing(path)
 
     def _plot_selected_recording(self) -> None:
-        selected = self.recordings_tree.selection()
-        path = self.recording_tree_paths.get(selected[0]) if selected else None
-        if path is None or (
-            path.suffix.lower() != ".csv" and path.name not in {"trial.json", "pose.json"}
-        ):
-            messagebox.showinfo(
-                "Choose a recording", "Select trial.json, pose.json or a sensor CSV."
-            )
-            return
-        python = self.simulation_python or console_python(Path(sys.executable))
-        self._start_program(
-            "Sensor recording plot",
-            "plot",
-            [str(python), "-m", "aurora.recording.plot_sensor_recording", "--file", str(path)],
-            parallel=True,
-            process_key="plot:sensor",
-        )
+        self.workflow.show_tool("plot")
 
     def _process_selected_emg(self) -> None:
-        from aurora.recording.saved_signals import emg_file
-
-        selected = self.recordings_tree.selection()
-        path = self.recording_tree_paths.get(selected[0]) if selected else None
-        if path is None:
-            messagebox.showinfo("Choose a recording", "Select trial.json or a raw EMG CSV.")
-            return
-        try:
-            source = emg_file(path)
-        except (OSError, ValueError) as error:
-            messagebox.showerror("Raw EMG required", str(error))
-            return
-        python = self.simulation_python or console_python(Path(sys.executable))
-        self._start_program(
-            "Saved EMG processing",
-            "processing",
-            [str(python), "-m", "aurora.recording.emg_processing", "--file", str(source)],
-            parallel=True,
-            process_key="processing:emg",
-        )
+        self.workflow.show_tool("process_emg")
 
     def _open_recordings_root(self) -> None:
         root_value = self.recordings_root.get().strip()

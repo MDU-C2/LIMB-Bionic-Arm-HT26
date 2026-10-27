@@ -3,28 +3,62 @@
 
 from __future__ import annotations
 
+import _thread
+import json
 import math
 import os
 import re
 import signal
+import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
-from aurora.json_utils import write_json
+from aurora.json_utils import read_json_object, write_json
 from aurora.paths import REPOSITORY_ROOT
 from aurora.time_utils import utc_now
 
 DEFAULT_OUTPUT = REPOSITORY_ROOT / "outputs" / "recordings"
 
 
-def enable_ctrl_break_as_interrupt() -> None:
+STOP_COMMAND = '{"command":"stop"}\n'
+
+
+def enable_ctrl_break_as_interrupt(*, stdin_stop=False) -> None:
     """Let the GUI's Windows stop request reach recorder cleanup blocks."""
-    if hasattr(signal, "SIGBREAK"):
 
-        def interrupt(_number: int, _frame: object) -> None:
-            raise KeyboardInterrupt
+    def interrupt(_number: int, _frame: object) -> None:
+        raise KeyboardInterrupt
 
-        signal.signal(signal.SIGBREAK, interrupt)
+    for name in ("SIGBREAK", "SIGTERM"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), interrupt)
+    if stdin_stop and os.environ.get("AURORA_GUI_CONTROL") == "1":
+        threading.Thread(target=_read_stop_command, daemon=True).start()
+
+
+def _read_stop_command():
+    """Interrupt the main loop from a GUI command, including console-free Windows children."""
+    pending = b""
+    try:
+        descriptor = sys.stdin.fileno()
+        # This worker owns stdin. Nested helpers must use DEVNULL, so they cannot
+        # consume commands or share a pending Windows pipe read.
+        while block := os.read(descriptor, 4096):
+            pending += block
+            while b"\n" in pending:
+                line, pending = pending.split(b"\n", 1)
+                try:
+                    command = json.loads(line)
+                except (ValueError, UnicodeError):
+                    continue
+                if isinstance(command, dict) and command.get("command") == "stop":
+                    _thread.interrupt_main()
+                    return
+            if len(pending) > 4096:
+                return
+    except (OSError, ValueError, AttributeError):
+        return
 
 
 def env_float(name: str, default: float) -> float:
@@ -39,6 +73,21 @@ def safe_label(value: str) -> str:
     """Make a short label safe to use in a folder name."""
     label = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip()).strip("._-")
     return label or "session"
+
+
+def verify_subject_files(paths, subject: str) -> None:
+    """Reject an ID collision using saved identity, including case-insensitive paths."""
+    for path in paths:
+        try:
+            document = read_json_object(path)
+            saved = document.get("subject_id", document.get("user_id"))
+        except (OSError, ValueError) as error:
+            raise ValueError(f"Cannot verify the subject in {path.name}: {error}") from error
+        if saved is None or str(saved) != subject:
+            raise ValueError(
+                f"This folder contains recordings for subject {saved!r}. "
+                "Use that exact subject ID or choose another output folder."
+            )
 
 
 def create_session_directory(source: str, subject: str) -> Path:

@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import contextlib
-import time
 import tkinter as tk
 from tkinter import ttk
 
-from aurora.sensors.emg_protocol import EmgActivationEstimator, extract_emg
-from aurora.sensors.fusion import DualImuArmEstimator
-from aurora.sensors.imu_protocol import ROLE_LABELS, extract_imus, i2c_wiring_hint
+from aurora.sensors.emg_protocol import extract_emg
+from aurora.sensors.imu_protocol import ROLE_LABELS, i2c_wiring_hint
+from aurora.sensors.live_input import LiveSensorInput
 
 
 class ImuMonitorWindow:
@@ -23,9 +22,7 @@ class ImuMonitorWindow:
         self.window.minsize(700, 580)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.closed = False
-        self.estimator = DualImuArmEstimator()
-        self.emg_estimator = EmgActivationEstimator()
-        self.last_sample_time: float | None = None
+        self.motion = LiveSensorInput(transport="serial", show_monitor=False)
         self.connection = tk.StringVar(value="Waiting for serial connection")
         self.device = tk.StringVar(value="ESP32: no data")
         self.joints = tk.StringVar(value="Waiting for IMU data")
@@ -114,14 +111,22 @@ class ImuMonitorWindow:
             maximum=100.0,
             length=250,
         ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(12, 0))
+        actions = ttk.Frame(emg)
+        actions.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Button(actions, text="Measure relaxed EMG", command=self.calibrate_emg_rest).pack(
+            side="left"
+        )
+        ttk.Button(actions, text="Measure firm grip", command=self.calibrate_emg_strength).pack(
+            side="left", padx=8
+        )
 
-        fused = ttk.LabelFrame(root, text="Relative arm estimate", padding=14)
+        fused = ttk.LabelFrame(root, text="Relative arm estimate (fixed mounting)", padding=14)
         fused.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(14, 0))
         fused.columnconfigure(0, weight=1)
         ttk.Label(fused, textvariable=self.joints, font=("Cascadia Mono", 10)).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Button(fused, text="Calibrate current pose", command=self.calibrate).grid(
+        ttk.Button(fused, text="Reset IMU reference", command=self.calibrate).grid(
             row=0, column=1, padx=(12, 0)
         )
 
@@ -150,14 +155,17 @@ class ImuMonitorWindow:
         except (KeyError, TypeError, ValueError):
             return "X  -        Y  -        Z  -"
 
+    def accept_packet(self, packet) -> None:
+        """Process every acquired sample, independently of display refresh."""
+        self.motion.feed_serial(packet)
+
     def show_packet(self, packet: dict[str, object]) -> None:
         if not self.exists:
             return
-        now = time.monotonic()
-        dt = 0.02 if self.last_sample_time is None else now - self.last_sample_time
-        self.last_sample_time = now
+        self.accept_packet(packet)
+        snapshot = self.motion.poll()
         device = str(packet.get("device", "ESP32"))
-        sensors = extract_imus(packet)
+        sensors = snapshot.sensors
         roles = tuple(
             role for role in ("shoulder", "wrist") if sensors.get(role, {}).get("connected") is True
         )
@@ -223,12 +231,12 @@ class ImuMonitorWindow:
             values["gyro"].set(self._axes(sensor.get("gyro_dps"), 2))
 
         emg = extract_emg(packet)
-        if emg.get("connected") is True:
-            raw = int(emg["adc_raw"])
-            activation = self.emg_estimator.update(raw, dt)
+        if snapshot.emg_raw is not None:
+            raw = snapshot.emg_raw
+            activation = snapshot.emg_activation
             if activation is None:
-                percent = round(self.emg_estimator.calibration_progress * 100)
-                self.emg_value.set(f"Raw {raw:4d} ADC   Calibrating rest {percent:3d}%")
+                percent = round(self.motion.emg_estimator.calibration_progress * 100)
+                self.emg_value.set(f"Raw {raw:4d} ADC   {self.motion.emg_estimator.status}")
                 self.emg_progress.set(percent)
             else:
                 self.emg_value.set(f"Raw {raw:4d} ADC   Activation {activation * 100:5.1f}%")
@@ -241,9 +249,13 @@ class ImuMonitorWindow:
             self.emg_meta.set("ADC channel: -    GPIO: -")
             self.emg_progress.set(0.0)
 
-        estimate = self.estimator.update(sensors, dt)
+        estimate = snapshot.relative_angles or snapshot.angles
         if estimate is None:
-            self.joints.set(f"Waiting for an IMU ({connected}/2 connected)")
+            self.joints.set(
+                "Forearm IMU connected; shoulder IMU needed for arm estimates"
+                if roles == ("wrist",)
+                else f"Waiting for an IMU ({connected}/2 connected)"
+            )
             return
         if not estimate:
             self.joints.set("Forearm IMU connected · camera or shoulder IMU needed for arm control")
@@ -268,16 +280,24 @@ class ImuMonitorWindow:
         )
 
     def calibrate(self) -> None:
-        self.estimator.reset_calibration()
-        self.emg_estimator.reset()
-        self.last_sample_time = None
+        self.motion.calibrate()
         self.joints.set("Calibration reset · hold the arm still for the next sample")
+
+    def calibrate_emg_rest(self) -> None:
+        self.motion.calibrate_emg()
         self.emg_value.set("Calibration reset · relax the muscle briefly")
         self.emg_progress.set(0.0)
+
+    def calibrate_emg_strength(self) -> None:
+        if self.motion.calibrate_emg_strength():
+            self.emg_value.set("Hold a firm, comfortable grip for 3 seconds, then relax")
+        else:
+            self.emg_value.set(self.motion.emg_estimator.status)
 
     def close(self) -> None:
         if self.closed:
             return
         self.closed = True
+        self.motion.close()
         with contextlib.suppress(tk.TclError):
             self.window.destroy()

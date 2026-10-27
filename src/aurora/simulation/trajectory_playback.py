@@ -14,6 +14,7 @@ import numpy as np
 import pybullet as p
 
 from aurora.paths import RESOURCE_DIRECTORY
+from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.simulation.dmp.trajectory_io import load_dmp_trajectory, resolve_saved_dmp_rollout_path
 from aurora.simulation.model.joint_limits import (
     DMP_JOINT_NAMES,
@@ -69,6 +70,7 @@ def main() -> None:
         help="Run once without opening a window or waiting in real time",
     )
     args = parser.parse_args()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     if args.loop and args.headless:
         parser.error("--loop and --headless cannot be combined")
     if not args.path.is_dir():

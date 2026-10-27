@@ -94,6 +94,25 @@ class EmgActivationEstimator:
             else "Calibrate strong grip (scale estimated)"
         )
 
+    @property
+    def calibration_state(self) -> dict:
+        """Machine state is independent of the instructions shown to the operator."""
+        if self._gap_settling_s > 0:
+            phase, progress = "gap", 0.0
+        elif self._clipping > 0.05:
+            phase, progress = "clipping", 0.0
+        elif self.calibration_error:
+            phase, progress = "failed", 0.0
+        elif not self.calibrated:
+            phase, progress = "rest", self.calibration_progress
+        elif self._strength_elapsed is not None:
+            phase, progress = "grip", min(1.0, self._strength_elapsed / 3)
+        elif self.reference is not None:
+            phase, progress = "ready", 1.0
+        else:
+            phase, progress = "grip_reference_needed", 0.0
+        return {"phase": phase, "progress": progress, "message": self.status}
+
     def calibrate_strength(self) -> bool:
         """Capture three seconds of deliberate grip after a relaxed baseline."""
         if not self.calibrated:

@@ -37,7 +37,9 @@ class GraspMixin:
     """Handle safe approach, finger movement, grasping, and release."""
 
     def update_grasp(self) -> None:
-        """Advance the existing cup interaction and grip logic."""
+        """Advance cup interaction; consume each queued action once."""
+        interact_requested = self.interact_requested
+        self.interact_requested = False
         current_contact_links, self.fingertip_force_n = self.target_contact_feedback()
         self.hand_target_contact = bool(current_contact_links & self.hand_contact_link_indices)
         self.active_fingertips = {
@@ -187,7 +189,7 @@ class GraspMixin:
 
         if (
             (
-                self.interact_requested
+                interact_requested
                 or self.auto_grasp_pending
                 or manual_grasp_requested
                 or live_grasp_ready
@@ -195,7 +197,7 @@ class GraspMixin:
             and self.grasp_transform is None
             and self.hand_link_index != -1
         ):
-            if self.interact_requested and self.auto_grasp_pending:
+            if interact_requested and self.auto_grasp_pending:
                 self.auto_grasp_pending = False
                 self.auto_grasp_phase = "reach"
                 self.notice_text = "Assisted grasp canceled"
@@ -296,7 +298,7 @@ class GraspMixin:
                 self.notice_text = f"Grip failed: {len(self.active_fingertips)}/{MIN_GRASP_FINGERTIPS} fingertip contacts"
                 self.notice_until_ms = pygame.time.get_ticks() + 2600
                 print(self.notice_text)
-            elif self.interact_requested:
+            elif interact_requested:
                 target_reachable, target_reason = is_reachable(self.target_relative_position)
                 if target_reachable:
                     self.auto_grasp_pending = True
@@ -310,7 +312,7 @@ class GraspMixin:
                 print(self.notice_text)
 
         elif (
-            self.interact_requested
+            interact_requested
             or self.keys[pygame.K_g]
             or self.bullet_key_down("g")
             or (

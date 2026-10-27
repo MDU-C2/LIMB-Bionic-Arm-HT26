@@ -16,6 +16,9 @@ os.environ.setdefault("MPLCONFIGDIR", str(REPOSITORY_ROOT / "outputs" / "cache" 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
+    parser.add_argument(
+        "--save", type=Path, help="Separate image export; defaults to the training folder"
+    )
     args = parser.parse_args()
     import matplotlib
 
@@ -36,7 +39,10 @@ def main() -> None:
         axis.grid(True, linestyle="--", alpha=0.6)
         axis.legend()
     figure.tight_layout()
-    figure.savefig(args.manifest.parent / "training_metrics.png")
+    output = args.save or args.manifest.parent / "training_metrics.png"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output)
+    print(f"Saved {output}")
     plt.close(figure)
 
 

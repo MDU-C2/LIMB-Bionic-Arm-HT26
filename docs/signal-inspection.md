@@ -1,6 +1,6 @@
 # Inspect saved signals
 
-In **Recordings**, select `trial.json` and press **Plot signals**. The plot shows
+In **Review & export**, select `trial.json` and press **Plot / export image**. Choose the signals, optional spectrum and PNG destination. Leave the image destination empty to open an interactive plot. The plot shows
 raw EMG, upper-arm and forearm acceleration/gyroscope readings, and saved camera
 angle estimates. Use the toolbar to zoom, pan or save an image.
 
@@ -22,7 +22,7 @@ Before processing, check:
 - Spikes, missing samples and movement artefacts.
 - Whether the cue/marker timing agrees with the signal and video.
 
-For a raw EMG spectrum, run:
+Enable **Include EMG spectrum** in that form. The equivalent optional command is:
 
 ```powershell
 python -m aurora.recording.plot_sensor_recording --file PATH/emg.csv --spectrum
@@ -41,7 +41,7 @@ slope-sign changes and sample variance in 200 ms windows with 50 ms overlap.
 The ZC/SSC threshold defaults to 5 ADC counts (`--noise-threshold`).
 It requires regular sample times and a sampling rate above twice the high cutoff.
 The USB diagnostic stream is 400 Hz, so it cannot use the default 450 Hz cutoff.
-Use the command line to choose a lower cutoff for that stream:
+Choose a lower **Band-pass upper frequency** in the processing form, for example 150 Hz. The equivalent optional command is:
 
 ```powershell
 python -m aurora.recording.emg_processing --file PATH/recording.csv --highcut 150

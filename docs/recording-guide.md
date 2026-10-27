@@ -10,7 +10,7 @@ simulator and does not need an internet connection after setup.
    arm, hand and the cup's path across the 60 x 60 cm table. Keep the camera,
    chair and table positions fixed. The table can hide the hips; recording
    continues, but trunk-relative shoulder angles may be unavailable.
-2. Open **Recording**. Enter a subject ID such as `S01`, choose the arm and
+2. Open **Record**. Enter a subject ID such as `S01`, choose the arm and
    set the recording window. The default is **8 seconds after GO**, with a
    **3-second countdown**. Use a longer window if a practice attempt, especially
    at slow pace, needs more time. `0` selects manual stopping.
@@ -219,7 +219,7 @@ times stay empty until the new clock fit is available. Review epochs separately.
 
 ## Inspect before processing
 
-Open **Recordings**, select a trial's `trial.json`, then press **Plot signals**.
+Open **Review & export**, select a trial's `trial.json`, then press **Plot / export image**.
 This shows raw EMG, both IMUs and saved camera angle estimates. Use the plot
 toolbar to zoom and pan. Selecting `emg.csv`, `imu.csv` or `pose.json` plots
 that source alone. Missing samples break the lines. Operator marker times are
@@ -227,18 +227,19 @@ shown when the saved clocks can be aligned.
 
 Check the relaxed level, contraction changes, clipping and gaps before applying
 filters. Press **Process EMG** to save filtered samples, six-feature windows and
-processing settings beside the source. Refresh the list and select the generated
+processing settings in a new folder selected in the form. Use **Browse last outputs in Review** and select the generated
 CSV to plot it. Raw files stay unchanged. See [signal inspection](signal-inspection.md)
 for the spectrum and filter settings.
 
 Use **Review EMG labels** to check phase boundaries against the raw signal and
-video, then **Compare EMG models** for participant evaluation. See
+video, then **Advanced Tools → EMG models → Compare EMG models** for participant evaluation. See
 [EMG learning](emg-learning.md) for labels, model settings and selection.
 
 ## Advanced recordings
 
-Expand **Advanced recording options** for individual sources, USB diagnostics,
-custom camera arguments or guided grip trials. The existing recorders still
+Open **Advanced Tools → Raw capture** for individual sources, camera depth/detail
+settings or guided grip trials. USB monitoring is under **Connect & inspect**.
+The existing recorders still
 save separate source folders with shared subject and session metadata.
 
 For a guided grip trial, select Bluetooth and EMG, enable **Guided grip trial**

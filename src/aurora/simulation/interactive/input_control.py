@@ -34,10 +34,12 @@ class InputMixin:
         """Read current positions and the latest camera/BLE control state."""
         # Keep motor speed tied to elapsed time when rendering slows down.
         previous_loop_ms = self.clock.get_time()
-        self.loop_dt_s = (
+        elapsed_s = (
             previous_loop_ms / 1000.0 if previous_loop_ms > 0 else 1.0 / SIMULATION_FREQUENCY_HZ
         )
-        self.loop_dt_s = min(0.1, max(0.001, self.loop_dt_s))
+        self.steps_due = self.step_clock.advance(elapsed_s)
+        self.wall_time_s = self.step_clock.wall_time_s
+        self.loop_dt_s = self.step_clock.period_s
 
         try:
             self.target_position, _ = p.getBasePositionAndOrientation(self.target_body)
@@ -72,13 +74,19 @@ class InputMixin:
             if self.live_snapshot.stop_requested:
                 self.running = False
                 return False
+            if not self.live_snapshot.calibration_valid:
+                self.live_feedback_active = False
+            guide = getattr(self, "live_setup", None)
+            if guide is not None:
+                guide.update(self.live_snapshot)
+                if guide.stage != "running":
+                    self.live_feedback_active = False
         return True
 
     def process_events(self) -> None:
         """Handle keyboard actions and live alignment/calibration."""
         reset_requested = getattr(self, "live_reset_requested", False)
         self.live_reset_requested = False
-        self.interact_requested = False
         self.camera_changed = False
         calibrate_requested = False
         start_live_requested = False
@@ -194,6 +202,7 @@ class InputMixin:
             self.running = False
 
         if reset_requested:
+            self.interact_requested = False
             self.auto_grasp_pending = False
             self.auto_grasp_phase = "reach"
             self.h_contact_stop = False
@@ -231,9 +240,11 @@ class InputMixin:
                 if getattr(self, "live_setup", None) is not None:
                     from aurora.simulation.interactive.live_setup import LiveSetup
 
+                    self.live_setup.cancel()
                     self.live_setup = LiveSetup(
                         self.live_sensor_input,
                         anatomical_reference_angles(get_angles_deg(self.arm)),
+                        subject_id=getattr(self.args, "subject", "diagnostic"),
                     )
                 elif self.args.transport == "serial":
                     self.setup_text.set(
@@ -281,8 +292,13 @@ class InputMixin:
                     return target
                 return step_toward(current, target, joint, elapsed_s=elapsed_s)
 
-            targets = interactive_control_targets(
-                self.live_snapshot.angles if self.live_snapshot is not None else None
+            targets = (
+                (
+                    self.live_snapshot.robot_targets
+                    or interactive_control_targets(self.live_snapshot.angles)
+                )
+                if self.live_snapshot is not None
+                else None
             )
             if targets:
                 set_shoulder(
@@ -374,6 +390,7 @@ class InputMixin:
                 "shoulder_y",
                 self.arm.shoulder.angle_y,
                 speed_mult,
+                self.loop_dt_s,
             )
             delta_should_z = self.manual_motion.step(
                 self.keys,
@@ -382,6 +399,7 @@ class InputMixin:
                 "shoulder_z",
                 self.arm.shoulder.angle_z,
                 speed_mult,
+                self.loop_dt_s,
             )
             delta_should_x = self.manual_motion.step(
                 self.keys,
@@ -390,6 +408,7 @@ class InputMixin:
                 "shoulder_x",
                 self.arm.shoulder.angle_x,
                 speed_mult,
+                self.loop_dt_s,
             )
             set_shoulder(
                 self.arm,
@@ -406,6 +425,7 @@ class InputMixin:
                 "elbow_x",
                 self.arm.elbow.angle_x,
                 speed_mult,
+                self.loop_dt_s,
             )
             delta_wrist = self.manual_motion.step(
                 self.keys,
@@ -414,6 +434,7 @@ class InputMixin:
                 "wrist_rotation",
                 self.arm.wrist.rotation,
                 speed_mult,
+                self.loop_dt_s,
             )
             set_elbow(self.arm, x=delta_elbow_x, mode="rel")
             set_wrist(self.arm, delta_wrist, mode="rel")

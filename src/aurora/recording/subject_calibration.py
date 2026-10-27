@@ -63,6 +63,7 @@ def fit_subject_reference(directory: Path, manifest: dict):
         "subject_id": manifest["subject_id"],
         "side": manifest["side"],
         "connection_generation": manifest["connection_generation"],
+        "mounting_session_id": manifest.get("mounting_session_id"),
         "accuracy_validated": False,
     }
     try:

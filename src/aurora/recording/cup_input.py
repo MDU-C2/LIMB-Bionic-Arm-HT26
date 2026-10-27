@@ -7,47 +7,24 @@ import contextlib
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field, replace
-from typing import Any
+from dataclasses import replace
 
 from aurora.sensors.ble_input import BleSensorReader
 from aurora.sensors.camera.oak_camera import (
+    DEPTH_MATCH_TOLERANCE_NS,
     FRAME_SIZE,
+    DepthFrame,
     build_pipeline,
     configure_depthai_runtime,
+    device_timestamp_ns,
+    matching_depth,
+    next_tracking_frame,
+    receive_depth,
     receive_frame,
 )
+from aurora.sensors.camera.oak_camera import CameraFrame as CupCameraFrame
 
-# Half a camera period. Distant depth frames must not supply 3D arm coordinates.
-DEPTH_MATCH_TOLERANCE_NS = 20_000_000
-
-
-def device_timestamp_ns(message):
-    """RGB and depth share the OAK device clock; it differs from the ESP32 clock."""
-    return round(message.getTimestampDevice().total_seconds() * 1e9)
-
-
-@dataclass(frozen=True)
-class CupDepthFrame:
-    """One RGB-aligned millimetre map with host receipt and OAK device times."""
-
-    frame_sequence: int
-    frame_time_ns: int
-    device_time_ns: int
-    depth_mm: Any
-
-
-@dataclass(frozen=True)
-class CupCameraFrame:
-    """Keep tracking attached to the RGB frame that supplied it, even when delayed."""
-
-    frame_sequence: int
-    frame_time_ns: int
-    latest_frame: Any
-    camera_sample: Any = None
-    camera_observation: dict = field(default_factory=dict)
-    device_frame_sequence: int | None = None
-    device_time_ns: int | None = None
+CupDepthFrame = DepthFrame
 
 
 class CupSensorInput:
@@ -63,6 +40,7 @@ class CupSensorInput:
             shoulder_twist_axis=shoulder_twist_axis,
             wrist_twist_axis=wrist_twist_axis,
             synchronize_clock=True,
+            side=side,
         )
         self.cv2 = self.pipeline = self.video_queue = self.depth_queue = None
         self.camera_frame = self.tracking_frame = None
@@ -141,15 +119,7 @@ class CupSensorInput:
                 if self.depth_queue is not None:
                     depth_message = self.depth_queue.tryGet()
                     if depth_message is not None:
-                        depth_mm = depth_message.getFrame()
-                        self._publish_depth(
-                            CupDepthFrame(
-                                depth_message.getSequenceNum(),
-                                time.monotonic_ns(),
-                                device_timestamp_ns(depth_message),
-                                depth_mm,
-                            )
-                        )
+                        self._publish_depth(receive_depth(depth_message))
                 message = self.video_queue.tryGet()
                 if message is None:
                     self.stop_event.wait(0.002)
@@ -190,34 +160,18 @@ class CupSensorInput:
 
     def matching_depth(self, frame):
         """Match by device time, never by whichever map happened to arrive last."""
-        if frame.device_time_ns is None:
-            return None
         with self.lock:
             candidates = list(self.depth_history)
-        if not candidates:
-            return None
-        matched = min(candidates, key=lambda item: abs(item.device_time_ns - frame.device_time_ns))
-        if abs(matched.device_time_ns - frame.device_time_ns) > DEPTH_MATCH_TOLERANCE_NS:
-            return None
-        return matched
+        return matching_depth(frame.device_time_ns, candidates)
 
     def next_tracking_frame(self, last_sequence):
         """Wait for stereo's delayed map without holding up the raw camera view."""
         with self.lock:
             frames = list(self.rgb_history)
-        for frame in reversed(frames):
-            if frame.frame_sequence <= last_sequence:
-                break
-            depth = self.matching_depth(frame) if self.depth else None
-            if depth is not None or not self.depth:
-                return frame, depth
-        # RGB tracking still works if stereo stops. Never invent metric points.
-        for frame in reversed(frames):
-            if frame.frame_sequence <= last_sequence:
-                break
-            if time.monotonic_ns() - frame.frame_time_ns >= 200_000_000:
-                return frame, None
-        return None, None
+            depths = list(self.depth_history)
+        return next_tracking_frame(
+            frames, depths, last_sequence, use_depth=self.depth, now_ns=time.monotonic_ns()
+        )
 
     def _track(self):
         pose = hands = cups = None
@@ -432,9 +386,23 @@ class CupSensorInput:
     def close(self):
         self.stop_event.set()
         self.frame_event.set()
-        if self.pipeline is not None:
-            with contextlib.suppress(Exception):
-                self.pipeline.stop()
+        errors = []
+        deadline = time.monotonic() + 5.0
         for thread in self.threads:
-            thread.join(timeout=5)
-        self.reader.stop()
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+            if thread.is_alive():
+                errors.append("Camera worker did not stop; resources remain owned")
+        if not errors and self.pipeline is not None:
+            try:
+                self.pipeline.stop()
+            except Exception as error:
+                errors.append(f"Camera pipeline: {error}")
+            else:
+                self.pipeline = None
+        try:
+            if self.reader.stop() is False:
+                raise RuntimeError("worker did not stop; connection remains owned")
+        except Exception as error:
+            errors.append(f"Sensor reader: {error}")
+        if errors:
+            raise RuntimeError("; ".join(errors))

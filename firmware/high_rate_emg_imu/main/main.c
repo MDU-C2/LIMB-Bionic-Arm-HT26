@@ -138,13 +138,10 @@ static void read_imu_frame(bool usb, bool ble, uint32_t *sequence)
 
 void app_main(void)
 {
-    const bool use_emg = SENSOR_MODE == SENSOR_MODE_EMG || SENSOR_MODE == SENSOR_MODE_EMG_IMU;
+    bool use_emg = SENSOR_MODE == SENSOR_MODE_EMG || SENSOR_MODE == SENSOR_MODE_EMG_IMU;
     const bool use_imu = SENSOR_MODE == SENSOR_MODE_IMU || SENSOR_MODE == SENSOR_MODE_EMG_IMU;
     const bool use_usb = TRANSPORT_MODE == TRANSPORT_USB || TRANSPORT_MODE == TRANSPORT_BOTH;
     const bool use_ble = TRANSPORT_MODE == TRANSPORT_BLE || TRANSPORT_MODE == TRANSPORT_BOTH;
-    if (use_emg) {
-        ESP_ERROR_CHECK(emg_init());
-    }
     if (use_imu) {
         scan_imu_bus();
     }
@@ -153,6 +150,10 @@ void app_main(void)
     }
     if (use_usb) {
         printf("sensor,timestamp_us,data...\n");
+    }
+    /* Start the 100 ms ADC buffer after bus and BLE startup have finished. */
+    if (use_emg) {
+        ESP_ERROR_CHECK(emg_init());
     }
 
     uint16_t samples[EMG_BLOCK_SIZE];
@@ -190,7 +191,13 @@ void app_main(void)
                     ble_send_emg_block(&block);
                 }
             } else if (result != ESP_OK && result != ESP_ERR_TIMEOUT) {
-                ESP_LOGW(TAG, "EMG read failed: %s", esp_err_to_name(result));
+                /* ADC pool overflow means an unknown number of conversions were
+                 * lost. V1 has no ADC loss counter: stop this stream instead of
+                 * continuing its synthetic sample clock across that loss. */
+                ESP_LOGE(TAG, "EMG capture stopped: %s. Restart the board before recording.",
+                         esp_err_to_name(result));
+                use_emg = false;
+                emg_deinit();
             }
         }
 

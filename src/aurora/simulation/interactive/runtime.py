@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import csv
 import tkinter as tk
 
@@ -29,6 +28,7 @@ from aurora.simulation.interactive.settings import (
     OVERVIEW_CAMERA_YAW_DEG,
     SIMULATION_FREQUENCY_HZ,
 )
+from aurora.simulation.stepping import FixedStepClock
 
 
 class InteractiveSimulator(
@@ -57,10 +57,11 @@ class InteractiveSimulator(
                 if not self.prepare_frame():
                     continue
                 self.process_events()
-                self.update_grasp()
-                self.update_arm()
-                if not self.advance_physics():
-                    continue
+                for _ in range(self.steps_due):
+                    self.update_grasp()
+                    self.update_arm()
+                    if not self.advance_physics():
+                        break
                 self.update_camera()
                 self.draw_hud()
                 self.update_dashboard()
@@ -75,6 +76,7 @@ class InteractiveSimulator(
         self.grasp_transform = None
         self.grasp_constraint = None
         self.auto_grasp_pending = False
+        self.interact_requested = False
         self.target_collision_pending = False
         self.auto_grasp_phase = "reach"
         self.h_contact_stop = False
@@ -100,6 +102,9 @@ class InteractiveSimulator(
         self.measured_motor_torque = {name: 0.0 for name in self.joint_indices}
         self.physics_snapshot = None
         self.frame_number = 0
+        self.simulation_time_s = 0.0
+        self.step_clock = FixedStepClock(SIMULATION_FREQUENCY_HZ)
+        self.wall_time_s = 0.0
         self.telemetry_file = None
         if self.args.telemetry_out is not None:
             self.args.telemetry_out.parent.mkdir(parents=True, exist_ok=True)
@@ -176,6 +181,7 @@ class InteractiveSimulator(
                     self.live_setup = LiveSetup(
                         self.live_sensor_input,
                         anatomical_reference_angles(get_angles_deg(self.arm)),
+                        subject_id=getattr(self.args, "subject", "diagnostic"),
                     )
                     self.setup_button.configure(state="normal")
                 else:
@@ -236,23 +242,48 @@ class InteractiveSimulator(
 
     def close(self) -> None:
         print("Simulation finished.")
-        if self.live_sensor_input is not None:
-            self.live_sensor_input.close()
-        if self.sensor_window is not None:
-            with contextlib.suppress(tk.TclError):
-                self.sensor_window.destroy()
-        pygame.quit()
-        if self.telemetry_file is not None:
-            self.telemetry_file.close()
-        if self.torque_csv_file is not None:
-            self.torque_csv_file.close()
-        if p.isConnected():
-            p.disconnect()
+        errors = []
+        guide = getattr(self, "live_setup", None)
+        if guide is not None:
+            try:
+                guide.close()
+            except Exception as error:
+                errors.append(f"calibration: {error}")
+        for name, method in (
+            ("live_sensor_input", "close"),
+            ("sensor_window", "destroy"),
+            ("telemetry_file", "close"),
+            ("torque_csv_file", "close"),
+        ):
+            resource = getattr(self, name, None)
+            if resource is None:
+                continue
+            try:
+                getattr(resource, method)()
+            except tk.TclError:
+                setattr(self, name, None)
+            except Exception as error:
+                errors.append(f"{name}: {error}")
+            else:
+                setattr(self, name, None)
+        try:
+            pygame.quit()
+        except Exception as error:
+            errors.append(f"display: {error}")
+        try:
+            if p.isConnected():
+                p.disconnect()
+        except Exception as error:
+            errors.append(f"physics: {error}")
+        if errors:
+            raise RuntimeError("; ".join(errors))
 
     def calibrate_live_emg(self) -> None:
         if self.live_sensor_input is not None:
             guide = getattr(self, "live_setup", None)
-            if guide is not None and (guide.pending or guide.stage in ("align", "imu")):
+            if guide is not None and (
+                guide.pending or guide.stage not in ("rest", "grip", "ready", "running")
+            ):
                 guide.message = "Finish the current setup step before calibrating relaxed EMG."
                 return
             self.live_sensor_input.calibrate_emg()

@@ -45,6 +45,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--address", default="", help="Optional known BLE address")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--side", choices=("left", "right"), default="left")
+    parser.add_argument(
+        "--subject", default="diagnostic", help="Subject ID saved with live calibration"
+    )
     parser.add_argument("--camera-weight", type=float, default=0.25)
     parser.add_argument(
         "--shoulder-twist-axis",

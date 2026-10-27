@@ -8,6 +8,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Select the project interpreter before importing the installed package.
@@ -48,6 +49,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from aurora.gui.app_layout import AppLayoutMixin
+from aurora.gui.background_tasks import BackgroundTasks
 from aurora.gui.ble_dashboard import BleDashboardMixin
 from aurora.gui.process_manager import ProcessManagerMixin
 from aurora.gui.project_support import (
@@ -56,7 +58,6 @@ from aurora.gui.project_support import (
     DEFAULT_REFERENCE_DIRECTORY,
     ERROR,
     INTERACTIVE_SIMULATION_SCRIPT,
-    MOVEMENT_MODEL,
     MOVEMENT_RECOGNITION_SCRIPT,
     POSE_RECORDING_SCRIPT,
     RECORDER_DETAILS,
@@ -65,14 +66,14 @@ from aurora.gui.project_support import (
     WARNING,
     FirmwareProject,
     display_path,
-    find_simulation_python,
     open_path,
+    project_path,
     resolve_firmware_tool,
 )
-from aurora.gui.project_support import has_python_dependencies as _has_python_dependencies
 from aurora.gui.project_tabs import ProjectTabsMixin
 from aurora.gui.recording_tab import RecordingTabMixin
 from aurora.gui.simulation_tabs import SimulationTabsMixin
+from aurora.gui.workflow_tools import WorkflowTools
 from aurora.sensors.settings import DEFAULT_GRIP_SOURCE
 
 # Application
@@ -97,16 +98,16 @@ class ProjectGui(
         super().__init__(window, style="App.TFrame", padding=(16, 10, 16, 12))
 
         self._initialize_process_manager()
-        self.simulation_python = find_simulation_python()
-        self.movement_ai_ready = bool(
-            self.simulation_python
-            and _has_python_dependencies(self.simulation_python, ("numpy", "onnxruntime"))
-        )
+        self.background_tasks = BackgroundTasks()
+        self.simulation_python = None
+        self.movement_ai_ready = False
+        self.capability_status = "Checking optional capabilities..."
 
         self.dynamic_simulation = tk.BooleanVar(value=False)
         self.save_simulation_torque = tk.BooleanVar(value=True)
+        self.save_simulation_telemetry = tk.BooleanVar(value=False)
         self.fusion_camera_weight = tk.StringVar(value="0.25")
-        self.fusion_depth = tk.BooleanVar(value=False)
+        self.fusion_depth = tk.BooleanVar(value=True)
         self.table_width_cm = tk.StringVar(value="60")
         self.table_depth_cm = tk.StringVar(value="60")
         self.fusion_grip_source = tk.StringVar(value=DEFAULT_GRIP_SOURCE.upper())
@@ -123,6 +124,7 @@ class ProjectGui(
         self.status = tk.StringVar(value="Ready")
 
         self.firmware_projects: dict[str, FirmwareProject] = {}
+        self.workflow = WorkflowTools(self)
 
         self.grid(row=0, column=0, sticky="nsew")
         self.columnconfigure(0, weight=1)
@@ -132,7 +134,7 @@ class ProjectGui(
 
         self._build_header()
         self._build_notebook()
-        self.notebook.select(self.tabs["recording"])
+        self.notebook.select(self.tabs["connections"])
         self._build_activity_panel()
 
         self._refresh_recording_programs()
@@ -141,8 +143,8 @@ class ProjectGui(
         self._refresh_firmware()
         self._refresh_info()
         self._update_controls()
-        if self.simulation_python is None:
-            self._set_status("Simulation environment missing", "warning")
+        self._set_status("Checking optional capabilities...", "running")
+        self._refresh_capabilities()
 
         self._bind_recording_traces()
         self.motion_recording.trace_add("write", lambda *_: self._update_controls())
@@ -154,8 +156,19 @@ class ProjectGui(
         self.after(100, self._drain_serial_sensor_events)
         self.after(100, self._poll_ble_dashboard)
         self.after(1000, self._poll_serial_ports)
+        self.after(25, self._drain_background_tasks)
+
+    def _drain_background_tasks(self) -> None:
+        self.background_tasks.drain()
+        self.after(25, self._drain_background_tasks)
 
     # Window and tabs
+
+    def _build_connections_tab(self, page):
+        self.workflow.build_connections(page)
+
+    def _build_advanced_tools_tab(self, page):
+        self.workflow.build_advanced(page)
 
     def _build_activity_panel(self) -> None:
         """Build the shared process log and stop controls."""
@@ -237,13 +250,27 @@ class ProjectGui(
         recording_selected = bool(self.motion_recording.get().strip())
         motion_ai_ready = (
             MOVEMENT_RECOGNITION_SCRIPT.is_file()
-            and MOVEMENT_MODEL.is_file()
+            and self.movement_model_path.is_file()
             and self.movement_ai_ready
         )
         self.analyze_motion_button.configure(
             state="disabled"
-            if running or not recording_selected or not motion_ai_ready
+            if running
+            or not recording_selected
+            or not motion_ai_ready
+            or not project_path(self.motion_references.get()).is_dir()
             else "normal"
+        )
+        self.motion_ai_status.set(
+            "Stop the active program before profile analysis."
+            if running
+            else "Choose a movement-profile recording first."
+            if not recording_selected
+            else "Profile analysis needs ONNX Runtime and a valid model; see Setup and checks."
+            if not motion_ai_ready
+            else "Choose a folder containing reference movement profiles."
+            if not project_path(self.motion_references.get()).is_dir()
+            else "Ready for movement-profile comparison. These scores do not measure anatomical accuracy."
         )
         pose_playback_ready = POSE_RECORDING_SCRIPT.is_file() and self.simulation_python is not None
         self.pose_playback_button.configure(
@@ -293,6 +320,15 @@ class ProjectGui(
         ble_monitor_running = self.ble_reader is not None and self.ble_reader.thread.is_alive()
         self.stop_button.configure(state="normal" if running or ble_monitor_running else "disabled")
         self._update_cup_controls()
+        self.workflow.update_controls()
+        if hasattr(self, "control_readiness"):
+            self.control_readiness.set(
+                "Stop the active program before starting another control session."
+                if non_preview_running
+                else "Ready: open live setup and complete calibration, or start keyboard control."
+                if interactive_ready
+                else "Control needs the simulation packages. Run Setup, then Refresh status under Help & status."
+            )
 
     # UI helpers
 
@@ -359,12 +395,23 @@ class ProjectGui(
         """Stop active work when allowed, then close the application."""
         if not self._close_processes():
             return
-        if self.ble_reader is not None:
-            self.ble_reader.stop()
-        self._stop_ble_dashboard()
-        self._stop_serial_dashboard()
+        ble_stopped = self._stop_ble_dashboard()
+        serial_stopped = self._stop_serial_dashboard()
+        if not ble_stopped or not serial_stopped:
+            deadline = getattr(self, "_sensor_close_deadline", time.monotonic() + 15)
+            self._sensor_close_deadline = deadline
+            if time.monotonic() < deadline:
+                self._set_status("Closing sensor connections...", "running")
+                self.after(50, self.close)
+            else:
+                self._set_status("Sensor shutdown timed out; retry Close", "error")
+                self._sensor_close_deadline = time.monotonic() + 15
+            return
+        self.background_tasks.close()
         if self.imu_monitor is not None and self.imu_monitor.exists:
             self.imu_monitor.close()
+        for callback in self.window.tk.call("after", "info"):
+            self.window.tk.call("after", "cancel", callback)
         self.window.destroy()
 
 
@@ -374,36 +421,6 @@ class ProjectGui(
 def main() -> None:
     """Create the top-level window and run the Tk event loop."""
     argparse.ArgumentParser(description=__doc__).parse_args()
-    # IDEs and double-clicks can start this file with a system Python even when
-    # the project environment exists. Switch before Tk is created so the
-    # in-process sensor readers have the installed USB and BLE dependencies.
-    if (
-        any(importlib.util.find_spec(module) is None for module in ("serial", "bleak"))
-        and os.environ.get("AURORA_GUI_RELAUNCHED") != "1"
-    ):
-        simulation_python = find_simulation_python()
-        current_python = Path(sys.executable).resolve()
-        if simulation_python is not None and simulation_python.resolve() != current_python:
-            environment = os.environ.copy()
-            environment["AURORA_GUI_RELAUNCHED"] = "1"
-            try:
-                return_code = subprocess.call(
-                    [
-                        str(simulation_python),
-                        "-m",
-                        "aurora.gui.app",
-                        *sys.argv[1:],
-                    ],
-                    cwd=REPOSITORY_ROOT,
-                    env=environment,
-                )
-            except OSError:
-                # Keep the GUI launchable in the current interpreter. The IMU
-                # monitor will show a focused dependency message if needed.
-                pass
-            else:
-                raise SystemExit(return_code)
-
     window = tk.Tk()
     window.title("AURORA Control Center")
     window.geometry("1000x720")

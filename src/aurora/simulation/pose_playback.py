@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pybullet as p
 
+from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.simulation.model.joint_limits import finger_joint_angles_rad
 from aurora.simulation.model.robot_model import JOINT_MAPPING, SIM_DIR, joint_index
 from aurora.simulation.pose_mapping import (
@@ -106,6 +107,7 @@ def main() -> None:
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--headless", action="store_true")
     args = parser.parse_args()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     if not math.isfinite(args.fps) or args.fps <= 0:
         parser.error("--fps must be finite and positive")
     if args.loop and args.headless:

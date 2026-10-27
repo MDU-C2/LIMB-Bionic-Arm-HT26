@@ -91,9 +91,9 @@ class BleDashboardMixin:
     def _stop_ble_dashboard(self) -> bool:
         """Release BLE before recording, firmware work, or live control starts."""
         if self.ble_reader is not None:
-            self.ble_reader.stop(timeout=0)
+            stopped = self.ble_reader.stop(timeout=0)
             thread = self.ble_reader.thread
-            if thread is not None and thread.is_alive():
+            if not stopped or (thread is not None and thread.is_alive()):
                 self.ble_sensor_connection.set("BLE: still disconnecting; try again shortly")
                 return False
             self.ble_reader = None

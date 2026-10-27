@@ -14,7 +14,6 @@ from aurora.sensors.ble_protocol import HIGH_RATE_IMU_PACKET
 from aurora.sensors.fusion import (
     DualImuArmEstimator,
     fuse_control_angles,
-    interactive_control_targets,
 )
 from aurora.sensors.live_input import LiveFusionSnapshot, LiveSensorInput
 from aurora.simulation.interactive.live_setup import LiveSetup
@@ -34,6 +33,27 @@ def snapshot(**changes):
 
 
 class LiveSetupTests(unittest.TestCase):
+    def test_delayed_camera_result_cannot_correct_current_imu_state(self):
+        clock = [100.0]
+        live = LiveSensorInput(show_monitor=False, clock=lambda: clock[0])
+        live.reader = BleSensorReader(clock=live.clock)
+        for index in range(60):
+            live.reader.notification(
+                "imu",
+                HIGH_RATE_IMU_PACKET.pack(
+                    0x103, index, index * 10_000, index * 10_000, *([0, 0, 1000, 0, 0, 0] * 2)
+                ),
+            )
+        before = dict(live.reader.imu_estimator.last_angles)
+        live.accept_camera_observation(
+            {"angles_deg": {"elbow_flexion": 130, "shoulder_flexion": 60}}, 99.0
+        )
+        state = live.poll()
+        self.assertFalse(state.camera_ready)
+        self.assertEqual(live.reader.imu_estimator.last_angles, before)
+        self.assertIn("too old", state.status)
+        live.close()
+
     def setUp(self):
         self.live = SimpleNamespace(
             reader=Mock(connection_generation=1),
@@ -82,18 +102,22 @@ class LiveSetupTests(unittest.TestCase):
         self.guide.action()
         self.live.calibrate_emg.assert_called_once()
         self.live.reader.graph_data.return_value = {
-            "emg_calibration": "Calibrate strong grip (scale estimated)"
+            "emg_calibration_state": {"phase": "grip_reference_needed", "message": "Rest saved"}
         }
         self.guide.update(snapshot(), 11)
         self.assertEqual(self.guide.stage, "grip")
         self.live.calibrate_emg_strength.assert_not_called()
         self.guide.action()
-        self.live.reader.graph_data.return_value = {"emg_calibration": "Grip too weak; repeat"}
+        self.live.reader.graph_data.return_value = {
+            "emg_calibration_state": {"phase": "failed", "message": "Grip too weak; repeat"}
+        }
         self.guide.update(snapshot(), 14)
         self.assertEqual(self.guide.stage, "grip")
         self.assertFalse(self.guide.pending)
         self.guide.action()
-        self.live.reader.graph_data.return_value = {"emg_calibration": "Grip calibrated"}
+        self.live.reader.graph_data.return_value = {
+            "emg_calibration_state": {"phase": "ready", "message": "Grip reference saved"}
+        }
         self.guide.update(snapshot(), 18)
         self.assertEqual(self.guide.stage, "ready")
         self.assertTrue(self.guide.action())
@@ -125,7 +149,8 @@ class LiveSetupTests(unittest.TestCase):
         live.calibrate({"elbow_flexion": 45})
         clock[0] += 0.4
         live.accept_camera_observation({"angles_deg": {"elbow_flexion": 85}}, clock[0])
-        self.assertEqual(interactive_control_targets(live.camera_angles)["elbow_x"], 35)
+        self.assertEqual(live.camera_angles["elbow_flexion"], 85)
+        self.assertEqual(live.poll().robot_targets["elbow_x"], 35)
 
     def test_camera_correction_persists_in_later_imu_predictions(self):
         estimator = DualImuArmEstimator(alpha=0)
@@ -158,7 +183,7 @@ class LiveSetupTests(unittest.TestCase):
             release.wait(2)
             return snapshot()
 
-        live._poll_sources = slow_camera
+        live._poll_camera = slow_camera
         try:
             live.start_background()
             self.assertTrue(entered.wait(1))
@@ -203,13 +228,13 @@ class LiveSetupTests(unittest.TestCase):
             release.wait(2)
             return snapshot()
 
-        live._poll_sources = slow_camera
+        live._poll_camera = slow_camera
         try:
             live.start_background()
             self.assertTrue(entered.wait(1))
-            before = live.poll().angles["shoulder_flexion"]
+            before = live.poll().relative_angles["shoulder_flexion"]
             live.reader.notification("imu", packet(707, 707, 1_010_000))
-            after = live.poll().angles["shoulder_flexion"]
+            after = live.poll().relative_angles["shoulder_flexion"]
             self.assertEqual(before, 0)
             self.assertAlmostEqual(after, 45)
         finally:

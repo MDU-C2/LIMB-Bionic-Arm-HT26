@@ -31,6 +31,7 @@ DEFAULT_BLE_SENSORS = ("imu", "emg")
 BLE_SENSOR_OPTIONS = (
     ("imu", "IMU"),
     ("emg", "EMG"),
+    ("piezo", "Piezo (legacy firmware)"),
 )
 
 

@@ -42,6 +42,7 @@ def describe(samples, period, np):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", choices=("rest", "grip"), default="rest")
+    parser.add_argument("--device", default="AURORA")
     parser.add_argument("--seconds", type=float, default=6)
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument("--out", type=Path, default=ROOT / "outputs/emg_calibration_check.json")
@@ -52,7 +53,7 @@ def main():
 
     from aurora.sensors.ble_input import BleSensorReader
 
-    reader = BleSensorReader()
+    reader = BleSensorReader(args.device)
     raw = []
     captured = []
     envelopes = []

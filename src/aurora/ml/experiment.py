@@ -51,6 +51,7 @@ def create_manifest(data: Path, splits: dict[str, list[str]], settings: dict) ->
                 ["git", "rev-parse", "HEAD"],
                 cwd=REPOSITORY_ROOT,
                 stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
             )
             .decode()
             .strip()
@@ -60,6 +61,7 @@ def create_manifest(data: Path, splits: dict[str, list[str]], settings: dict) ->
                 ["git", "status", "--porcelain"],
                 cwd=REPOSITORY_ROOT,
                 stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
             ).strip()
         )
     except (OSError, subprocess.CalledProcessError):
@@ -93,8 +95,10 @@ def write_manifest(directory: Path, manifest: dict) -> None:
 
 
 def verify_model_manifest(model: Path) -> None:
-    """Reject a stale sidecar while allowing earlier models without one."""
+    """Validate a sidecar or training run, allowing earlier models without either."""
     sidecar = model.with_suffix(".json")
+    if not sidecar.is_file():
+        sidecar = model.parent / "training.json"
     if not sidecar.is_file():
         return
     try:

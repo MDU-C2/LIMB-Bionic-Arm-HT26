@@ -29,6 +29,7 @@ class ManagedProcess:
     stopping: bool = False
     log_path: Path | None = None
     output_tail: list[str] = field(default_factory=list)
+    stop_input: str | None = None
 
 
 class ProcessManagerMixin:
@@ -36,7 +37,25 @@ class ProcessManagerMixin:
 
     def _initialize_process_manager(self) -> None:
         self.processes: dict[str, ManagedProcess] = {}
-        self.log_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.log_queue: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=512)
+        self.process_exits: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=32)
+        self.log_overruns = 0
+        self.reported_log_overruns = 0
+        self._closing_processes = False
+
+    def _queue_process_event(self, event):
+        if event[0] == "exit":
+            # Only the finished child's watcher waits here; acquisition never does.
+            self.process_exits.put(event)
+            return
+        try:
+            self.log_queue.put_nowait(event)
+        except queue.Full:
+            self.log_overruns += 1
+            with contextlib.suppress(queue.Empty):
+                self.log_queue.get_nowait()
+            with contextlib.suppress(queue.Full):
+                self.log_queue.put_nowait(event)
 
     def _active_processes(self, kind: str | None = None) -> list[ManagedProcess]:
         active = [
@@ -56,6 +75,7 @@ class ProcessManagerMixin:
         environment: dict[str, str] | None = None,
         parallel: bool = False,
         process_key: str | None = None,
+        stop_input: str | None = None,
     ) -> bool:
         """Start a managed child and stream labelled output to Activity."""
         active = self._active_processes()
@@ -69,6 +89,28 @@ class ProcessManagerMixin:
         if existing is not None and existing.process.poll() is None:
             messagebox.showinfo("Program running", f"{existing.name} is already running.")
             return False
+
+        if kind in {"recording", "simulation", "firmware"}:
+            stop_serial = getattr(self, "_stop_serial_dashboard", None)
+            if stop_serial is not None and not stop_serial():
+                release_serial = getattr(self, "_release_serial_for", None)
+                if release_serial is not None:
+                    return release_serial(
+                        lambda: self._start_program(
+                            name,
+                            kind,
+                            command,
+                            working_directory=working_directory,
+                            environment=environment,
+                            parallel=parallel,
+                            process_key=process_key,
+                            stop_input=stop_input,
+                        )
+                    )
+                self._append_log(
+                    "[USB monitor] Waiting for the port to close. Try again shortly.\n"
+                )
+                return False
 
         stop_ble = (
             getattr(self, "_stop_ble_dashboard", None)
@@ -91,6 +133,7 @@ class ProcessManagerMixin:
                     environment=environment,
                     parallel=parallel,
                     process_key=process_key,
+                    stop_input=stop_input,
                 )
             ):
                 return True
@@ -101,6 +144,8 @@ class ProcessManagerMixin:
         if environment:
             merged_environment.update(environment)
         merged_environment["PYTHONUTF8"] = "1"
+        if stop_input is not None:
+            merged_environment["AURORA_GUI_CONTROL"] = "1"
         merged_environment["PYTHONIOENCODING"] = "utf-8"
         merged_environment = python_runtime_environment(Path(command[0]), merged_environment)
         try:
@@ -128,6 +173,7 @@ class ProcessManagerMixin:
             return False
 
         managed = ManagedProcess(key, name, kind, process)
+        managed.stop_input = stop_input
         log_name = re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_")
         managed.log_path = (
             REPOSITORY_ROOT / "outputs/logs" / f"{datetime.now():%Y%m%d_%H%M%S_%f}_{log_name}.log"
@@ -178,20 +224,37 @@ class ProcessManagerMixin:
                             with contextlib.suppress(OSError):
                                 log.close()
                             log = None
-                    self.log_queue.put(("line", (managed.key, managed.name, line)))
+                    self._queue_process_event(("line", (managed.key, managed.name, line)))
         finally:
             if log is not None:
                 with contextlib.suppress(OSError):
                     log.close()
-        self.log_queue.put(
-            ("exit", (managed.key, managed.process, managed.name, managed.process.wait()))
+        return_code = managed.process.wait()
+        for stream in (managed.process.stdout, managed.process.stdin):
+            if stream is not None:
+                with contextlib.suppress(OSError):
+                    stream.close()
+        self._queue_process_event(
+            ("exit", (managed.key, managed.process, managed.name, return_code))
         )
 
     def _drain_log_queue(self) -> None:
         """Move worker output and completion events into Tk widgets."""
+        lost = getattr(self, "log_overruns", 0) - getattr(self, "reported_log_overruns", 0)
+        if lost:
+            self.reported_log_overruns = self.log_overruns
+            self._append_log(
+                f"[Activity] Skipped {lost} display messages. Check the child log files.\n"
+            )
+        events = []
+        for source, limit in ((self.log_queue, 200), (self.process_exits, 32)):
+            for _ in range(limit):
+                try:
+                    events.append(source.get_nowait())
+                except queue.Empty:
+                    break
         try:
-            while True:
-                event, value = self.log_queue.get_nowait()
+            for event, value in events:
                 if event == "line":
                     key, name, line = value
                     if key == "recording:cup_trials" and str(line).startswith("[CUP] "):
@@ -292,11 +355,17 @@ class ProcessManagerMixin:
                 continue
             managed.stopping = True
             self._append_log(f"[Stopping {managed.name}]\n")
-            if not self._request_process_stop(managed.process):
+            cooperative = managed.stop_input is not None and self._send_process_input(
+                managed.key, managed.stop_input
+            )
+            if not cooperative and not self._request_process_stop(managed.process):
                 self._append_log(f"[{managed.name}] Could not send a stop signal.\n")
                 continue
             self.after(
-                4000, lambda process=managed.process: self._kill_process_tree_if_running(process)
+                4000,
+                lambda process=managed.process: threading.Thread(
+                    target=self._kill_process_tree_if_running, args=(process,), daemon=True
+                ).start(),
             )
         self._set_status("Stopping active programs", "running")
         self._update_controls()
@@ -361,14 +430,10 @@ class ProcessManagerMixin:
         active = self._active_processes()
         if not active:
             return True
-        if not self._confirm_sensitive_stop(active):
-            return False
-        for managed in active:
-            managed.stopping = True
-            self._request_process_stop(managed.process)
-        for managed in active:
-            try:
-                managed.process.wait(timeout=4)
-            except subprocess.TimeoutExpired:
-                self._kill_process_tree_if_running(managed.process)
-        return True
+        if not self._closing_processes:
+            if not self._confirm_sensitive_stop(active):
+                return False
+            self._closing_processes = True
+            self._stop_processes(active)
+        self.after(100, self.close)
+        return False

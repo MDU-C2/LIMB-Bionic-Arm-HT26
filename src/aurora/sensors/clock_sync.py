@@ -28,6 +28,26 @@ class ClockExchange:
     round_trip_ns: int
 
 
+@dataclass(frozen=True)
+class ClockMapping:
+    """One immutable affine fit, safe to carry with a queued notification."""
+
+    reference_device_ns: float
+    reference_host_ns: float
+    rate: float
+    exchange_count: int
+
+    def to_host_ns(self, device_time_us):
+        if not isinstance(device_time_us, int):
+            return None
+        return round(
+            self.reference_host_ns + (device_time_us * 1000 - self.reference_device_ns) * self.rate
+        )
+
+    def provenance(self):
+        return asdict(self)
+
+
 class ClockSynchronizer:
     """Robust affine mapping from device microseconds to host nanoseconds."""
 
@@ -39,6 +59,7 @@ class ClockSynchronizer:
         self._reference_device_ns = 0.0
         self._reference_host_ns = 0.0
         self._rate = 1.0
+        self.mapping = None
 
     @property
     def ready(self) -> bool:
@@ -124,13 +145,17 @@ class ClockSynchronizer:
 
         self._reference_device_ns = reference_device
         self._reference_host_ns = reference_host
+        self.mapping = ClockMapping(reference_device, reference_host, self._rate, len(self.samples))
+
+    def snapshot(self):
+        return self.mapping
 
     def to_host_ns(self, device_time_us: int | str | None) -> int | None:
         """Convert one acquisition timestamp, or return None before first sync."""
         if not self.ready or not isinstance(device_time_us, int):
             return None
-        device_ns = device_time_us * 1000
-        return round(self._reference_host_ns + (device_ns - self._reference_device_ns) * self._rate)
+        mapping = self.mapping
+        return mapping.to_host_ns(device_time_us) if mapping is not None else None
 
     def summary(self) -> dict[str, Any]:
         """Return serializable diagnostics for the recording metadata."""

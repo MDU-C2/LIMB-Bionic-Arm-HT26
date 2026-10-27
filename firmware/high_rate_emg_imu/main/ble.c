@@ -60,6 +60,24 @@ static uint32_t s_emg_packet_sequence;
 static ble_imu_packet_t s_latest_imu;
 static time_sync_response_t s_latest_sync;
 static portMUX_TYPE s_state_mux = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t s_emg_notify_failures;
+static uint32_t s_imu_notify_failures;
+static int64_t s_last_failure_log_us;
+
+static void note_notification_failure(bool emg, int error)
+{
+    if (emg) {
+        ++s_emg_notify_failures;
+    } else {
+        ++s_imu_notify_failures;
+    }
+    const int64_t now_us = esp_timer_get_time();
+    if (now_us - s_last_failure_log_us >= 1000000) {
+        ESP_LOGW(k_tag, "Notification submission failures: EMG=%lu IMU=%lu; latest=%d",
+                 (unsigned long)s_emg_notify_failures, (unsigned long)s_imu_notify_failures, error);
+        s_last_failure_log_us = now_us;
+    }
+}
 
 static int sensor_access(uint16_t connection_handle, uint16_t attribute_handle,
                          struct ble_gatt_access_ctxt *context, void *argument);
@@ -434,7 +452,7 @@ esp_err_t ble_send_imu_frame(const imu_frame_t *frame)
 
     const int error = notify_custom(connection_handle, s_imu_value_handle, &packet, sizeof(packet));
     if (error != 0 && error != BLE_HS_ENOTCONN) {
-        ESP_LOGW(k_tag, "IMU notification failed: %d", error);
+        note_notification_failure(false, error);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -452,6 +470,7 @@ esp_err_t ble_send_emg_block(const emg_block_t *block)
     }
 
     uint16_t offset = 0;
+    esp_err_t result = ESP_OK;
     while (offset < block->sample_count) {
         uint16_t remaining = block->sample_count - offset;
         uint16_t chunk_count =
@@ -486,11 +505,11 @@ esp_err_t ble_send_emg_block(const emg_block_t *block)
                 notify_custom(connection_handle, s_emg_value_handle, &packet, packet_size);
 
             if (error != 0 && error != BLE_HS_ENOTCONN) {
-                ESP_LOGW(k_tag, "EMG notification failed: %d", error);
-                return ESP_FAIL;
+                note_notification_failure(true, error);
+                result = ESP_FAIL;
             }
         }
         offset += chunk_count;
     }
-    return ESP_OK;
+    return result;
 }

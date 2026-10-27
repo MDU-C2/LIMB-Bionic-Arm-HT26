@@ -19,8 +19,17 @@ BLE sends all acquired EMG samples and uses the ESP32 clock for sample times.
 Clock synchronization maps those times to the host monotonic clock used for
 camera receipt timestamps. EMG times are reconstructed from the first ADC block
 read and the nominal sample period. This does not establish exact camera exposure
-alignment or detect samples lost inside the ADC buffer.
+alignment or count samples lost inside the ADC buffer. An ADC read error other
+than timeout stops EMG acquisition and logs the failure. Restart the board and
+repeat calibration before recording again; IMU acquisition continues. This avoids
+extending the reconstructed EMG clock across an unknown ADC loss.
 USB streaming, when enabled, sends every tenth EMG sample at 400 Hz.
+
+Failed BLE notification submissions are counted and logged at a limited rate.
+Successful submission does not prove radio delivery. Notification
+sequence gaps expose transport loss to the host. A failed EMG notification does
+not skip the remaining chunks in its ADC block. MTU and actual sustained
+throughput still need checking on the receiving computer.
 
 ## Build and flash
 

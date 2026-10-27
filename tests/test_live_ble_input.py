@@ -20,7 +20,7 @@ from aurora.recording.record_ble_sensors import (
 )
 from aurora.sensors.ble_input import BleSensorReader
 from aurora.sensors.emg_protocol import EmgActivationEstimator
-from aurora.sensors.fusion import DualImuArmEstimator, interactive_control_targets
+from aurora.sensors.fusion import DualImuArmEstimator
 from aurora.sensors.live_input import LiveSensorInput
 from aurora.simulation.live_control import main as launch_live
 
@@ -92,7 +92,7 @@ class LiveBleTests(unittest.TestCase):
                 )
                 snapshot = controller.poll()
                 self.assertAlmostEqual(snapshot.angles["shoulder_rotation_proxy"], -20.3)
-                self.assertEqual(snapshot.angles["wrist_rotation"], 0.0)
+                self.assertEqual(snapshot.relative_angles["wrist_rotation"], 0.0)
             with patch("aurora.sensors.live_input.time.monotonic", return_value=100.03):
                 snapshot = controller.poll()
                 self.assertGreater(snapshot.angles["shoulder_rotation_proxy"], -20.3)
@@ -130,7 +130,9 @@ class LiveBleTests(unittest.TestCase):
         self.assertTrue(snapshot.imu_ready)
         self.assertFalse(snapshot.camera_ready)
         self.assertEqual(set(snapshot.sensors), {"shoulder", "wrist"})
-        self.assertEqual(interactive_control_targets(snapshot.angles)["elbow_x"], 60.0)
+        self.assertIsNone(snapshot.angles)
+        self.assertGreater(snapshot.relative_angles["elbow_flexion"], 80)
+        self.assertEqual(snapshot.robot_targets["elbow_x"], 60.0)
         self.assertEqual(snapshot.grip_source, "EMG")
         self.assertGreater(snapshot.hand_curl, 0)
         self.assertIsNone(reader.decoder.raw_file)
@@ -330,6 +332,7 @@ class LiveBleTests(unittest.TestCase):
         application = SimpleNamespace(
             simulation_python=Path(sys.executable),
             recording_ble_device=setting("AURORA"),
+            recording_subject=setting("S17"),
             fusion_camera_weight=setting("0.25"),
             processes={},
             _stop_serial_dashboard=Mock(),
@@ -346,22 +349,27 @@ class LiveBleTests(unittest.TestCase):
         command = application._start_program.call_args.args[2]
         self.assertEqual(command[command.index("--transport") + 1], "ble")
         self.assertEqual(command[command.index("--device") + 1], "AURORA")
+        self.assertEqual(command[command.index("--subject") + 1], "S17")
         self.assertNotIn("--port", command)
         self.assertEqual(command[command.index("--table-width-cm") + 1], "60")
         self.assertEqual(command[command.index("--table-depth-cm") + 1], "60")
         self.assertEqual(command[command.index("--grip-source") + 1], "camera")
-        self.assertEqual(command[command.index("--shoulder-twist-axis") + 1], "y")
-        self.assertEqual(command[command.index("--wrist-twist-axis") + 1], "-y")
+        from aurora.simulation.interactive.settings import parse_args
+
+        parsed = parse_args(command[3:])
+        self.assertEqual(parsed.shoulder_twist_axis, "y")
+        self.assertEqual(parsed.wrist_twist_axis, "-y")
 
     def test_compatibility_launcher_defaults_to_ble_and_keeps_serial_commands(self):
         for arguments, expected in (([], "ble"), (["--port", "COM5"], "serial")):
             with (
-                patch.object(sys, "argv", ["live_control.py", *arguments]),
+                patch.object(sys, "argv", ["live_control.py", *arguments, "--subject", "S09"]),
                 patch("aurora.simulation.live_control.subprocess.call", return_value=0) as launch,
             ):
                 self.assertEqual(launch_live(), 0)
                 command = launch.call_args.args[0]
                 self.assertEqual(command[command.index("--transport") + 1], expected)
+                self.assertEqual(command[command.index("--subject") + 1], "S09")
 
 
 class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
@@ -382,9 +390,10 @@ class BleConnectionTests(unittest.IsolatedAsyncioTestCase):
                 {"shoulder_flexion": 45, "elbow_flexion": 45, "shoulder_abduction": 5}
             )
             snapshot = controller.poll()
-        self.assertEqual(snapshot.angles["shoulder_flexion"], 45)
-        self.assertEqual(snapshot.angles["elbow_flexion"], 45)
-        self.assertEqual(snapshot.angles["shoulder_abduction"], 5)
+        self.assertEqual(snapshot.angles["shoulder_flexion"], 35)
+        self.assertEqual(snapshot.angles["elbow_flexion"], 40)
+        self.assertEqual(snapshot.angles["shoulder_abduction"], 8)
+        self.assertEqual(snapshot.robot_targets["elbow_x"], 45)
 
     async def test_disconnect_clears_old_values_and_reconnects(self):
         reader = BleSensorReader(address="test-device")

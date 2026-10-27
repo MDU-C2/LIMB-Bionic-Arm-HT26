@@ -14,14 +14,19 @@ if os.name == "nt":
     if native_bin.is_dir():
         os.environ["PATH"] = str(native_bin) + os.pathsep + os.environ.get("PATH", "")
 
+from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.simulation.interactive.settings import parse_args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     from aurora.simulation.interactive.runtime import InteractiveSimulator
 
-    InteractiveSimulator(args).run()
+    try:
+        InteractiveSimulator(args).run()
+    except KeyboardInterrupt:
+        return 130
     return 0
 
 

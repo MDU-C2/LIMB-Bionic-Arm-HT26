@@ -50,12 +50,24 @@ alignment. `packets.jsonl` preserves raw payloads and both timestamps. The
 session `meta.json` contains exchange count, clock rate/drift, minimum round
 trip, and estimated uncertainty.
 
+New CSV rows also retain `connection_generation`. Each queued raw packet keeps
+the immutable clock fit available at receipt; a later fit does not rewrite its
+mapped time. Reconnects start a new clock epoch and invalidate live calibration.
+A large backwards device clock after stale input is treated as a possible reset.
+Version 1 has no boot identifier, so this inference requires reconnecting and
+calibrating again rather than pretending the old clock fit is still valid.
+
 `packet_health` in `meta.json` records received packets, sequence discontinuities,
 estimated missing notifications, and decode errors for each stream. Forward
 sequence gaps estimate missing notifications; duplicates, reordered packets and
 device resets are counted as discontinuities rather than enormous packet losses.
 Sequence tracking handles the 32-bit counter wrapping. No application checksum
 or automatic retransmission is provided.
+
+Health also separates duplicate/reordered packets and EMG sample-time gaps.
+Continuous notification sequences do not prove continuous sample times. Overlapping
+EMG times remain in raw files but are excluded from live activation processing.
+Bounded raw-writer queues report overruns and make affected captures incomplete.
 
 If a legacy HT25 peripheral lacks the time-sync characteristic, recording still
 works and the synchronized field stays empty. The arrival timestamp remains
@@ -85,3 +97,23 @@ header plus 1–40 unsigned 16-bit ADC readings; the header includes sequence,
 first sample time, sample period, count, and offset in the ADC read block.
 Each BLE notification has its own sequence number so missing packets can be
 detected. The recorder saves each decoded EMG sample with its individual time.
+
+Unsupported versions and malformed current packets are rejected. Timestamped
+inherited layouts remain separate decoder rules. Headerless EMG requires known
+firmware provenance: choose `--emg-format legacy-fixed` for forty samples followed
+by a sequence, or `--emg-format legacy-prefix` for a sequence followed by samples.
+For example:
+
+```powershell
+python -m aurora.recording.record_ble_sensors --emg-format legacy-fixed
+```
+
+Automatic decoding cannot distinguish a truncated current packet from an 84-byte
+headerless packet reliably.
+
+Current BLE gyros use signed 16-bit values at 0.01 degrees/s per count. Their
+wire range is -327.68 to +327.67 degrees/s. A value at either endpoint is retained
+with `gyro_saturated=1` in IMU CSV and counted in packet health. It is not used
+for gyro integration; live control pauses and requires alignment again. The
+earlier packed timestamped layout has a smaller range because it uses mdps.
+The wire format and sensor configuration are unchanged.

@@ -94,7 +94,7 @@ class ImuTwistTests(unittest.TestCase):
         sensors["wrist"]["accel_g"] = {"x": 0.0, "y": 0.8660254, "z": 0.5}
         sensors["wrist"]["gyro_dps"]["x"] = 30.0
         angles = estimator.update(sensors, 0.1)
-        self.assertAlmostEqual(angles["elbow_flexion"], 30.0, places=5)
+        self.assertAlmostEqual(angles["elbow_flexion"], -30.0, places=5)
         self.assertEqual(angles["wrist_rotation"], 0.0)
         self.assertEqual(angles["shoulder_rotation_proxy"], 0.0)
 

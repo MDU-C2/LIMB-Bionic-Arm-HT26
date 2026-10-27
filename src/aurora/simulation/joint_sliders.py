@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pybullet as p
 
+from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.simulation.model.joint_limits import HARDWARE_JOINT_LIMITS_DEG, JOINT_LIMITS_RAD
 from aurora.simulation.model.robot_model import JOINT_MAPPING, SIM_DIR, joint_index
 
@@ -30,6 +31,7 @@ def main() -> None:
         help="Seconds between visual updates (default: 1/120)",
     )
     args = parser.parse_args()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     if not math.isfinite(args.step_time) or args.step_time <= 0:
         parser.error("--step-time must be finite and positive")
 

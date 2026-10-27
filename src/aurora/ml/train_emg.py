@@ -75,6 +75,7 @@ def fit_model(
                     str(seed),
                 ],
                 capture_output=True,
+                stdin=subprocess.DEVNULL,
                 text=True,
                 check=False,
             )
@@ -180,6 +181,7 @@ def code_info() -> dict:
                 ["git", "rev-parse", "HEAD"],
                 cwd=CHECKOUT_DIRECTORY,
                 stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
                 text=True,
             ).strip()
             dirty = bool(
@@ -187,6 +189,7 @@ def code_info() -> dict:
                     ["git", "status", "--porcelain"],
                     cwd=CHECKOUT_DIRECTORY,
                     stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
                 ).strip()
             )
         except (OSError, subprocess.CalledProcessError):
@@ -429,7 +432,7 @@ def main() -> int:
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
-    enable_ctrl_break_as_interrupt()
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
     from datetime import datetime
 
     output = args.output or REPOSITORY_ROOT / "outputs/training" / datetime.now().strftime(

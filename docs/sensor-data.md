@@ -46,7 +46,7 @@ platformio run -t upload --upload-port COM4
 ```
 
 The same Build, Flash, and Serial monitor actions are available under
-**Firmware** in the GUI through native IDF or that ESP-IDF PlatformIO fallback.
+**Advanced Tools → Firmware** in the GUI through native IDF or that ESP-IDF PlatformIO fallback.
 The serial output uses 115200 baud with `EMG`, `IMU1` (shoulder), and `IMU2`
 (forearm) rows. When USB transport is enabled, EMG prints every tenth 4 kHz
 ADC sample. The default BLE transport sends every acquired EMG sample.
@@ -61,15 +61,23 @@ sensors, run:
 python scripts/check_dual_imu.py --port COM5 --require-emg
 ```
 
+USB diagnostic recording saves received bytes and line receipt times in
+`serial.jsonl`. Its derived `recording.csv` has one row per measurement, with
+separate device sample times and actual host receipt times. It retains duplicates
+and clock resets and reports them in `meta.json`. Unsequenced USB lines cannot
+establish a transport-loss count. A disconnect keeps the raw file and marks the
+capture incomplete. CSV export runs after the connection closes and streams the
+file without holding the capture in memory.
+
 ## View readings
 
 **Connect BLE / show graphs** in the header opens raw EMG and both IMUs'
 acceleration/gyro graphs. The header reports connected IMUs and EMG reception. Live activation uses
 a relaxed-muscle baseline; live simulation also has IMU neutral-pose calibration.
-The **USB monitor** on Recording is available for USB diagnostic firmware.
+The **Connect / inspect USB** action under **Connect & inspect** is available for USB diagnostic firmware.
 See the [recording guide](recording-guide.md) for the complete BLE workflow.
 
-Choose **Open camera monitor** in the header, Recording page, or Simulation
+Choose **Open camera monitor** in the header, Connect & inspect page, or Control
 page to see the OAK-D image, pose landmarks, arm angles, and hand tracking
 without starting a recording.
 
@@ -84,9 +92,10 @@ is treated as the upper-arm sensor, matching HT25's original placement.
 
 ## Live camera/IMU/EMG simulation control
 
-Open **Simulation → Connect + open live setup**. Follow **Align starting pose →
-Relaxed EMG → Firm grip → Start interactive control**. Keep the open hand at
-marker 1, thumb up and elbow comfortably bent during starting-pose alignment.
+Open **Control → Connect + open live setup**. Follow **Mounting movements →
+Relaxed EMG → Firm grip → Start interactive control**. Stereo depth is enabled
+by default. Return the open hand to marker 1, thumb up and elbow about 90 degrees
+after the isolated movements. Without depth, setup uses configured-axis diagnostics.
 See [Live control](live-control.md) for mounting, theory and offline replay.
 
 The camera corrects elevation, elbow and lateral motion as well as the observable

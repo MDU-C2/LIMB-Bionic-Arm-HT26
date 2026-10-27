@@ -7,12 +7,13 @@ finger positions or shoulder angles.
 
 ## Start control
 
-Open **Simulation → Connect + open live setup**. Movement starts paused.
+Open **Control → Connect + open live setup**. Movement starts paused.
 
 1. Sit upright, shoulder relaxed, elbow bent to about 90 degrees. Rest the open hand at
    marker 1 with the thumb up. Show both shoulders, hips, elbow and wrist.
-2. Press **Align starting pose**. Keep still for two seconds and wait for the
-   IMU baseline. The measured starting pose maps to the simulator's tabletop pose.
+2. Enter the subject ID and start guided mounting calibration. Stereo depth is
+   enabled by default. Follow still, raise, bend, turn and return, starting each
+   step when ready. Wait for the mounting checks to pass.
 3. Press **Calibrate relaxed EMG** while relaxed.
 4. Press **Calibrate firm grip**, hold for three seconds, then relax.
 5. Return to marker 1 and press **Start interactive control**.
@@ -21,10 +22,9 @@ Camera grip skips the two EMG calibration steps. Both IMUs are still required
 by the guided setup.
 
 First bend the elbow without lifting the upper arm, then raise the arm, move
-it sideways and turn the forearm. Check each direction. If a sensor axis is
-wrong, pause and correct its signed-axis setting before calibrating again.
-`0x6B` belongs on the upper arm and `0x6A` on the forearm. The default Y axes
-run along the arm segments. A resting pose cannot identify every mounting error.
+it sideways and turn the forearm. Check each direction. `0x6B` belongs on the
+upper arm and `0x6A` on the forearm. Repeat preparation if a fit fails or a sensor
+moves. A resting pose cannot identify every mounting error.
 
 **Pause / start setup again** and `R` pause live movement. A Bluetooth reconnect
 requires calibration again. EMG and IMU streams expire independently.
@@ -56,6 +56,50 @@ when converting the fused angles to the left-arm joint commands. This is pose
 retargeting, so the robot's available range can still limit the reproduced motion.
 The same rule applies to integrated shoulder and forearm twist: their state
 can exceed robot travel, while the mapped commands stay within joint limits.
+
+The anatomical estimate and the robot target are separate values. A measured
+90-degree elbow remains 90 degrees; alignment stores a separate human-to-robot
+reference offset. Return error compares fresh camera angles with that human
+reference. Shoulder estimates without a visible trunk assume that the trunk
+stays upright and still. Moving the trunk under that assumption can produce
+incorrect shoulder commands; pause and restore the view.
+
+An IMU-only diagnostic without a human pose reference reports signed changes
+since zeroing in `relative_angles`. Those channels stay out of the snapshot's
+anatomical `angles` until a camera or functional reference anchors them.
+Zero relative elbow movement does not mean a straight human elbow. Diagnostic
+retargeting can map that zero change to the current robot pose separately.
+
+Subject recording and stereo live setup use the same functional mounting fit.
+Passed rotations and gyro biases are consumed by that connection's live
+estimator and by saved replay. Profiles bind the subject, arm,
+mounting session and connection generation. They cannot be transferred to a new
+connection as a current live calibration. Live setup saves distinct attempts in
+`outputs/calibration`, with normalized input vectors, source timestamps, stereo
+points, cue windows and hashes. These inputs do not replace raw trial recordings.
+Fitting and saving run outside the control loop. Failed and cancelled captures
+are retained when a reference step has started.
+
+Turning stereo depth off selects a configured-axis diagnostic setup. It requires
+the mounting axes in advanced settings and a two-second still reference; it does
+not fit an arbitrary mounting from a stationary pose. USB control also uses the
+configured mounting convention.
+
+IMU roles expire independently after 0.5 seconds. Each acquired gyro measurement
+is integrated once, using its sensor time; held values do not become new samples.
+RGB and depth must share an OAK device timestamp within 20 ms. After a short wait,
+an RGB frame may be used without depth, with metric coordinates unavailable.
+Gyro values at the BLE wire limit pause control and invalidate the live reference.
+Their actual rotation rate is unknown. Raw recording keeps the received values
+and a saturation flag; repeat calibration after checking the movement and stream.
+
+Camera inference runs in a worker. Optional EMG model inference keeps at most
+one pending feature window and counts superseded windows; raw samples are still
+recorded. A model result older than 0.5 seconds does not command grip.
+Camera results older than 0.5 seconds are displayed with their original receipt
+time but do not correct current IMU state. Raw recording keeps received frames.
+Physics advances in fixed 1/60-second steps. Telemetry distinguishes wall time,
+accumulated physics time and pending simulation time when rendering falls behind.
 
 The distance between IMUs is not needed for these joint angles. Their mounting
 orientation and alignment to the arm are needed. Camera points can estimate

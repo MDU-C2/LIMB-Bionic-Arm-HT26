@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import math
-import os
-import shlex
 import sys
 import tkinter as tk
 from datetime import datetime
@@ -32,6 +30,7 @@ from aurora.gui.sensor_window import ImuMonitorWindow
 from aurora.gui.serial_dashboard import SerialDashboardMixin
 from aurora.gui.serial_sensor import SerialSensorReader
 from aurora.paths import PACKAGE_DIRECTORY
+from aurora.recording.common import STOP_COMMAND
 from aurora.recording.emg_trials import GripTrial
 from aurora.sensors.imu_protocol import ImuStreamDecoder
 from aurora.sensors.settings import DEFAULT_BLE_DEVICE_NAME
@@ -44,7 +43,9 @@ class RecordingTabMixin(
 
     def _initialize_recording_state(self) -> None:
         self.recording_program = tk.StringVar()
-        self.recording_arguments = tk.StringVar()
+        self.recording_camera_depth = tk.BooleanVar(value=False)
+        self.recording_pose_model = tk.StringVar(value="Balanced")
+        self.recording_emg_format = tk.StringVar(value="auto")
         self.recording_output = tk.StringVar(value=str(DEFAULT_RECORDINGS_DIRECTORY))
         self.recording_subject = tk.StringVar(value="S01")
         self.recording_trial_id = tk.StringVar(value="T001")
@@ -74,7 +75,7 @@ class RecordingTabMixin(
             filename: tk.BooleanVar(value=filename in DEFAULT_BATCH_SOURCES)
             for filename, _title, _description in MAINTAINED_SOURCES
         }
-        self.recordings_root = self.recording_output
+        self.recordings_root = tk.StringVar(value=self.recording_output.get())
         self.recordings_filter = tk.StringVar()
 
         self.recording_programs: dict[str, Path] = {}
@@ -114,7 +115,19 @@ class RecordingTabMixin(
 
     def _refresh_recording_programs(self) -> None:
         previous = self.recording_program.get()
-        self.recording_programs = discover_recording_programs()
+        labels = {
+            "record_ble_sensors.py": "Raw Bluetooth signals",
+            "record_oak_pose.py": "Camera video and pose",
+            "record_high_rate_serial.py": "USB signals with sample export",
+            "record_serial_sensors.py": "Raw USB messages",
+            "record_cup_trials.py": "Guided cup transfers",
+            "capture_movement.py": "Camera movement profiles",
+        }
+        self.recording_programs = {
+            labels[path.name]: path
+            for path in discover_recording_programs().values()
+            if path.name in labels
+        }
         values = list(self.recording_programs)
         if hasattr(self, "recording_program_box"):
             self.recording_program_box.configure(values=values)
@@ -164,7 +177,7 @@ class RecordingTabMixin(
                 raise ValueError("Baud must be positive.")
             output = project_path(output_value)
             output.mkdir(parents=True, exist_ok=True)
-            camera_arguments = self._split_arguments(self.recording_arguments.get())
+            camera_arguments = self._camera_arguments()
         except (OSError, ValueError) as error:
             messagebox.showerror("Could not prepare recording", str(error))
             return None
@@ -176,8 +189,6 @@ class RecordingTabMixin(
         ):
             messagebox.showerror("Serial port required", "Choose the sensor serial port first.")
             return None
-        if serial_recorders.intersection(filenames):
-            self._stop_serial_dashboard()
         if "record_ble_sensors.py" in filenames and not self.recording_ble_device.get().strip():
             messagebox.showerror("BLE device required", "Enter the AURORA BLE device name first.")
             return None
@@ -229,6 +240,9 @@ class RecordingTabMixin(
         if setup is None:
             return
         environment, camera_arguments = setup
+        if not self._stop_serial_dashboard():
+            self._release_serial_for(self.start_selected_recordings)
+            return
         if self._release_ble_for(self.start_selected_recordings):
             return
         python = self.simulation_python or console_python(Path(sys.executable))
@@ -251,6 +265,8 @@ class RecordingTabMixin(
                 self.recording_grip_trial.get(),
                 int(self.recording_grip_repeats.get()) if self.recording_grip_trial.get() else 5,
             )
+            if filename == "record_ble_sensors.py" and self.recording_emg_format.get() != "auto":
+                arguments += ["--emg-format", self.recording_emg_format.get()]
             display_name = next(
                 title
                 for candidate, title, _description in MAINTAINED_SOURCES
@@ -263,6 +279,7 @@ class RecordingTabMixin(
                 environment=environment,
                 parallel=True,
                 process_key=f"recording:{filename}",
+                stop_input=STOP_COMMAND,
             ):
                 launched += 1
         if launched:
@@ -276,6 +293,13 @@ class RecordingTabMixin(
         program = self.recording_programs.get(self.recording_program.get())
         if program is None:
             messagebox.showinfo("Recording unavailable", "No recording program was found in src.")
+            return
+        if program.name == "capture_movement.py":
+            self.workflow.show_tool("movement_capture")
+            return
+        if program.name == "record_cup_trials.py":
+            self.notebook.select(self.tabs["recording"])
+            self.prepare_cup_recording()
             return
         if self._active_processes():
             messagebox.showinfo("Programs running", "Stop active programs first.")
@@ -300,6 +324,8 @@ class RecordingTabMixin(
                 self.recording_grip_trial.get(),
                 int(self.recording_grip_repeats.get()) if self.recording_grip_trial.get() else 5,
             )
+            if self.recording_emg_format.get() != "auto":
+                arguments += ["--emg-format", self.recording_emg_format.get()]
         elif program.name == "record_oak_pose.py":
             arguments = ["--auto-start", *arguments]
         python = self.simulation_python or console_python(Path(sys.executable))
@@ -310,6 +336,7 @@ class RecordingTabMixin(
             environment=environment,
             parallel=True,
             process_key=f"recording:{program.name}",
+            stop_input=STOP_COMMAND,
         )
 
     def stop_recordings(self) -> None:
@@ -355,11 +382,7 @@ class RecordingTabMixin(
             "AURORA_TRIAL_ID": self.recording_trial_id.get().strip(),
             "AURORA_TEST_TYPE": self.recording_test_type.get().strip(),
         }
-        arguments = (
-            self._split_arguments(self.recording_arguments.get())
-            if filename == "record_oak_pose.py"
-            else []
-        )
+        arguments = self._camera_arguments() if filename == "record_oak_pose.py" else []
         python = self.simulation_python or console_python(Path(sys.executable))
         self._start_program(
             "OAK-D camera",
@@ -368,16 +391,12 @@ class RecordingTabMixin(
             environment=environment,
             parallel=True,
             process_key=f"preview:{filename}",
+            stop_input=STOP_COMMAND,
         )
 
-    @staticmethod
-    def _split_arguments(value: str) -> list[str]:
-        if not value.strip():
-            return []
-        parts = shlex.split(value, posix=os.name != "nt")
-        if os.name == "nt":
-            parts = [
-                part[1:-1] if len(part) >= 2 and part[0] == part[-1] and part[0] in "\"'" else part
-                for part in parts
-            ]
-        return parts
+    def _camera_arguments(self):
+        levels = {"Fast": 0, "Balanced": 1, "Detailed": 2}
+        arguments = ["--pose-model", str(levels[self.recording_pose_model.get()])]
+        if self.recording_camera_depth.get():
+            arguments.append("--depth")
+        return arguments

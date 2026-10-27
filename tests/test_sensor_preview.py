@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import io
+import struct
 import sys
 import tempfile
 import time
@@ -20,13 +22,114 @@ import aurora.recording.record_oak_pose as record_oak_pose
 import aurora.recording.record_serial_sensors as record_serial_sensors
 from aurora.gui.sensor_graphs import LiveSignalGraphs
 from aurora.gui.sensor_plot import draw_traces
-from aurora.recording.ble_preview import imu_tilt_degrees, relative_angle
+from aurora.recording.ble_preview import imu_tilt_degrees, relative_angle, run_ble_preview
 from aurora.recording.serial_preview import numeric_values
 from aurora.sensors.ble_input import BleSensorReader
-from aurora.sensors.ble_protocol import CURRENT_EMG_PACKET, HIGH_RATE_IMU_PACKET
+from aurora.sensors.ble_protocol import CURRENT_EMG_PACKET, HIGH_RATE_IMU_PACKET, BleRecorder
 
 
 class SensorPreviewTests(unittest.TestCase):
+    def test_standalone_ble_preview_expires_each_role_while_emg_continues(self):
+        clock = [100.0]
+        orientations, statuses, frames = [], [], []
+        callbacks = {}
+
+        class Variable:
+            def __init__(self, master=None, value=""):
+                self.value = value
+
+            def set(self, value):
+                self.value = value
+                statuses.append(value)
+
+        class Widget:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: None
+
+        class ImmediateThread:
+            def __init__(self, target, **kwargs):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        class Client:
+            def __init__(self, device):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def start_notify(self, uuid, callback):
+                callbacks[uuid] = callback
+
+            @property
+            def is_connected(self):
+                return len(frames) < 10
+
+        async def deliver(_seconds):
+            sequence = len(frames)
+            frames.append(sequence)
+            clock[0] += 0.1
+            callbacks["imu"](
+                None,
+                HIGH_RATE_IMU_PACKET.pack(
+                    0x103,
+                    sequence,
+                    1000 + sequence * 100_000,
+                    1000,
+                    *([0, 0, 1000, 0, 0, 0] * 2),
+                ),
+            )
+            callbacks["emg"](
+                None,
+                struct.pack("<HIQH", 0x101, sequence, 1000 + sequence * 100_000, 2048),
+            )
+
+        fake_tk = types.SimpleNamespace(
+            Tk=Widget,
+            Toplevel=Widget,
+            Frame=Widget,
+            Label=Widget,
+            Canvas=Widget,
+            Button=Widget,
+            StringVar=Variable,
+            TclError=RuntimeError,
+        )
+        args = argparse.Namespace(
+            address="test", device="test", scan_timeout=1, preview_sensor="imu"
+        )
+        with (
+            patch("aurora.recording.ble_preview.tk", fake_tk),
+            patch("aurora.recording.ble_preview.time.monotonic", side_effect=lambda: clock[0]),
+            patch("aurora.recording.ble_preview.asyncio.sleep", side_effect=deliver),
+            patch("aurora.recording.ble_preview.threading.Thread", ImmediateThread),
+            patch("aurora.recording.ble_preview.sys.stdin", io.StringIO("show imu\n" * 100)),
+            patch("aurora.recording.ble_preview.draw_traces"),
+            patch(
+                "aurora.recording.ble_preview.draw_orientation",
+                side_effect=lambda canvas, values: orientations.append(dict(values)),
+            ),
+            patch.dict(
+                sys.modules,
+                {"bleak": types.SimpleNamespace(BleakClient=Client, BleakScanner=object)},
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            result = asyncio.run(run_ble_preview(args, BleRecorder, {"imu": "imu", "emg": "emg"}))
+        self.assertEqual(result, 0)
+        self.assertIn({0, 1}, [set(values) for values in orientations])
+        self.assertEqual(set(orientations[-1]), {0})
+        self.assertTrue(any("IMUs 1/2" in status for status in statuses))
+        self.assertTrue(any("command overruns " in status for status in statuses))
+        self.assertEqual(frames, list(range(10)))
+
     def test_packet_totals_do_not_describe_sensor_availability(self):
         now = [100.0]
         reader = BleSensorReader(clock=lambda: now[0])

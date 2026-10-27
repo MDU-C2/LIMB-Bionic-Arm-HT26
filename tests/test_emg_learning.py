@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import csv
 import json
+import struct
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -16,7 +18,7 @@ from aurora.json_utils import write_json
 from aurora.ml.emg_dataset import load_trials, make_dataset, participant_splits, trial_windows
 from aurora.ml.emg_metrics import classification_scores, grip_scores
 from aurora.ml.emg_model import EmgModel, LiveEmgClassifier
-from aurora.ml.train_emg import run_experiment
+from aurora.ml.train_emg import fit_model, run_experiment
 from aurora.recording.emg_labels import digest, load_labels, save_labels
 from aurora.sensors.ble_input import BleSensorReader
 from aurora.sensors.emg_window import EmgWindowSettings, EmgWindowStream, features
@@ -46,6 +48,71 @@ def recording(root, subject="S01", trial="T01", seed=42):
 
 
 class EmgLearningTests(unittest.TestCase):
+    def test_slow_optional_inference_does_not_block_raw_recording_or_imu_updates(self):
+        from aurora.sensors.ble_protocol import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET
+
+        entered, release = threading.Event(), threading.Event()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = EmgWindowSettings(rate_hz=1000)
+            features = np.random.default_rng(42).normal(size=(40, 1, 6))
+            model = fit_model(
+                features,
+                np.tile(np.arange(4), 10),
+                "lda",
+                list(range(6)),
+                settings,
+                root / "model",
+                epochs=1,
+                seed=42,
+            )
+            model.manifest["reviewed_for_live"] = True
+            write_json(model.directory / "model.json", model.manifest)
+            reader = BleSensorReader(emg_model=model.directory)
+            original = reader.emg_classifier.model.predict
+
+            def slow_predict(features):
+                entered.set()
+                release.wait(3)
+                return original(features)
+
+            (root / "raw").mkdir()
+            reader.start_recording(root / "raw")
+            try:
+                with patch.object(reader.emg_classifier.model, "predict", slow_predict):
+                    for sequence in range(60):
+                        values = np.round(2048 + 30 * np.sin(np.arange(40) + sequence * 40)).astype(
+                            int
+                        )
+                        payload = HIGH_RATE_EMG_HEADER.pack(
+                            0x100, sequence, 1_000_000 + sequence * 40_000, 1000, 40, 0
+                        )
+                        reader.notification("emg", payload + struct.pack("<40H", *values))
+                        if sequence == 29:
+                            self.assertTrue(entered.wait(1))
+                    reader.notification(
+                        "imu",
+                        HIGH_RATE_IMU_PACKET.pack(
+                            0x103, 0, 1_000_000, 1_000_000, *([0, 0, 1000, 0, 0, 0] * 2)
+                        ),
+                    )
+                    reader.flush_recording()
+                    self.assertEqual(set(reader.latest()["imus"]), {"shoulder", "wrist"})
+                    self.assertEqual(reader.decoder.counts["emg"], 60)
+                    self.assertGreater(reader.emg_classifier.skipped_windows, 0)
+                    self.assertFalse(reader.stop(timeout=0))
+                    reader.calibrate_emg()
+                    release.set()
+                    self.assertTrue(reader.stop())
+                    self.assertIsNone(reader.emg_classifier.phase)
+            finally:
+                release.set()
+                reader.stop()
+            with (root / "raw/emg.csv").open(newline="") as source:
+                self.assertEqual(len(list(csv.DictReader(source))), 2400)
+            packets = (root / "raw/packets.jsonl").read_text().splitlines()
+            self.assertEqual(len(packets), 61)
+
     def test_reviewed_labels_are_separate_and_bind_to_raw_samples(self):
         with tempfile.TemporaryDirectory() as temp:
             source, labels = recording(Path(temp))
@@ -326,8 +393,13 @@ class EmgLearningTests(unittest.TestCase):
         reader.emg_classifier = Mock()
         reader.emg_classifier.model.settings = EmgWindowSettings(rate_hz=1000)
         reader._emg_period = 0.001
-        reader._samples("emg", 1, [[2048] * 10])
-        reader._samples("emg", 3, [[2048] * 10])
+        import struct
+
+        from aurora.sensors.ble_protocol import HIGH_RATE_EMG_HEADER
+
+        for sequence in (1, 3):
+            payload = HIGH_RATE_EMG_HEADER.pack(0x100, sequence, sequence * 10_000, 1000, 10, 0)
+            reader.notification("emg", payload + struct.pack("<10H", *([2048] * 10)))
         reader.emg_classifier.reset.assert_called()
         reader.emg_classifier.reset.reset_mock()
         reader.calibrate_emg()

@@ -1,63 +1,76 @@
-# App
+# AURORA app
 
-Run `Start.bat` from the repo root. For a new setup, use `Setup.bat` first.
-To launch directly, select the project Python and run `python -m aurora.gui.app`.
+Run Setup once, then open Start. Ordinary launching works offline.
 
-| Tab | Use |
+| Location | Use |
 | --- | --- |
-| Simulation | Keyboard or live sensor control of the arm |
-| Recording | Record raw signals and repeated cup transfers per subject |
-| Recordings | Browse/plot signals, review EMG labels and compare classifiers |
-| Motion AI | Play saved poses or compare movements |
-| Firmware | Build, flash and monitor the ESP32 |
-| Info | Check installed tools and project files |
+| Connect & inspect | Set subject and arm; inspect BLE, USB and camera signals |
+| Record | Connect camera + BLE, calibrate, practise and record separate cup trials |
+| Control | Keyboard control, guided live setup and recorded sensor replay |
+| Review & export | Browse recordings, inspect signals, review EMG labels, process and export |
+| Advanced Tools | Movement profiles, EMG models, DMP/manual joints, raw capture, diagnostics and firmware |
+| Help & status | Refresh capability checks and open the guides |
 
-The app opens on Recording. The operator enters the subject ID, connects camera
-and BLE, calibrates the subject, selects a pace and starts each trial. Calibration
-guides arm raises, elbow bends, forearm turns, a static reference and EMG checks.
-Each calibration step waits for **Start step**, then counts down before capture.
-Normal trials require passed checks and valid stereo arm points. Trials default
-to a three-second countdown followed by eight seconds of capture and automatic
-saving. Stereo depth is used throughout this workflow. The countdown is for the operator, who gives the subject the
-start signal. Trial numbers advance automatically. Use **Finish subject** before
-changing participants.
+Start with **Connect & inspect**. Monitors do not create recordings. Stop them or
+close the camera preview before a capture or control session takes the devices.
+The app hands sensor connections to the child program before opening another owner.
+Subject and arm controls stay locked while recording or control runs.
 
-**Connect BLE / show graphs** opens a standalone sensor check. During cup recording,
-use **Signals** to view the same reader without opening another BLE connection.
+Under **Record**, enter the subject ID, choose the arm and output folder, then
+connect camera + BLE. Subject calibration guides mounting movements, a static
+reference and EMG checks. Each step waits for **Start step**, counts down and
+shows the result. Repeat the named movement when a check fails. Normal trials
+require valid calibration and stereo depth. Use **Practice (no files)** first.
+The default capture is eight seconds after GO with a three-second countdown.
+Requested natural, slow and fast pace stay separate from verified movement labels.
+Use **Finish subject** before changing participants.
 
-Use **Guided grip trial** under Advanced recording options to collect repeated rest, grip,
-hold and release phases. The operator relays the cues to the subject. Saved cue times can
-be corrected before generating labelled features.
+Under **Control**, choose **Direct pose preview** or **Motor physics**. Follow the
+mounting, relaxed EMG and deliberate grip steps before live control. Human anatomical
+angles, changes since zeroing and limited robot commands are different quantities.
+Direct preview follows mapped targets; motor physics adds actuator speed and dynamics.
+Use R to reset. See the [simulation guide](../../../docs/simulation-guide.md) for keys.
 
-Live simulation uses the Bluetooth name `AURORA`. Follow the setup panel:
-align the starting pose, calibrate relaxed EMG, calibrate firm grip, then start
-control. Keep the open hand at marker 1 with the thumb up and elbow about 90°.
-Press R to pause and reset. K and L advance the current setup step.
+Under **Review & export**, select a trial or raw file:
 
-The table is 60 x 60 cm. The arm is mounted on the left, with the cup to its
-right. The green disc marks the placement area farther right.
+- **Plot / export image** selects signals, optional EMG spectrum and a PNG destination.
+- **Process EMG** selects filter frequencies, feature windows and a new output folder.
+- **Review EMG labels** opens raw intervals and available synchronized video. Save
+  reviewed labels before training; operator cues alone are not reviewed labels.
+- **Replay selected cup trial** uses the recorded inputs and calibration.
+- **Trial / calibration summary** shows completeness, references, cues and frame counts.
+- **Export recording bundle** writes a lossless ZIP with hashes. Selecting a trial
+  manifest exports that trial folder; choose its subject folder to include separate
+  reference sessions. Original files and incomplete status are preserved.
 
-See the [recording guide](../../../docs/recording-guide.md) and
-[simulation guide](../../../docs/simulation-guide.md) for the full controls.
+Processing and export destinations stay separate from the next recording's output.
+**Browse last outputs in Review** opens derived results in the browser.
 
-## Files
+**Advanced Tools** contains optional workflows:
 
-- `app.py`, `app_layout.py`: window and shared controls.
-- `recording_tab.py`, `recording_views.py`, `recording_settings.py`: recording setup.
-- `cup_recording.py`: operator controls for repeated cup trials.
-- `recording_browser.py`: saved files and plots.
-- `emg_review.py`, `emg_tools.py`: label review, classifier comparison and selection.
-- `ble_dashboard.py`, `serial_dashboard.py`, `sensor_window.py`, `sensor_graphs.py`: sensor monitors.
-- `sensor_plot.py`: drawing shared by the live graphs and standalone preview.
-- `simulation_tabs.py`: keyboard and live simulation setup.
-- `motion_tools.py`: movement comparison and pose playback.
-- `project_tabs.py`, `firmware_workspace.py`: firmware actions and project status.
-- `process_manager.py`, `project_support.py`: child programs, paths and tool checks.
+- **Movement profiles**: capture a camera profile, choose references and a reviewed
+  movement model, set the recognition threshold, train a GRU and export result plots.
+- **EMG models**: compare LDA/ANN/LSTM and feature sets with explicit window, sequence,
+  participant calibration, epoch and seed settings. Review participant results before
+  selecting a bundle for the next live session. Calibrated amplitude remains available.
+- **DMP / manual joints**: fit/export trajectories, play saved or refitted DMPs, play
+  compatible camera poses and open robot joint sliders. Exports retain unclipped radians;
+  playback applies robot limits. The inherited angles-only DMP fit assumes one second.
+- **Raw capture**: choose named BLE, camera or USB captures, guided grip repeats,
+  depth/detail settings and explicit legacy compatibility where needed.
+- **Diagnostics**: select BLE/USB/camera checks, live or recorded profiling, fusion
+  comparisons, dynamics and offline benchmarks. Blank-image benchmarks do not measure
+  camera acquisition or tracking accuracy. **USB live-control diagnostics** uses the
+  earlier configured-axis align/start path; use BLE for guided functional mounting
+  and deliberate grip calibration. **Control** can also save detailed physics telemetry.
+- **Firmware**: build, monitor or explicitly confirm a flash. Flashing is separate
+  from build and requires the supported toolchain and a selected port.
 
-Program output is kept under `outputs/logs/`. A failed recording or simulation
-shows its error and log path in the app.
+Forms check optional packages in the background and explain missing capabilities.
+**Cancel** closes an unstarted form. Once running, use **Stop active program**.
+Progress, errors and completion appear in Activity, with full logs in `outputs/logs`.
+New training runs stay under `outputs/training`; selection never replaces bundled models.
 
-In Recordings, select a trial or CSV and press **Plot signals** to inspect it.
-Use **Process EMG** afterward; the raw files stay unchanged.
-Use **Review EMG labels** before **Compare EMG models**. The
-[EMG guide](../../../docs/emg-learning.md) covers participant splits and model selection.
+See the [recording guide](../../../docs/recording-guide.md),
+[signal inspection](../../../docs/signal-inspection.md) and
+[EMG guide](../../../docs/emg-learning.md) for data and evaluation details.

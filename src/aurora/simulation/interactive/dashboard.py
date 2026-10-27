@@ -53,6 +53,12 @@ class DashboardMixin:
             tk.Label(setup, textvariable=self.setup_text, wraplength=510, justify="left").pack(
                 anchor="w"
             )
+            self.measurement_text = tk.StringVar(
+                value="Human angles: waiting for an observable pose"
+            )
+            tk.Label(
+                setup, textvariable=self.measurement_text, wraplength=510, justify="left"
+            ).pack(anchor="w", pady=(6, 0))
             self.setup_button = tk.Button(
                 setup,
                 text="1. Align starting pose (hold still 2 s)",
@@ -255,11 +261,15 @@ class DashboardMixin:
     def update_dashboard(self) -> None:
         """Refresh the monitor from this frame's measurements."""
         try:
+            if self.sensor_window.state() == "withdrawn":
+                self.sensor_window.update()
+                return
             now = time.monotonic()
             if now - getattr(self, "last_dashboard_update", 0.0) < 0.1:
                 self.sensor_window.update()
                 return
             self.last_dashboard_update = now
+            self.torque_graph.redraw(self.dynamic_mode)
             if (
                 getattr(self.args, "replay", None)
                 and self.live_sensor_input is not None
@@ -271,10 +281,29 @@ class DashboardMixin:
                 )
                 self.setup_button.configure(state="disabled")
             guide = getattr(self, "live_setup", None)
+            if self.live_snapshot is not None and hasattr(self, "measurement_text"):
+                human = (self.live_snapshot.angles or {}).get("elbow_flexion")
+                relative = (self.live_snapshot.relative_angles or {}).get("elbow_flexion")
+                target = (self.live_snapshot.robot_targets or {}).get("elbow_x")
+                difference = self.live_snapshot.return_error_deg
+                self.measurement_text.set(
+                    f"Human elbow: {human:.1f} deg | Robot target: {target:.1f} deg"
+                    if human is not None and target is not None
+                    else f"Elbow change since zeroing: {relative:.1f} deg | Anatomical elbow unavailable"
+                    if relative is not None
+                    else "Human elbow: unavailable | Robot waits for a valid estimate"
+                )
+                if difference is not None:
+                    self.measurement_text.set(
+                        self.measurement_text.get()
+                        + f"\nCamera difference from reference: {difference:.1f} deg"
+                    )
+                if self.live_snapshot.body_reference == "stationary_trunk_assumed":
+                    self.measurement_text.set(
+                        self.measurement_text.get()
+                        + "\nKeep trunk still: camera body reference unavailable"
+                    )
             if guide is not None and self.live_snapshot is not None:
-                guide.update(self.live_snapshot)
-                if guide.stage != "running":
-                    self.live_feedback_active = False
                 self.setup_text.set(guide.message)
                 self.setup_button.configure(
                     text=guide.button,

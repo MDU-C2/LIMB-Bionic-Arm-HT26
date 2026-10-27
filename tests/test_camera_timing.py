@@ -23,6 +23,90 @@ from aurora.sensors.live_input import LiveSensorInput
 
 
 class CameraTimingTests(unittest.TestCase):
+    def test_published_frame_identity_does_not_advance_while_inference_is_running(self):
+        live = LiveSensorInput(show_monitor=False)
+        live._worker = Mock()
+        live.mp = live.cv2 = live.np = None
+        live.video_queue = Mock()
+        live.camera_frame = CupCameraFrame(1, 111, object())
+        live.frame_sequence, live.frame_time_ns = 1, 111
+        live._camera_frames.received = 1
+        entered, release = threading.Event(), threading.Event()
+
+        def analyze(*args, **kwargs):
+            entered.set()
+            release.wait(2)
+            return object(), "ready", None, {}
+
+        with (
+            patch("aurora.sensors.live_input.receive_frame", return_value=(object(), 222)),
+            patch("aurora.sensors.live_input.analyze_frame", analyze),
+        ):
+            worker = threading.Thread(target=live._poll_camera)
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(1))
+                live.poll()
+                self.assertEqual((live.frame_sequence, live.frame_time_ns), (1, 111))
+                self.assertEqual(live.camera_frame.frame_sequence, 1)
+            finally:
+                release.set()
+                worker.join(2)
+            live.poll()
+        self.assertEqual((live.frame_sequence, live.frame_time_ns), (2, 222))
+        self.assertEqual(live.camera_frame.frame_sequence, 2)
+
+    def test_trial_frames_received_while_files_open_keep_the_trial_time_origin(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            camera = CameraSession(
+                Mock(),
+                "S01",
+                "left",
+                directory=Path(temporary) / "camera",
+                metadata={"trial_started_host_monotonic_ns": 10_000_000_000},
+            )
+            with (
+                patch(
+                    "aurora.recording.oak_session.time.monotonic_ns", return_value=10_100_000_000
+                ),
+                patch("aurora.recording.oak_session.time.monotonic", return_value=10.1),
+            ):
+                camera.start()
+                camera.add_frame(object(), None, {}, host_monotonic_ns=10_050_000_000)
+                camera.stop()
+            self.assertEqual(camera.source_frames, 1)
+            self.assertEqual(camera.observations[0]["host_monotonic_ns"], 10_050_000_000)
+            self.assertEqual(camera.observations[0]["time_s"], 0.05)
+
+    def test_partial_camera_start_does_not_export_previous_frames_or_uptime_as_duration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            camera = CameraSession(Mock(), "S01", "left", directory=Path(temporary) / "camera")
+            camera.video_frames = 100
+            camera.observations = [{"old": True}]
+            original = Path.open
+
+            def open_file(path, *args, **kwargs):
+                if path.name == "frame_times.jsonl":
+                    raise OSError("timestamp file unavailable")
+                return original(path, *args, **kwargs)
+
+            with (
+                patch.object(Path, "open", open_file),
+                patch(
+                    "aurora.recording.oak_session.time.monotonic_ns", return_value=10_000_000_000
+                ),
+                patch("aurora.recording.oak_session.time.monotonic", return_value=10),
+                self.assertRaisesRegex(OSError, "timestamp file unavailable"),
+            ):
+                camera.start()
+            metadata = json.loads((camera.session / "meta.json").read_text())
+            self.assertFalse(camera.recording)
+            self.assertFalse(metadata["complete"])
+            self.assertEqual(metadata["duration_seconds"], 0)
+            self.assertEqual(metadata["started_host_monotonic_ns"], 10_000_000_000)
+            self.assertEqual(metadata["video_frame_count"], 0)
+            self.assertEqual(camera.observations, [])
+
     def test_tracking_waits_for_delayed_depth_and_keeps_both_receipt_times(self):
         live = CupSensorInput(
             side="left", device="test", shoulder_twist_axis="y", wrist_twist_axis="y"

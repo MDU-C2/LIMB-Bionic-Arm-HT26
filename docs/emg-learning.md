@@ -2,7 +2,7 @@
 
 ## Review recordings
 
-In **Recordings**, select `trial.json` or raw EMG and press **Review EMG labels**.
+In **Review & export**, select `trial.json` or raw EMG and press **Review EMG labels**.
 Check the subject/trial IDs. Select an interval on the plot, choose its phase,
 then press **Add interval**. Check the saved video with the slider. Remove and
 replace incorrect intervals; leave uncertain sections unlabelled.
@@ -22,14 +22,17 @@ video playback time and show that limitation.
 
 ## Compare classifiers
 
-Press **Compare EMG models** and choose reviewed recordings from at least two
-subjects, or run from the project environment:
+Open **Advanced Tools → EMG models → Compare EMG models** and choose reviewed
+recordings from at least two subjects. Select model/feature checkboxes, window
+and sequence settings, optional personal calibration trials, epochs, seed and
+a new run folder. The GUI starts with LDA selected; ANN/LSTM need the optional
+training packages. The equivalent optional command is:
 
 ```powershell
 python -m aurora.ml.train_emg --data outputs/recordings
 ```
 
-Defaults compare LDA, ANN and LSTM with RMS/MAV and all six features. New runs
+CLI defaults compare LDA, ANN and LSTM with RMS/MAV and all six features. New runs
 go in `outputs/training/` with `training.json`, participant splits, raw/label
 hashes, code hashes, package versions, scores and model bundles. Install the
 optional `requirements-training.txt` packages for PyTorch/ONNX training;
@@ -89,7 +92,7 @@ reported as unavailable; test movements are never used to invent it. Compare
 binary scores with binary scores: amplitude does not predict the four phases.
 This baseline still requires personal pre-trial calibration.
 
-In **Simulation → Live settings → Select reviewed EMG model**, choose a
+In **Advanced Tools → EMG models → Review and select a live EMG model**, choose a
 candidate's `bundles/.../model.json`. Check participant scores and open the full
 results. **Use this model for live EMG** records the review and selects it for
 the next session. **Use calibrated amplitude** restores the default. New training

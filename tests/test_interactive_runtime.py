@@ -80,6 +80,18 @@ class InteractiveRuntimeTests(unittest.TestCase):
             self.assertAlmostEqual(self.simulator.measured_angles_deg[name], requested, places=4)
         self.simulator.sensor_window.update.assert_called()
 
+    def test_space_survives_a_render_without_physics_and_is_consumed_once(self):
+        simulator = self.simulator
+        simulator.auto_grasp_pending = True
+        simulator.auto_grasp_phase = "reach"
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+        simulator.process_events()
+        simulator.process_events()
+        simulator.update_grasp()
+        self.assertFalse(simulator.auto_grasp_pending)
+        simulator.update_grasp()
+        self.assertFalse(simulator.auto_grasp_pending)
+
     def test_paused_live_setup_initializes_and_refreshes_contact_display(self):
         simulator = self.simulator
         simulator.args.control = "camera-imu"
@@ -99,6 +111,24 @@ class InteractiveRuntimeTests(unittest.TestCase):
         self.assertEqual(get_angles_deg(simulator.arm), before)
         self.assertIsNone(simulator.grasp_transform)
         simulator.sensor_window.update.assert_called()
+
+    def test_hidden_dashboard_does_not_disable_setup_safety_transitions(self):
+        simulator = self.simulator
+        simulator.args.control = "camera-imu"
+        source = Mock()
+        source.reader.connection_generation = 1
+        source.grip_source = "emg"
+        source.poll.return_value = LiveFusionSnapshot(
+            {"elbow_flexion": 90}, {}, True, True, "EMG lost", emg_raw=None
+        )
+        simulator.live_sensor_input = source
+        simulator.live_setup = LiveSetup(source, {})
+        simulator.live_setup.stage = "running"
+        simulator.live_feedback_active = True
+        simulator.sensor_window.state.return_value = "withdrawn"
+        self.frame()
+        self.assertFalse(simulator.live_feedback_active)
+        self.assertEqual(simulator.live_setup.stage, "align")
 
     def test_table_dimensions_cup_and_neutral_pose_clear_the_lift_path(self):
         from aurora.simulation.interactive.arm_control import set_shoulder, sync_to_pybullet

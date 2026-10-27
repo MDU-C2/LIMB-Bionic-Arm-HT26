@@ -19,11 +19,22 @@ FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
 REFERENCE_IMU_PERIOD_S = 0.02
 MAX_IMU_PERIOD_S = 0.35
 DEFAULT_GYRO_DEADZONE_DPS = 2.5
-DEFAULT_GYRO_ABDUCTION_GAIN = 0.45
+DEFAULT_GYRO_ABDUCTION_GAIN = 1.0
 # A six-axis IMU has no absolute heading reference.  Its integrated gyro-Z
 # value is useful through short camera gaps, but must not pull a valid absolute
 # camera left/right angle away from the observed pose.
 CAMERA_ABSOLUTE_CHANNELS = frozenset(("shoulder_abduction",))
+
+
+def fresh_imu_angles(angles, roles):
+    """Only publish angles supported by the currently fresh sensor roles."""
+    if not angles or "shoulder" not in roles:
+        return None
+    result = dict(angles)
+    if "wrist" not in roles:
+        result.pop("elbow_flexion", None)
+        result.pop("wrist_rotation", None)
+    return result or None
 
 
 def _vector(value: object) -> tuple[float, float, float] | None:
@@ -59,7 +70,11 @@ class DualImuArmEstimator:
         gyro_abduction_gain: float = DEFAULT_GYRO_ABDUCTION_GAIN,
         shoulder_twist_axis: str = DEFAULT_TWIST_AXIS,
         wrist_twist_axis: str = DEFAULT_TWIST_AXIS,
+        side: str = "left",
     ) -> None:
+        if side not in ("left", "right"):
+            raise ValueError("Choose left or right arm")
+        self.side = self.initial_side = side
         self.alpha = min(0.999, max(0.0, float(alpha)))
         self.accel_time_constant_s = (
             -REFERENCE_IMU_PERIOD_S / math.log(self.alpha) if self.alpha > 0.0 else 0.0
@@ -68,10 +83,7 @@ class DualImuArmEstimator:
         self.twist = ImuTwistEstimator(
             shoulder_twist_axis, wrist_twist_axis, self.gyro_deadzone_dps
         )
-        # The built shoulder has roughly 40 degrees of lateral travel while a
-        # human upper arm can move through about 90 degrees.  Scale gyro-only
-        # fallback motion into that range instead of hitting the stop after a
-        # small real movement.
+        # Human angular rates stay in degrees/s. Robot travel belongs to mapping.
         self.gyro_abduction_gain = max(0.0, float(gyro_abduction_gain))
         self.filtered_accel: dict[str, tuple[float, float, float]] = {}
         self.tilt_offsets: dict[str, float] = {}
@@ -82,10 +94,69 @@ class DualImuArmEstimator:
         self.reference_angles: dict[str, float] = {}
         self.camera_offsets: dict[str, float] = {}
         self.last_angles: dict[str, float] = {}
+        self.alignment_profile = None
+        self.sensor_rotations = {}
+        self.sensor_biases = {}
+        self.initial_twist_axes = dict(self.twist.axes)
+
+    def clear_alignment(self):
+        self.side = self.initial_side
+        self.alignment_profile = None
+        self.sensor_rotations, self.sensor_biases = {}, {}
+        self.twist.axes = dict(self.initial_twist_axes)
+        self.reference_angles = {}
+        self.reset_calibration()
+
+    def set_alignment(self, profile) -> None:
+        """Apply a validated sensor-to-segment fit to the live/offline estimator."""
+        import numpy as np
+
+        from aurora.sensors.arm_alignment import METHOD, ROLES, rotation_matrix
+
+        if (
+            profile.get("format_version") != 1
+            or profile.get("method") != METHOD
+            or profile.get("status") != "passed"
+            or profile.get("matrix_direction") != "segment_from_sensor"
+        ):
+            raise ValueError("A passed version-1 sensor-to-segment alignment is required")
+        rotations = {role: rotation_matrix(profile["sensor_to_segment"][role]) for role in ROLES}
+        biases = {role: np.asarray(profile["gyro_bias_dps"][role], dtype=float) for role in ROLES}
+        if any(value.shape != (3,) or not np.isfinite(value).all() for value in biases.values()):
+            raise ValueError("Alignment gyro biases must be finite three-vectors")
+        references = {
+            role: rotation_matrix(profile["camera_from_segment_at_reference"][role])
+            for role in ROLES
+        }
+        elbow = float(profile["reference_elbow_flexion_deg"])
+        if profile.get("side") not in ("left", "right"):
+            raise ValueError("Alignment must identify the selected arm")
+        if not math.isfinite(elbow) or not 0 <= elbow <= 180:
+            raise ValueError("Invalid anatomical elbow reference")
+        self.sensor_rotations, self.sensor_biases = rotations, biases
+        self.alignment_profile = profile
+        self.side = profile["side"]
+        self.alignment_references = references
+        self.twist.axes = dict.fromkeys(ROLES, "y")
+        self.reset_calibration(
+            {
+                "shoulder_flexion": 0.0,
+                "elbow_flexion": elbow,
+                "shoulder_abduction": 0.0,
+                "wrist_rotation": 0.0,
+            }
+        )
 
     def reset_calibration(self, reference_angles: object = None) -> None:
-        if reference_angles is not None:
+        if reference_angles is not None and self.alignment_profile is None:
             self.reference_angles = camera_control_angles(reference_angles)
+        if self.alignment_profile is not None:
+            self.reference_angles = {
+                "shoulder_flexion": 0.0,
+                "shoulder_abduction": 0.0,
+                "elbow_flexion": self.alignment_profile["reference_elbow_flexion_deg"],
+                "wrist_rotation": 0.0,
+            }
         self.twist.reset(
             shoulder_angle=-self.reference_angles.get("shoulder_rotation_proxy", 0.0),
             wrist_angle=self.reference_angles.get("wrist_rotation", 0.0),
@@ -98,6 +169,16 @@ class DualImuArmEstimator:
         self.active_roles = ()
         self.camera_offsets = {}
         self.last_angles = {}
+        if self.alignment_profile is not None:
+            # Restore the measured reference geometry, not the current pose.
+            up_camera = -self.alignment_references["shoulder"][:, 1]
+            for role, orientation in self.alignment_references.items():
+                gravity = orientation.T @ up_camera
+                self.tilt_offsets[role] = self._mounted_tilt(gravity)
+                self.gyro_bias_z[role], self.yaw_delta[role] = 0.0, 0.0
+            self.active_roles = ("shoulder", "wrist")
+            self.twist.bias = dict.fromkeys(self.active_roles, (0.0, 0.0, 0.0))
+            self.twist.dual_ready = True
 
     @staticmethod
     def _mounted_tilt(accel: tuple[float, float, float]) -> float:
@@ -141,13 +222,27 @@ class DualImuArmEstimator:
             corrected,
         )
 
-    def update(self, sensors: dict[str, dict[str, Any]], dt: float) -> dict[str, float] | None:
+    def update(
+        self,
+        sensors: dict[str, dict[str, Any]],
+        dt: float,
+        *,
+        sample_dt_s: dict[str, float] | None = None,
+    ) -> dict[str, float] | None:
+        if any(
+            isinstance(sensor, dict) and sensor.get("gyro_saturated") for sensor in sensors.values()
+        ):
+            return dict(self.last_angles) or None
         if not math.isfinite(dt) or dt <= 0 or dt > 0.5:
             self.reset_calibration()
             dt = 0.01
         # Use elapsed packet time rather than assuming a sample rate.  The cap
         # rejects reconnection gaps without halving legitimate 5 Hz gyro motion.
         dt = min(MAX_IMU_PERIOD_S, max(0.001, float(dt)))
+        role_dt = {
+            role: dt if sample_dt_s is None else sample_dt_s.get(role, 0.0)
+            for role in ("shoulder", "wrist")
+        }
         tilts: dict[str, float] = {}
         gyro_z: dict[str, float] = {}
         gyros: dict[str, tuple[float, float, float]] = {}
@@ -159,9 +254,19 @@ class DualImuArmEstimator:
             gyro = _vector(sensor.get("gyro_dps"))
             if accel is None or gyro is None:
                 continue
-            accel = self.twist.remap(role, accel)
-            gyro = self.twist.remap(role, gyro)
-            tilts[role] = self._mounted_tilt(self._filter_accel(role, accel, dt))
+            if role in self.sensor_rotations:
+                matrix = self.sensor_rotations[role]
+                accel = tuple(matrix @ accel)
+                gyro = tuple(matrix @ (gyro - self.sensor_biases[role]))
+            else:
+                accel = self.twist.remap(role, accel)
+                gyro = self.twist.remap(role, gyro)
+            filtered = (
+                self._filter_accel(role, accel, role_dt[role])
+                if role_dt[role] > 0
+                else self.filtered_accel.get(role, accel)
+            )
+            tilts[role] = self._mounted_tilt(filtered)
             gyro_z[role] = gyro[2]
             gyros[role] = gyro
 
@@ -179,7 +284,7 @@ class DualImuArmEstimator:
         for role in active_roles:
             if role not in new_roles:
                 self.yaw_delta[role] = self.yaw_delta.get(role, 0.0) + (
-                    self._yaw_rate(gyro_z[role], role) * self.gyro_abduction_gain * dt
+                    self._yaw_rate(gyro_z[role], role) * self.gyro_abduction_gain * role_dt[role]
                 )
 
         shoulder_tilt = (
@@ -206,25 +311,21 @@ class DualImuArmEstimator:
             if wrist_tilt is not None and shoulder_tilt is not None
             else 0.0
         )
-        rotations = self.twist.update(gyros, dt, math.radians(relative_bend))
+        rotations = self.twist.update(gyros, dt, math.radians(relative_bend), sample_dt_s=role_dt)
         if shoulder_tilt is None:
             return {}
 
         result = {
-            "shoulder_flexion": (
-                self.reference_angles.get("shoulder_flexion", 0.0) + shoulder_tilt
-                if self.reference_angles
-                else abs(shoulder_tilt)
-            ),
+            "shoulder_flexion": self.reference_angles.get("shoulder_flexion", 0.0) + shoulder_tilt,
             # Preserve the gyro sign.  Taking abs() here made both real motion
             # directions command the robot outward/left.
             "shoulder_abduction": (
                 self.reference_angles.get("shoulder_abduction", 0.0)
-                + self.yaw_delta.get("shoulder", 0.0)
+                + (1.0 if self.side == "left" else -1.0) * self.yaw_delta.get("shoulder", 0.0)
             ),
         }
         if wrist_tilt is not None:
-            result["elbow_flexion"] = relative_bend if self.reference_angles else abs(relative_bend)
+            result["elbow_flexion"] = relative_bend
         result.update(rotations)
         for name, offset in self.camera_offsets.items():
             if name in result:
@@ -236,9 +337,11 @@ class DualImuArmEstimator:
         """Anchor the IMU prediction once per fresh camera observation."""
         measured = camera_control_angles(camera_angles)
         weight = min(1.0, max(0.0, weight))
+        referenced = self.referenced_channels()
         for name in ("shoulder_flexion", "elbow_flexion", "shoulder_abduction"):
-            if name in measured and name in self.last_angles:
-                correction = weight * (measured[name] - self.last_angles[name])
+            if weight > 0 and name in measured and name in self.last_angles:
+                gain = weight if name in referenced else 1.0
+                correction = gain * (measured[name] - self.last_angles[name])
                 self.camera_offsets[name] = self.camera_offsets.get(name, 0.0) + correction
                 self.last_angles[name] += correction
         if "shoulder_rotation_proxy" in measured:
@@ -246,6 +349,15 @@ class DualImuArmEstimator:
             if rotation is not None:
                 self.last_angles["shoulder_rotation_proxy"] = rotation
         return dict(self.last_angles)
+
+    def referenced_channels(self) -> set[str]:
+        """Name channels anchored by a human pose or fitted segment reference."""
+        if self.alignment_profile is not None:
+            return set(CONTROL_NAMES)
+        names = set(self.reference_angles) | set(self.camera_offsets)
+        if self.twist.camera_aligned:
+            names.add("shoulder_rotation_proxy")
+        return names
 
     def correct_rotation(self, camera_proxy: float, weight: float) -> float | None:
         """Anchor axial gyro state to a fresh camera target; preserve relative wrist twist."""
@@ -375,6 +487,17 @@ def interactive_control_targets(angles: object) -> dict[str, float] | None:
     if "wrist_rotation" in fused:
         result["wrist_rotation"] = min(140.0, max(0.0, fused["wrist_rotation"]))
     return result or None
+
+
+def retarget_reference(angles, human_reference, robot_reference):
+    """Shift command references explicitly while preserving anatomical estimates."""
+    measured = camera_control_angles(angles)
+    human = camera_control_angles(human_reference)
+    robot = camera_control_angles(robot_reference)
+    return {
+        name: value + robot[name] - human[name] if name in robot and name in human else value
+        for name, value in measured.items()
+    }
 
 
 def anatomical_reference_angles(joints: dict[str, float]) -> dict[str, float]:

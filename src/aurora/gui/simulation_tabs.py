@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from tkinter import BooleanVar, filedialog, messagebox, ttk
+from tkinter import BooleanVar, StringVar, filedialog, messagebox, ttk
 
 from aurora.gui.motion_tools import MotionToolsMixin
 from aurora.gui.project_support import (
@@ -14,6 +14,7 @@ from aurora.gui.project_support import (
     INTERACTIVE_SIMULATION_SCRIPT,
     REPOSITORY_ROOT,
 )
+from aurora.recording.common import STOP_COMMAND
 
 
 class SimulationTabsMixin(MotionToolsMixin):
@@ -25,7 +26,7 @@ class SimulationTabsMixin(MotionToolsMixin):
         self._heading(
             tab,
             "AURORA simulation",
-            "Use the left-arm task scene with keyboard control or live camera + IMUs + EMG.",
+            "Control the left robot using the keyboard or the selected human arm with camera + IMUs + EMG.",
         )
 
         interactive = self._card(
@@ -33,7 +34,7 @@ class SimulationTabsMixin(MotionToolsMixin):
             3,
             "Interactive task simulator",
             "Open the table-and-target scene with five arm actuators and hand controls. "
-            "Physics mode uses gravity and position motors; direct mode previews joint poses.",
+            "Direct pose preview follows robot commands. Enable Motor physics for gravity, position motors and actuator speed limits.",
         )
         self.interactive_button = ttk.Button(
             interactive,
@@ -44,7 +45,7 @@ class SimulationTabsMixin(MotionToolsMixin):
         self.interactive_button.grid(row=2, column=0, sticky="w")
         ttk.Checkbutton(
             interactive,
-            text="Physics mode: gravity and motor speed limits (slower than a person)",
+            text="Motor physics: gravity and actuator speed limits (slower than a person)",
             variable=self.dynamic_simulation,
             style="Card.TCheckbutton",
         ).grid(row=3, column=0, sticky="w", pady=(8, 0))
@@ -54,6 +55,12 @@ class SimulationTabsMixin(MotionToolsMixin):
             variable=self.save_simulation_torque,
             style="Card.TCheckbutton",
         ).grid(row=4, column=0, sticky="w", pady=(4, 0))
+        ttk.Checkbutton(
+            interactive,
+            text="Save detailed physics telemetry in outputs/simulation",
+            variable=self.save_simulation_telemetry,
+            style="Card.TCheckbutton",
+        ).grid(row=6, column=0, sticky="w", pady=(4, 0))
 
         table_settings = ttk.Frame(interactive, style="Card.TFrame")
         table_settings.grid(row=5, column=0, sticky="w", pady=(8, 0))
@@ -74,7 +81,7 @@ class SimulationTabsMixin(MotionToolsMixin):
             "Interactive simulator with live sensors",
             "1. Connect and open setup. Movement stays paused.\n"
             "2. Sit upright. Upper arm relaxed, elbow about 90°, open hand at marker 1, thumb up.\n"
-            "3. Follow Align → Relaxed EMG → Firm grip in the setup window.\n"
+            "3. Follow the mounting movements, relaxed EMG and firm grip in the setup window.\n"
             "4. Return the open hand to marker 1 and press Start control.",
         )
         fusion_settings = ttk.Frame(fusion, style="Card.TFrame")
@@ -98,12 +105,14 @@ class SimulationTabsMixin(MotionToolsMixin):
         ttk.Label(fusion_settings, text="Tracked arm", style="Card.TLabel").grid(
             row=0, column=3, sticky="w", padx=(12, 0)
         )
-        ttk.Combobox(
-            fusion_settings,
-            textvariable=self.recording_camera_side,
-            values=("left", "right"),
-            state="readonly",
-            width=9,
+        self.workflow.bind_context(
+            ttk.Combobox(
+                fusion_settings,
+                textvariable=self.recording_camera_side,
+                values=("left", "right"),
+                state="readonly",
+                width=9,
+            )
         ).grid(row=1, column=3, padx=(12, 0), pady=(4, 0))
         ttk.Label(fusion_settings, text="Grip source", style="Card.TLabel").grid(
             row=2, column=0, sticky="w", pady=(8, 0)
@@ -137,8 +146,8 @@ class SimulationTabsMixin(MotionToolsMixin):
             ).grid(row=5, column=column, sticky="w", pady=(4, 0))
         ttk.Label(
             fusion_settings,
-            text="0x6B on upper arm, 0x6A on forearm. Selected axes run along each limb. "
-            "Keep shoulders, hips, elbow and wrist in view.",
+            text="0x6B on upper arm, 0x6A on forearm. Stereo setup fits the mounting axes. "
+            "Without depth, these axis settings are required for diagnostic control.",
             style="Card.TLabel",
         ).grid(row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
@@ -151,6 +160,10 @@ class SimulationTabsMixin(MotionToolsMixin):
             command=self.start_live_control,
         )
         self.fusion_button.pack(side="left", padx=(0, 8))
+        ttk.Label(fusion_actions, text="Subject ID", style="Card.TLabel").pack(side="left")
+        self.workflow.bind_context(
+            ttk.Entry(fusion_actions, textvariable=self.recording_subject, width=12)
+        ).pack(side="left", padx=6)
         ttk.Button(
             fusion_settings,
             text="Open live BLE graphs",
@@ -195,12 +208,16 @@ class SimulationTabsMixin(MotionToolsMixin):
             style="Card.TCheckbutton",
         ).grid(row=4, column=0, sticky="w", pady=(10, 0))
         fusion_settings.grid_remove()
+        self.control_readiness = StringVar(self, value="Checking control capabilities...")
+        ttk.Label(
+            tab, textvariable=self.control_readiness, wraplength=820, style="PageSub.TLabel"
+        ).grid(row=6, column=0, sticky="w", pady=8)
 
-    def start_recorded_control(self) -> None:
+    def start_recorded_control(self, trial=None) -> None:
         if self.simulation_python is None:
             messagebox.showerror("Environment missing", "Run project setup first.")
             return
-        trial = filedialog.askopenfilename(
+        trial = trial or filedialog.askopenfilename(
             title="Choose trial.json from a recorded cup trial",
             initialdir=REPOSITORY_ROOT / DEFAULT_RECORDINGS_DIRECTORY,
             filetypes=(("Trial metadata", "trial.json"),),
@@ -224,7 +241,7 @@ class SimulationTabsMixin(MotionToolsMixin):
             self.fusion_camera_weight.get(),
             *table_arguments,
         ]
-        self._start_program("Recorded live control", "simulation", command)
+        self._start_program("Recorded live control", "simulation", command, stop_input=STOP_COMMAND)
 
     def start_interactive_simulation(self) -> None:
         """Launch the full AURORA task simulator in the managed environment."""
@@ -241,14 +258,16 @@ class SimulationTabsMixin(MotionToolsMixin):
         command += table_arguments
         command += ["--mode", "dynamic" if self.dynamic_simulation.get() else "kinematic"]
         if self.dynamic_simulation.get() and self.save_simulation_torque.get():
-            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S}.csv"
+            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S_%f}.csv"
             torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name
             command += ["--torque-out", str(torque_output)]
+        command += SimulationTabsMixin._telemetry_arguments(self)
         self._start_program(
             "Interactive task simulator",
             "simulation",
             command,
             parallel=all(process.kind == "preview" for process in self._active_processes()),
+            stop_input=STOP_COMMAND,
         )
 
     def start_live_control(self) -> None:
@@ -289,7 +308,6 @@ class SimulationTabsMixin(MotionToolsMixin):
                 "The simulator opens its own sensor monitor.",
             )
             return
-        self._stop_serial_dashboard()
         if self.imu_monitor is not None and self.imu_monitor.exists:
             self.imu_monitor.close()
             self.imu_monitor = None
@@ -307,14 +325,14 @@ class SimulationTabsMixin(MotionToolsMixin):
             device,
             "--side",
             self.recording_camera_side.get(),
+            "--subject",
+            self.recording_subject.get().strip() or "diagnostic",
             "--camera-weight",
             str(weight),
             "--grip-source",
             self.fusion_grip_source.get().lower(),
-            "--shoulder-twist-axis",
-            self.fusion_shoulder_twist_axis.get(),
-            "--wrist-twist-axis",
-            self.fusion_wrist_twist_axis.get(),
+            f"--shoulder-twist-axis={self.fusion_shoulder_twist_axis.get()}",
+            f"--wrist-twist-axis={self.fusion_wrist_twist_axis.get()}",
         ]
         command += table_arguments
         if self.fusion_depth.get():
@@ -327,10 +345,23 @@ class SimulationTabsMixin(MotionToolsMixin):
                 return
             command += ["--emg-model", str(self.emg_model_path)]
         if self.dynamic_simulation.get() and self.save_simulation_torque.get():
-            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S}.csv"
+            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S_%f}.csv"
             torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name
             command += ["--torque-out", str(torque_output)]
-        self._start_program("Interactive live sensor control", "simulation", command)
+        command += SimulationTabsMixin._telemetry_arguments(self)
+        self._start_program(
+            "Interactive live sensor control", "simulation", command, stop_input=STOP_COMMAND
+        )
+
+    def _telemetry_arguments(self):
+        if self.dynamic_simulation.get() and self.save_simulation_telemetry.get():
+            path = (
+                REPOSITORY_ROOT
+                / DEFAULT_SIMULATION_OUTPUT_DIRECTORY
+                / f"telemetry_{datetime.now():%Y%m%d_%H%M%S_%f}.jsonl"
+            )
+            return ["--telemetry-out", str(path)]
+        return []
 
     def _table_arguments(self) -> list[str] | None:
         values = []

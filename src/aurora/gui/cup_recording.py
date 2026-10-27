@@ -34,7 +34,6 @@ class CupRecordingMixin:
             value="Connect camera + BLE, prepare the subject, then choose the trial pace."
         )
         self.cup_next_trial = tk.StringVar(value="T001")
-        self.recording_advanced = tk.BooleanVar(value=False)
         self._cup_ready = False
         self._cup_recording = False
         self._cup_camera_handoff_pending = False
@@ -82,6 +81,8 @@ class CupRecordingMixin:
                 else ttk.Entry(fields, textvariable=variable)
             )
             widget.grid(row=1, column=column, sticky="ew", padx=(0, 12), pady=(4, 12))
+            if column < 2:
+                self.workflow.bind_context(widget)
             self.cup_fields.append(widget)
         fields.columnconfigure(3, weight=1)
         ttk.Label(fields, text="Pace", style="Card.TLabel").grid(row=0, column=3, sticky="w")
@@ -166,7 +167,7 @@ class CupRecordingMixin:
             actions, text="Signals", command=lambda: self._cup_command("graphs")
         )
         self.cup_graphs_button.grid(row=1, column=1, padx=(0, 8), sticky="w")
-        ttk.Button(actions, text="Saved recordings", command=self._open_recordings_root).grid(
+        ttk.Button(actions, text="Saved recordings", command=self.workflow.review_recordings).grid(
             row=1, column=3, sticky="w"
         )
         ttk.Label(
@@ -226,14 +227,12 @@ class CupRecordingMixin:
                 raise ValueError("Trial duration must be 0 or more seconds.")
             output = project_path(self.recording_output.get().strip())
             if not self.recording_output.get().strip():
-                raise ValueError("Choose an output folder in Advanced recording options.")
+                raise ValueError("Choose the cup-trial output folder under Record.")
         except ValueError as error:
             messagebox.showerror("Recording settings", str(error))
             return
         if self._release_ble_for(self.prepare_cup_recording):
             return
-        self.recording_advanced.set(False)
-        self.recording_advanced_panel.grid_remove()
         python = self.simulation_python or console_python(Path(sys.executable))
         command = [
             str(python),
@@ -267,7 +266,13 @@ class CupRecordingMixin:
         self._cup_protocol_phase = "ready"
         self._cup_can_prepare = self._cup_can_record = False
         self.cup_status.set("Connecting camera and BLE...")
-        self._start_program("Cup recording", "recording", command, process_key=CUP_PROCESS_KEY)
+        self._start_program(
+            "Cup recording",
+            "recording",
+            command,
+            process_key=CUP_PROCESS_KEY,
+            stop_input='{"action":"connection_closed"}\n',
+        )
 
     def _cup_command(self, action: str, **values) -> None:
         if action in ("record", "practice"):

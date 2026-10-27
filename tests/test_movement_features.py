@@ -24,6 +24,16 @@ def measured_frame():
 
 
 class MovementFeatureTests(unittest.TestCase):
+    def test_a_movement_folder_cannot_mix_participant_identities(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first = capture_movement.save_capture(root, "S01", "left", [measured_frame()])
+            original = first.read_bytes()
+            with self.assertRaisesRegex(ValueError, "exact subject ID"):
+                capture_movement.save_capture(root, "S02", "left", [measured_frame()])
+            self.assertEqual(list(root.iterdir()), [first])
+            self.assertEqual(first.read_bytes(), original)
+
     def test_new_and_legacy_profiles_have_identical_features(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -86,6 +96,10 @@ class MovementFeatureTests(unittest.TestCase):
             cv2.getWindowProperty.return_value = 1
             mp = MagicMock()
             pipeline, video, depth = Mock(), Mock(), Mock()
+            from datetime import timedelta
+
+            for source in (video, depth):
+                source.tryGet.return_value.getTimestampDevice.return_value = timedelta(seconds=1)
             frame = measured_frame()
             with (
                 patch.dict("sys.modules", {"cv2": cv2, "mediapipe": mp, "depthai": Mock()}),

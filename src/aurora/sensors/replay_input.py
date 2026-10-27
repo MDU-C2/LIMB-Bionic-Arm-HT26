@@ -21,6 +21,7 @@ class RecordedSensorInput(LiveSensorInput):
         kwargs["transport"] = "ble"
         kwargs["side"] = self.manifest["side"]
         super().__init__(clock=lambda: self.replay_time, **kwargs)
+        self._calibration_valid = True
         self.events = []
         self.index = 0
         self.elapsed = 0.0
@@ -29,14 +30,14 @@ class RecordedSensorInput(LiveSensorInput):
         self.playing = False
         self.capture = None
         self.capture_frame = -1
+        self._replay_epoch = None
 
     def start(self) -> None:
-        import cv2
         import numpy as np
 
         from aurora.sensors.ble_input import BleSensorReader
 
-        self.cv2, self.np = cv2, np
+        self.np = np
         self.camera_status = "Saved camera observations"
         profile = self.manifest["calibration"]
         axes = profile.get("imu_twist_axes", {})
@@ -45,23 +46,30 @@ class RecordedSensorInput(LiveSensorInput):
             wrist_twist_axis=axes.get("wrist", "y"),
             clock=self.clock,
             emg_model=self.emg_model,
+            side=self.side,
         )
         self.reader.status, self.reader.error = "Recorded data", ""
+        self.reader.imu_motion_gap = bool(profile.get("imu_motion_gap", False))
+        self.reader.imu_invalid_reason = profile.get("imu_invalid_reason", "")
         imu = self.reader.imu_estimator
-        imu.tilt_offsets = dict(profile.get("imu_tilt_offsets", {}))
-        imu.gyro_bias_z = dict(profile.get("imu_gyro_bias_z", {}))
+        alignment = self.manifest.get("alignment_profile") or profile.get("sensor_alignment")
+        if alignment is not None:
+            imu.set_alignment(alignment)
+        imu.tilt_offsets = dict(profile.get("imu_tilt_offsets", imu.tilt_offsets))
+        imu.gyro_bias_z = dict(profile.get("imu_gyro_bias_z", imu.gyro_bias_z))
         imu.elbow_zero = profile.get("imu_elbow_zero", 0.0)
         imu.active_roles = tuple(imu.tilt_offsets)
         imu.yaw_delta = dict(profile.get("imu_yaw_delta", dict.fromkeys(imu.active_roles, 0.0)))
         imu.camera_offsets = dict(profile.get("imu_camera_offsets", {}))
-        imu.reference_angles = dict(profile.get("imu_reference_angles", {}))
+        imu.reference_angles = dict(profile.get("imu_reference_angles", imu.reference_angles))
         imu.filtered_accel = {
             key: tuple(value) for key, value in profile.get("imu_filtered_accel", {}).items()
         }
         imu.twist.shoulder_angle = profile.get("imu_shoulder_twist_deg", 0.0)
         imu.twist.wrist_angle = profile.get("imu_wrist_twist_deg", 0.0)
         imu.twist.bias = {
-            key: tuple(value) for key, value in profile.get("imu_twist_bias_dps", {}).items()
+            key: tuple(value)
+            for key, value in profile.get("imu_twist_bias_dps", imu.twist.bias).items()
         }
         imu.twist.dual_ready = len(imu.twist.bias) == 2
         self.reader._emg_period = profile.get("emg_period", 0.00025)
@@ -86,6 +94,9 @@ class RecordedSensorInput(LiveSensorInput):
         if not self.events:
             raise ValueError("This trial contains no recorded sensor or camera events")
         if self.show_monitor:
+            import cv2
+
+            self.cv2 = cv2
             self.capture = cv2.VideoCapture(str(self.directory / "camera/video.mp4"))
             from aurora.sensors.live_input import WINDOW
 
@@ -112,6 +123,17 @@ class RecordedSensorInput(LiveSensorInput):
             stamp, kind, value = self.events[self.index]
             self.replay_time = 1000.0 + stamp
             if kind == 0:
+                epoch = value.get("connection_generation", 0)
+                if self._replay_epoch is not None and epoch != self._replay_epoch:
+                    self.reader._clear_state()
+                    self.reader.decoder.reset_sequence_tracking()
+                    self.camera_angles = {}
+                    self.camera_time = 0.0
+                    self.reference_angles = None
+                    self.robot_reference_angles = {}
+                    self._calibration_valid = False
+                self._replay_epoch = epoch
+                self.reader.connection_generation = epoch
                 self.reader.notification(value["sensor"], base64.b64decode(value["data_base64"]))
             else:
                 self._poll_sources()
@@ -144,14 +166,26 @@ class RecordedSensorInput(LiveSensorInput):
 
     def calibrate(self, reference_angles=None) -> None:
         # The saved rest and grip calibration belongs to this recording.
-        self.reference_angles = reference_angles
+        self.robot_reference_angles = reference_angles or {}
+        self.reference_angles = dict(self.raw_camera_angles)
         self.camera_origin = dict(self.raw_camera_angles)
         self.camera_smoother.reset()
-        if reference_angles is not None:
-            self.camera_angles = dict(reference_angles)
-            self.reader.correct_angles(reference_angles, 1.0)
+        if self.reference_angles:
+            self.camera_angles = dict(self.reference_angles)
+            self.reader.correct_angles(self.reference_angles, 1.0)
 
     def close(self) -> None:
+        errors = []
         if self.capture is not None:
-            self.capture.release()
-        super().close()
+            try:
+                self.capture.release()
+            except Exception as error:
+                errors.append(f"Replay video: {error}")
+            else:
+                self.capture = None
+        try:
+            super().close()
+        except Exception as error:
+            errors.append(str(error))
+        if errors:
+            raise RuntimeError("; ".join(errors))

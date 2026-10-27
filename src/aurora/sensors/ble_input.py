@@ -7,13 +7,12 @@ import asyncio
 import contextlib
 import threading
 import time
+import uuid
 from collections import deque
 from pathlib import Path
 
 from aurora.sensors.ble_discovery import find_device
 from aurora.sensors.ble_protocol import (
-    HIGH_RATE_EMG_HEADER,
-    HIGH_RATE_IMU_PACKET,
     SENSOR_UUIDS,
     BleRecorder,
 )
@@ -22,6 +21,7 @@ from aurora.sensors.emg_protocol import EmgActivationEstimator
 from aurora.sensors.fusion import DualImuArmEstimator
 from aurora.sensors.imu_twist import DEFAULT_TWIST_AXIS
 from aurora.sensors.settings import DEFAULT_BLE_DEVICE_NAME
+from aurora.time_utils import utc_now
 
 
 class BleSensorReader:
@@ -37,6 +37,7 @@ class BleSensorReader:
         synchronize_clock: bool = False,
         emg_model: Path | None = None,
         clock=None,
+        side: str = "left",
     ) -> None:
         self.device = device
         self.clock = clock or (lambda: time.monotonic())
@@ -51,26 +52,36 @@ class BleSensorReader:
         self.synchronize_clock = synchronize_clock
         self.clock_sync = ClockSynchronizer()
         self._recording_lock = threading.Lock()
+        self._recording_idle = threading.Condition(self._recording_lock)
+        self._recording_inflight = 0
         self._recording = None
+        self._pending_writer = None
         self._recording_clock_epochs = []
         self.recording_error = ""
         self.connection_generation = 0
+        self.mounting_session_id = uuid.uuid4().hex
+        self.device_clock_resets = 0
         self.decoder = BleRecorder(None, sample_sink=self._samples)
         self.imu_estimator = DualImuArmEstimator(
-            shoulder_twist_axis=shoulder_twist_axis, wrist_twist_axis=wrist_twist_axis
+            shoulder_twist_axis=shoulder_twist_axis, wrist_twist_axis=wrist_twist_axis, side=side
         )
         self.emg_estimator = EmgActivationEstimator()
         self.emg_classifier = None
         if emg_model is not None:
             from aurora.ml.emg_model import LiveEmgClassifier
 
-            self.emg_classifier = LiveEmgClassifier(emg_model)
+            self.emg_classifier = LiveEmgClassifier(emg_model, background=True)
         self._emg_period = 0.01
         self._imu_device_time: int | None = None
+        self._imu_device_times = {}
         self._previous_imu_time: int | None = None
+        self.reference_capture = None
         self._clear_state()
 
     def _clear_state(self) -> None:
+        if self.reference_capture is not None:
+            self.reference_capture.error = "Connection changed; repeat mounting calibration"
+            self.reference_capture = None
         # Keep a small waveform buffer without opening another BLE connection.
         self._emg_history = deque(maxlen=800)
         self._imu_history = {role: deque(maxlen=300) for role in ("shoulder", "wrist")}
@@ -81,9 +92,16 @@ class BleSensorReader:
         self.emg_raw: int | None = None
         self.activation: float | None = None
         self._previous_imu_time = None
+        self._previous_imu_times = {}
+        self._imu_role_receipts = {}
+        self.alignment_profile = None
         self._previous_emg_sequence = None
+        self._previous_emg_device_time = None
+        self._previous_emg_end_us = None
         self._previous_imu_sequence = None
-        self.imu_estimator.reset_calibration()
+        self.imu_motion_gap = False
+        self.imu_invalid_reason = ""
+        self.imu_estimator.clear_alignment()
         self.emg_estimator.reset()
         if self.emg_classifier is not None:
             self.emg_classifier.reset()
@@ -94,11 +112,13 @@ class BleSensorReader:
 
         if self.thread is not None and self.thread.is_alive():
             return
+        if self.emg_classifier is not None:
+            self.emg_classifier.reopen()
         self._stop.clear()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
-    def stop(self, timeout: float = 3.0) -> None:
+    def stop(self, timeout: float = 3.0) -> bool:
         already_stopping = self._stop.is_set()
         self._stop.set()
         loop, task = self._loop, self._task
@@ -114,9 +134,20 @@ class BleSensorReader:
                 loop.call_soon_threadsafe(task.cancel)
         if self.thread is not None:
             self.thread.join(timeout=timeout)
+            if self.thread.is_alive():
+                return False
+        if self.emg_classifier is not None and not self.emg_classifier.close(timeout):
+            return False
+        if self._recording is not None or self._pending_writer is not None:
+            if timeout <= 0:
+                return False
+            self.stop_recording()
+        return True
 
     def calibrate(self, reset_emg: bool = True, reference_angles: object = None) -> None:
         with self._lock:
+            self.imu_motion_gap = False
+            self.imu_invalid_reason = ""
             self.imu_estimator.reset_calibration(reference_angles)
             if reset_emg:
                 self.emg_estimator.reset()
@@ -127,11 +158,29 @@ class BleSensorReader:
 
     def latest(self) -> dict:
         with self._lock:
-            imu_fresh = self.imu_time > 0 and self.clock() - self.imu_time <= 0.5
+            now = self.clock()
+            sensors = {
+                role: dict(sensor)
+                for role, sensor in self.sensors.items()
+                if now - self._imu_role_receipts.get(role, self.imu_time) <= 0.5
+            }
+            imu_fresh = self.imu_time > 0 and now - self.imu_time <= 0.5
+            from aurora.sensors.fusion import fresh_imu_angles
+
             return {
-                "imus": dict(self.sensors) if imu_fresh else {},
-                "imu_angles": dict(self.angles) if imu_fresh and self.angles else None,
+                "imus": sensors if imu_fresh else {},
+                "imu_angles": fresh_imu_angles(self.angles, sensors) if imu_fresh else None,
+                "imu_angle_reference": {
+                    name: "human_reference"
+                    if name in self.imu_estimator.referenced_channels()
+                    else "change_since_zeroing"
+                    for name in self.angles or {}
+                },
                 "imu_time": self.imu_time,
+                "connection_generation": self.connection_generation,
+                "mounting_session_id": self.mounting_session_id,
+                "imu_motion_gap": self.imu_motion_gap,
+                "imu_invalid_reason": self.imu_invalid_reason,
                 "imu_calibrated": all(
                     role in self.imu_estimator.twist.bias for role in ("shoulder", "wrist")
                 ),
@@ -172,69 +221,75 @@ class BleSensorReader:
 
     def notification(self, sensor: str, data: bytes | bytearray) -> None:
         """Decode each packet and save it when a trial is active."""
-        if sensor == "emg":
-            period = 0.01
-            if len(data) >= HIGH_RATE_EMG_HEADER.size:
-                flags, _sequence, _timestamp, period_us, count, _dropped = (
-                    HIGH_RATE_EMG_HEADER.unpack_from(data)
-                )
-                if (
-                    flags >> 8 == 1
-                    and period_us > 0
-                    and 1 <= count <= 40
-                    and len(data) == HIGH_RATE_EMG_HEADER.size + count * 2
-                ):
-                    period = period_us / 1_000_000
-            with self._lock:
-                if period != self._emg_period:
-                    self._emg_period = period
-                    # Keep the existing half-second rest calibration at the sample rate.
-                    self.emg_estimator = EmgActivationEstimator(max(2, round(0.5 / period)))
-                    self.activation = None
-                    if self.emg_classifier is not None:
-                        self.emg_classifier.reset()
-        elif sensor == "imu":
-            self._imu_device_time = None
-            if len(data) == HIGH_RATE_IMU_PACKET.size:
-                flags, _sequence, shoulder_time, wrist_time, *_values = HIGH_RATE_IMU_PACKET.unpack(
-                    data
-                )
-                if flags >> 8 == 1:
-                    self._imu_device_time = shoulder_time if flags & 1 else wrist_time
-        self.decoder.handle(sensor, bytes(data))
+        receipt_ns = time.monotonic_ns()
+        receipt_utc = utc_now()
+        payload = bytes(data)
         with self._recording_lock:
-            if self._recording is not None and not self.recording_error:
-                try:
-                    self._recording.handle(sensor, data)
-                except OSError as error:
-                    self.recording_error = str(error)
+            writer = self._recording
+            if writer is not None:
+                self._recording_inflight += 1
+        try:
+            self.decoder.handle(
+                sensor, payload, host_monotonic_ns=receipt_ns, host_time=receipt_utc
+            )
+            if self.emg_classifier is not None and self.emg_classifier.error:
+                self.error = self.emg_classifier.error
+        finally:
+            if writer is not None:
+                with self._recording_idle:
+                    try:
+                        writer.handle(
+                            sensor, payload, host_monotonic_ns=receipt_ns, host_time=receipt_utc
+                        )
+                    except (OSError, RuntimeError) as error:
+                        self.recording_error = str(error)
+                    finally:
+                        self._recording_inflight -= 1
+                        self._recording_idle.notify_all()
 
     def start_recording(self, session: Path) -> None:
         """Save packets from this connection without restarting calibration."""
+        from aurora.recording.packet_writer import PacketWriter
+
         with self._recording_lock:
-            if self._recording is not None:
+            if self._recording is not None or self._pending_writer is not None:
                 raise RuntimeError("A BLE trial is already recording")
             self.recording_error = ""
-            self._recording = BleRecorder(session, clock_sync=self.clock_sync)
-            self._recording.connection_generation = self.connection_generation
+            self._recording = PacketWriter(
+                session,
+                clock_sync=self.clock_sync,
+                connection_generation=self.connection_generation,
+            )
             self._recording_clock_epochs = [(self.connection_generation, self.clock_sync)]
+            self._recording_device_resets = self.device_clock_resets
 
     def _start_connection(self):
         # A reconnect needs its own clock fit, including an active raw recording.
         with self._recording_lock:
             self.clock_sync = ClockSynchronizer()
             self.connection_generation += 1
+            self.mounting_session_id = uuid.uuid4().hex
             self.decoder.reset_sequence_tracking()
-            if self._recording is not None:
-                self._recording.reset_sequence_tracking()
-                self._recording.clock_sync = self.clock_sync
-                self._recording.connection_generation = self.connection_generation
+            recorder = self._recording or (
+                self._pending_writer if self._recording_inflight else None
+            )
+            if recorder is not None:
+                recorder.clock_sync = self.clock_sync
+                recorder.connection_generation = self.connection_generation
                 self._recording_clock_epochs.append((self.connection_generation, self.clock_sync))
 
     def calibration_profile(self) -> dict:
         with self._lock:
             estimator = self.imu_estimator
             return {
+                "format_version": 2,
+                "side": estimator.side,
+                "imu_motion_gap": self.imu_motion_gap,
+                "imu_invalid_reason": self.imu_invalid_reason,
+                "angle_units": "degrees",
+                "angle_convention": "unclipped; wrist_relative_to_reference",
+                "human_reference_channels": sorted(estimator.referenced_channels()),
+                "body_reference": "camera_or_static_upright_assumption",
                 "emg_baseline_adc": self.emg_estimator.baseline,
                 "emg_rest": self.emg_estimator.rest_envelope,
                 "emg_reference": self.emg_estimator.reference,
@@ -253,25 +308,78 @@ class BleSensorReader:
                 "imu_twist_axes": dict(estimator.twist.axes),
                 "imu_twist_bias_dps": dict(estimator.twist.bias),
                 "connection_generation": self.connection_generation,
+                "mounting_session_id": self.mounting_session_id,
+                "sensor_alignment": self.alignment_profile,
             }
 
-    def stop_recording(self) -> dict:
-        with self._recording_lock:
-            recorder, self._recording = self._recording, None
+    def apply_alignment(self, profile, *, subject_id, side) -> None:
+        """Accept a fit only for this subject, mounting and live connection."""
+        with self._lock:
+            if (
+                profile.get("subject_id") != subject_id
+                or profile.get("side") != side
+                or profile.get("connection_generation") != self.connection_generation
+                or profile.get("mounting_session_id") != self.mounting_session_id
+            ):
+                raise ValueError(
+                    "Alignment belongs to another subject, arm or connection; repeat preparation"
+                )
+            self.imu_estimator.set_alignment(profile)
+            self.alignment_profile = profile
+            self.angles = None
+
+    def begin_reference_capture(self, subject_id):
+        from aurora.sensors.reference_capture import ReferenceCapture
+
+        with self._lock:
+            capture = ReferenceCapture(
+                subject_id=subject_id,
+                side=self.imu_estimator.side,
+                connection_generation=self.connection_generation,
+                mounting_session_id=self.mounting_session_id,
+            )
+            self.reference_capture = capture
+            return capture
+
+    def detach_reference_capture(self, capture):
+        with self._lock:
+            if self.reference_capture is capture:
+                self.reference_capture = None
+
+    def stop_recording(self, timeout=5.0) -> dict:
+        deadline = time.monotonic() + timeout
+        with self._recording_idle:
+            recorder = self._recording or self._pending_writer
             if recorder is None:
                 return {}
-            recorder.close()
-            return {
-                "packet_counts": dict(recorder.counts),
-                "packet_health": recorder.packet_health(),
-                "imu_units": recorder.imu_units,
-                "time_sync": recorder.clock_sync.summary(),
-                "time_sync_epochs": [
-                    {"connection_generation": generation, **synchronizer.summary()}
-                    for generation, synchronizer in self._recording_clock_epochs
-                ],
-                "write_error": self.recording_error,
-            }
+            # Handoff first; callbacks stay short while the writer drains.
+            self._recording = None
+            self._pending_writer = recorder
+            while self._recording_inflight:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("Received BLE packets are still processing; retry saving")
+                self._recording_idle.wait(remaining)
+        recorder.close(timeout=max(0.0, deadline - time.monotonic()))
+        with self._recording_lock:
+            self._pending_writer = None
+        return {
+            **recorder.summary(),
+            "time_sync": self.clock_sync.summary(),
+            "time_sync_epochs": [
+                {"connection_generation": generation, **synchronizer.summary()}
+                for generation, synchronizer in self._recording_clock_epochs
+            ],
+            "write_error": self.recording_error or recorder.error,
+            "device_clock_resets": self.device_clock_resets - self._recording_device_resets,
+        }
+
+    def flush_recording(self, timeout=5.0) -> None:
+        """Wait for queued recording writes without holding the acquisition lock."""
+        with self._recording_lock:
+            writer = self._recording
+        if writer is not None:
+            writer.flush(timeout)
 
     def calibrate_emg_strength(self) -> bool:
         with self._lock:
@@ -291,6 +399,8 @@ class BleSensorReader:
                 "emg_period": self._emg_period,
                 "activation": self.activation if emg_fresh else None,
                 "emg_calibration": self.emg_estimator.status,
+                "emg_calibration_state": self.emg_estimator.calibration_state,
+                "imu_motion_gap": self.imu_motion_gap,
                 "emg_envelope": self.emg_estimator.envelope if emg_fresh else None,
                 "emg_rest": self.emg_estimator.rest_envelope,
                 "emg_reference": self.emg_estimator.reference,
@@ -300,17 +410,58 @@ class BleSensorReader:
                 if self.emg_classifier and emg_fresh
                 else None,
                 "imus": {
-                    role: list(samples) if imu_fresh else []
+                    role: list(samples)
+                    if imu_fresh and now - self._imu_role_receipts.get(role, self.imu_time) <= 0.5
+                    else []
                     for role, samples in self._imu_history.items()
                 },
                 "health": self.decoder.packet_health(),
                 "status": self.status,
                 "error": self.error,
+                "emg_inference": {
+                    "skipped_windows": self.emg_classifier.skipped_windows,
+                    "error": self.emg_classifier.error,
+                }
+                if self.emg_classifier
+                else None,
             }
 
     def _samples(self, sensor: str, _sequence: int, channels: list) -> None:
+        if sensor not in ("imu", "emg"):
+            return
         now = self.clock()
         with self._lock:
+            packet = self.decoder.last_packet
+            stamp = (
+                packet.first_time_us
+                if sensor == "emg"
+                else next(
+                    (
+                        value
+                        for values, value in zip(
+                            packet.channels, packet.sample_times_us, strict=True
+                        )
+                        if values
+                    ),
+                    None,
+                )
+            )
+            previous_time = (
+                self._previous_emg_device_time if sensor == "emg" else self._previous_imu_time
+            )
+            last_receipt = self.emg_time if sensor == "emg" else self.imu_time
+            if (
+                stamp is not None
+                and previous_time is not None
+                and stamp < previous_time - 500_000
+                and now - last_receipt > 0.5
+            ):
+                # V1 has no boot ID. A large backwards clock after stale input
+                # starts an unsynchronized epoch; require reconnect/recalibration.
+                self._start_connection()
+                self._clear_state()
+                self.device_clock_resets += 1
+                self.error = "Possible device clock reset: reconnect and calibrate again"
             if sensor == "emg":
                 if self._previous_emg_sequence is not None:
                     difference = (_sequence - self._previous_emg_sequence) & 0xFFFFFFFF
@@ -321,6 +472,27 @@ class BleSensorReader:
                         if self.emg_classifier is not None:
                             self.emg_classifier.reset()
                 self._previous_emg_sequence = _sequence
+                expected_time = self._previous_emg_end_us
+                if packet.first_time_us is not None and packet.period_us is not None:
+                    if expected_time is not None and abs(packet.first_time_us - expected_time) > 1:
+                        self.emg_estimator.sample_gap()
+                        if self.emg_classifier is not None:
+                            self.emg_classifier.reset()
+                        if packet.first_time_us < expected_time:
+                            self.activation = None
+                            self.error = "Overlapping EMG sample times; retaining raw packets only"
+                            return
+                    self._previous_emg_end_us = (
+                        packet.first_time_us + len(channels[0]) * packet.period_us
+                    )
+                self._previous_emg_device_time = packet.first_time_us
+                period = (packet.period_us or 10_000) / 1e6
+                if period != self._emg_period:
+                    self._emg_period = period
+                    self.emg_estimator = EmgActivationEstimator(max(2, round(0.5 / period)))
+                    self.activation = None
+                    if self.emg_classifier is not None:
+                        self.emg_classifier.reset()
                 values = channels[0] if channels else []
                 if not values:
                     self.emg_time = 0.0
@@ -351,6 +523,14 @@ class BleSensorReader:
                     if difference == 0 or difference >= 0x80000000:
                         return
                 self._previous_imu_sequence = _sequence
+                self._imu_device_times = {
+                    role: stamp
+                    for role, stamp, samples in zip(
+                        ("shoulder", "wrist"), packet.sample_times_us, packet.channels, strict=False
+                    )
+                    if samples and stamp is not None
+                }
+                self._imu_device_time = next(iter(self._imu_device_times.values()), None)
                 units = self.decoder.imu_units
                 if units not in (("g", "dps"), ("mg", "mdps")):
                     self.error = "IMU units unknown; use the current sensor firmware"
@@ -366,6 +546,14 @@ class BleSensorReader:
                     values = samples[-1]
                     sensors[role] = {
                         "connected": True,
+                        "sample_time_us": self._imu_device_times.get(role),
+                        "host_monotonic_ns": round(now * 1e9),
+                        "connection_generation": self.connection_generation,
+                        "gyro_saturated": (0 if role == "shoulder" else 1)
+                        in packet.gyro_saturated_roles,
+                        "validity": "gyro_at_wire_limit"
+                        if (0 if role == "shoulder" else 1) in packet.gyro_saturated_roles
+                        else "valid",
                         "accel_g": dict(zip("xyz", (v * scale for v in values[:3]), strict=True)),
                         "gyro_dps": dict(zip("xyz", (v * scale for v in values[3:6]), strict=True)),
                     }
@@ -373,20 +561,68 @@ class BleSensorReader:
                 if self._imu_device_time is not None and self._previous_imu_time is not None:
                     dt = (self._imu_device_time - self._previous_imu_time) / 1_000_000
                 if dt <= 0 or dt > 0.5:
-                    self.imu_estimator.reset_calibration()
                     dt = 0.01
                 self._previous_imu_time = self._imu_device_time
+                role_dt = {}
+                updated_roles = set()
+                for role, stamp in self._imu_device_times.items():
+                    previous = self._previous_imu_times.get(role)
+                    if previous is None:
+                        role_dt[role] = 0.01
+                    elif stamp > previous:
+                        elapsed = (stamp - previous) / 1e6
+                        role_dt[role] = elapsed if elapsed <= 0.5 else 0.0
+                        if elapsed > 0.5:
+                            self.imu_motion_gap = True
+                            self.imu_invalid_reason = (
+                                "IMU timing gap: motion during the gap is unknown"
+                            )
+                    else:
+                        role_dt[role] = 0.0
+                    if previous is None or stamp > previous:
+                        self._previous_imu_times[role] = stamp
+                        self._imu_role_receipts[role] = now
+                        updated_roles.add(role)
+                    elif now - self._imu_role_receipts.get(role, 0.0) > 0.5:
+                        sensors.pop(role, None)
+                    if role in sensors and sensors[role]["gyro_saturated"]:
+                        role_dt[role] = 0.0
+                        self.imu_motion_gap = True
+                        self.imu_invalid_reason = (
+                            "Gyroscope at the BLE wire limit: rotation rate is unknown"
+                        )
+                for role, sensor in sensors.items():
+                    sensor["host_monotonic_ns"] = round(
+                        self._imu_role_receipts.get(role, now) * 1e9
+                    )
                 self.sensors = sensors
+                if self.reference_capture is not None:
+                    self.reference_capture.add_imus(
+                        {
+                            role: {
+                                **sensor,
+                                "host_monotonic_ns": self.decoder.last_host_monotonic_ns,
+                            }
+                            for role, sensor in sensors.items()
+                            if role in updated_roles
+                        }
+                    )
                 for role, history in self._imu_history.items():
                     if role not in sensors:
                         history.clear()
+                        continue
+                    if role_dt and role not in updated_roles:
                         continue
                     sensor = sensors[role]
                     history.append(
                         tuple(sensor["accel_g"][axis] for axis in "xyz")
                         + tuple(sensor["gyro_dps"][axis] for axis in "xyz")
                     )
-                self.angles = self.imu_estimator.update(sensors, dt)
+                if role_dt and not any(role_dt.values()):
+                    if updated_roles:
+                        self.imu_time = now if sensors else 0.0
+                    return
+                self.angles = self.imu_estimator.update(sensors, dt, sample_dt_s=role_dt or None)
                 self.imu_time = now if sensors else 0.0
 
     def _run(self) -> None:

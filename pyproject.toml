@@ -11,25 +11,23 @@ requires-python = ">=3.10,<3.13"
 dependencies = [
     "numpy==1.26.4",
     "scipy==1.15.2",
-    "pybullet>=3.2.5,<4",
-    "jax==0.4.38",
-    "jaxlib==0.4.38",
-    "pygame==2.6.1",
-    "onnxruntime==1.23.2",
-    "bleak==0.22.3",
-    "pyserial==3.5",
-    "depthai==3.10.0",
-    "opencv-contrib-python==4.10.0.84",
-    "mediapipe==0.10.14",
-    "protobuf>=4.25.3,<5",
-    "matplotlib>=3.8,<4",
 ]
-dynamic = ["optional-dependencies"]
 
-[tool.setuptools.dynamic.optional-dependencies]
-training = {file = ["requirements-training.txt"]}
-firmware = {file = ["requirements-firmware.txt"]}
-dev = {file = ["requirements-dev.txt"]}
+[project.optional-dependencies]
+simulation = ["pybullet>=3.2.5,<4", "pygame==2.6.1"]
+sensors = ["bleak==0.22.3", "pyserial==3.5"]
+camera = [
+    "depthai==3.10.0", "opencv-contrib-python==4.10.0.84",
+    "mediapipe==0.10.14", "protobuf>=4.25.3,<5", "onnxruntime==1.23.2",
+]
+inference = ["onnxruntime==1.23.2"]
+plots = ["matplotlib>=3.8,<4"]
+training = [
+    "torch>=2.2,<2.6", "onnx>=1.16,<1.18",
+    "onnxruntime==1.23.2", "matplotlib>=3.8,<4",
+]
+firmware = ["platformio==6.1.18"]
+dev = ["ruff==0.17.1"]
 
 [project.scripts]
 aurora = "aurora.gui.app:main"

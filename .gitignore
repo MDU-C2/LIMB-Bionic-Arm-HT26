@@ -1,3 +1,4 @@
+
 # =====================================
 # ESP-IDF generated files
 # =====================================
@@ -11,3 +12,35 @@ __pycache__/
 
 # Temporary files
 *.tmp
+
+
+# =====================================
+# KiCad generated / unnecessary files
+# =====================================
+
+# Local project settings
+*.kicad_prl
+
+# Automatic backups
+*-backups/
+_autosave-*
+*.bak
+
+# Lock files
+*.lck
+~*.lck
+
+# Temporary files
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.kicad_pcb~
+*.kicad_sch~
+
+# KiCad reports and logs
+*-report.txt
+drc.rpt
+erc.rpt
+
+# Optional generated manufacturing files
+# Uncomment if Gerber files should not be tracked
+# **/Gerber/

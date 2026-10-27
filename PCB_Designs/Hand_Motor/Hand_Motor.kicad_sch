@@ -3540,7 +3540,7 @@
 			(uuid "87b52268-71ca-47c7-b43b-0872d85581da")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR020")
 					(unit 1)
@@ -3579,7 +3579,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_THT_Wurth:J_Wurth_WR-WTB_68800411622"
+		(property "Footprint" "User_lib:J_Wurth_WR-WTB_68800411622"
 			(at 163.83 87.63 0)
 			(hide yes)
 			(show_name no)
@@ -3766,6 +3766,72 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 163.83 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 163.83 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pitch" ""
+			(at 163.83 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Rows" ""
+			(at 163.83 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 163.83 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 163.83 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "089db002-586a-45ff-a373-cb74d6f46861")
 		)
@@ -3779,7 +3845,7 @@
 			(uuid "5957da97-eec9-492e-871d-b089961e1952")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J2")
 					(unit 1)
@@ -3857,7 +3923,7 @@
 			(uuid "3731490a-fe84-4383-90cb-3674ccb234dc")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR010")
 					(unit 1)
@@ -3934,7 +4000,7 @@
 			(uuid "4321ddbb-d6d9-4236-ba52-c985e8396c59")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR015")
 					(unit 1)
@@ -4018,6 +4084,72 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 55.245 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 55.245 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pitch" ""
+			(at 55.245 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Rows" ""
+			(at 55.245 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 55.245 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 55.245 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "ee5c482c-adab-4601-af3d-522efeb7d8d8")
 		)
@@ -4025,7 +4157,7 @@
 			(uuid "da452c36-7cbc-40c5-b915-0ea2572ba773")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "D1")
 					(unit 1)
@@ -4103,7 +4235,7 @@
 			(uuid "83d69333-4191-4f8b-949b-d03576d3c349")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR03")
 					(unit 1)
@@ -4428,6 +4560,72 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 148.59 111.125 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 148.59 111.125 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pitch" ""
+			(at 148.59 111.125 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Rows" ""
+			(at 148.59 111.125 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 148.59 111.125 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 148.59 111.125 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "e8e9aae0-f91a-4eae-84f8-0401d7052155")
 		)
@@ -4435,7 +4633,7 @@
 			(uuid "6f4b0f31-0d5a-4120-a0ec-6b43e902d4d4")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "C2")
 					(unit 1)
@@ -4513,7 +4711,7 @@
 			(uuid "4de740d3-3c3b-4ba7-b649-1703cd6a7db1")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR023")
 					(unit 1)
@@ -4590,7 +4788,7 @@
 			(uuid "85e7a184-232d-457c-9e53-592ab3d8f2be")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR034")
 					(unit 1)
@@ -4669,7 +4867,7 @@
 			(uuid "6767b698-0311-47a8-ade2-983d8d585375")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR04")
 					(unit 1)
@@ -4746,7 +4944,7 @@
 			(uuid "d8b5dd51-443e-4a34-b8d8-a4c81766e864")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR033")
 					(unit 1)
@@ -4972,6 +5170,72 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 187.96 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 187.96 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pitch" ""
+			(at 187.96 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Rows" ""
+			(at 187.96 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 187.96 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 187.96 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "8072a0ef-fd0c-441f-9a5b-369d9695e05a")
 		)
@@ -4985,7 +5249,7 @@
 			(uuid "b1f240e3-c95a-4ed4-b496-02c46229321b")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J14")
 					(unit 1)
@@ -5057,6 +5321,72 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 67.31 90.17 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 67.31 90.17 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pitch" ""
+			(at 67.31 90.17 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Rows" ""
+			(at 67.31 90.17 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 67.31 90.17 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 67.31 90.17 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "7"
 			(uuid "453759c5-9346-4175-bcba-ddb43266fdad")
 		)
@@ -5112,7 +5442,7 @@
 			(uuid "e31b0873-455c-4efb-baca-9e0ad7255c3b")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "U1")
 					(unit 1)
@@ -5191,7 +5521,7 @@
 			(uuid "a2116c23-7281-42e2-bb2d-1241ebf51176")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR025")
 					(unit 1)
@@ -5270,7 +5600,7 @@
 			(uuid "0f065c19-3bab-4fb8-9d84-65659d0fa599")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR011")
 					(unit 1)
@@ -5311,7 +5641,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Connector_THT_Wurth:J_Wurth_WR-NPC2_626002110201"
+		(property "Footprint" "User_lib:J_Wurth_WR-NPC2_626002110201"
 			(at 160.02 74.295 0)
 			(hide yes)
 			(show_name no)
@@ -5502,6 +5832,72 @@
 				(justify left)
 			)
 		)
+		(property "Mount" ""
+			(at 147.32 94.615 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 147.32 94.615 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pitch" ""
+			(at 147.32 94.615 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Rows" ""
+			(at 147.32 94.615 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 147.32 94.615 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 147.32 94.615 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "2e9d9bd2-e87c-477a-bfd1-678ddd220f8a")
 		)
@@ -5509,7 +5905,7 @@
 			(uuid "642a62b0-77b7-401a-8529-00a6c3b31782")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J1")
 					(unit 1)
@@ -5550,7 +5946,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_THT_Wurth:J_Wurth_WR-WTB_68800611722"
+		(property "Footprint" "User_lib:J_Wurth_WR-WTB_68800611722"
 			(at 148.59 127 0)
 			(hide yes)
 			(show_name no)
@@ -5737,6 +6133,72 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 148.59 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 148.59 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pitch" ""
+			(at 148.59 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Rows" ""
+			(at 148.59 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 148.59 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 148.59 134.62 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "4"
 			(uuid "d760eea7-f957-4533-9a25-adddd7deb057")
 		)
@@ -5756,7 +6218,7 @@
 			(uuid "fb38b083-319b-429b-9d14-efc43f364924")
 		)
 		(instances
-			(project "LIMB_Lowerarm"
+			(project "Hand_Motor"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J12")
 					(unit 1)

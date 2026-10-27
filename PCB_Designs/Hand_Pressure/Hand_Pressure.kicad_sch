@@ -4127,6 +4127,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 125.73 181.61 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 125.73 181.61 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 125.73 181.61 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 125.73 181.61 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "fd56e30c-0f37-4b72-b5cb-877ce77d078c")
 		)
@@ -4134,7 +4178,7 @@
 			(uuid "d3227767-69b5-40de-88b4-0467cb1a8802")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "R2")
 					(unit 1)
@@ -4208,6 +4252,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 123.19 184.15 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 123.19 184.15 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 123.19 184.15 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 123.19 184.15 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "d25972f9-9e1b-4110-836f-ef6b5d072bf8")
 		)
@@ -4215,7 +4303,7 @@
 			(uuid "154847de-f196-4946-9b75-e4454861ad61")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "R1")
 					(unit 1)
@@ -4293,7 +4381,7 @@
 			(uuid "3731490a-fe84-4383-90cb-3674ccb234dc")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR010")
 					(unit 1)
@@ -4366,6 +4454,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 133.35 173.99 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 133.35 173.99 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 133.35 173.99 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 133.35 173.99 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "2fc130f2-ab5c-45d3-b1d0-beaa1780f615")
 		)
@@ -4373,7 +4505,7 @@
 			(uuid "1461ab35-128f-4df8-8d6a-a9f88b805b3c")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "R5")
 					(unit 1)
@@ -4451,7 +4583,7 @@
 			(uuid "a5ae950d-f6fe-41d2-8ef1-3b38bc04d725")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR020")
 					(unit 1)
@@ -4535,6 +4667,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 77.47 26.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 77.47 26.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 77.47 26.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 77.47 26.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "ee5c482c-adab-4601-af3d-522efeb7d8d8")
 		)
@@ -4542,7 +4718,7 @@
 			(uuid "da452c36-7cbc-40c5-b915-0ea2572ba773")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "D1")
 					(unit 1)
@@ -4620,7 +4796,7 @@
 			(uuid "83d69333-4191-4f8b-949b-d03576d3c349")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR03")
 					(unit 1)
@@ -4697,7 +4873,7 @@
 			(uuid "8aafb728-c259-4d2c-8c2b-6f08028ddba6")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR013")
 					(unit 1)
@@ -5022,6 +5198,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 36.195 186.055 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 36.195 186.055 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 36.195 186.055 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 36.195 186.055 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "e8e9aae0-f91a-4eae-84f8-0401d7052155")
 		)
@@ -5029,7 +5249,7 @@
 			(uuid "6f4b0f31-0d5a-4120-a0ec-6b43e902d4d4")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "C2")
 					(unit 1)
@@ -5107,7 +5327,7 @@
 			(uuid "4de740d3-3c3b-4ba7-b649-1703cd6a7db1")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR023")
 					(unit 1)
@@ -5184,7 +5404,7 @@
 			(uuid "85e7a184-232d-457c-9e53-592ab3d8f2be")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR034")
 					(unit 1)
@@ -5263,7 +5483,7 @@
 			(uuid "6767b698-0311-47a8-ade2-983d8d585375")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR04")
 					(unit 1)
@@ -5340,7 +5560,7 @@
 			(uuid "d8b5dd51-443e-4a34-b8d8-a4c81766e864")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR033")
 					(unit 1)
@@ -5380,7 +5600,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_THT_Wurth:J_Wurth_WR-WTB_68800411622"
+		(property "Footprint" "User_lib:J_Wurth_WR-WTB_68800411622"
 			(at 50.8 151.765 0)
 			(hide yes)
 			(show_name no)
@@ -5567,6 +5787,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 50.8 159.385 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 50.8 159.385 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 50.8 159.385 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 50.8 159.385 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "b0e4fd83-8a91-47f3-b816-4304eb4c72d2")
 		)
@@ -5580,7 +5844,7 @@
 			(uuid "2366d7b9-d309-496d-b420-937f5f0744f0")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J2")
 					(unit 1)
@@ -5652,6 +5916,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 89.535 21.59 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 89.535 21.59 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 89.535 21.59 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 89.535 21.59 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "7"
 			(uuid "453759c5-9346-4175-bcba-ddb43266fdad")
 		)
@@ -5707,7 +6015,7 @@
 			(uuid "e31b0873-455c-4efb-baca-9e0ad7255c3b")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "U1")
 					(unit 1)
@@ -5780,6 +6088,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 130.81 176.53 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 130.81 176.53 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 130.81 176.53 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 130.81 176.53 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "878f59e7-de1e-4fbc-9ac1-2bed3ebf9656")
 		)
@@ -5787,7 +6139,7 @@
 			(uuid "fbc1a5d3-b469-443d-b071-9c922a704c4b")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "R4")
 					(unit 1)
@@ -5864,7 +6216,7 @@
 			(uuid "c3a3398a-6290-43cf-88db-5d932f4a25da")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR035")
 					(unit 1)
@@ -5943,7 +6295,7 @@
 			(uuid "a2116c23-7281-42e2-bb2d-1241ebf51176")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR025")
 					(unit 1)
@@ -6021,7 +6373,7 @@
 			(uuid "938140a6-12cc-41e4-92de-486784b8168d")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR012")
 					(unit 1)
@@ -6100,7 +6452,7 @@
 			(uuid "0f065c19-3bab-4fb8-9d84-65659d0fa599")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "#PWR011")
 					(unit 1)
@@ -6141,7 +6493,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Connector_THT_Wurth:J_Wurth_WR-NPC2_626002110201"
+		(property "Footprint" "User_lib:J_Wurth_WR-NPC2_626002110201"
 			(at 31.75 131.445 0)
 			(hide yes)
 			(show_name no)
@@ -6332,6 +6684,50 @@
 				(justify left)
 			)
 		)
+		(property "Mount" ""
+			(at 19.05 151.765 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 19.05 151.765 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 19.05 151.765 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 19.05 151.765 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "2e9d9bd2-e87c-477a-bfd1-678ddd220f8a")
 		)
@@ -6339,7 +6735,7 @@
 			(uuid "642a62b0-77b7-401a-8529-00a6c3b31782")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J1")
 					(unit 1)
@@ -6567,6 +6963,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 68.58 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 68.58 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 68.58 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 68.58 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "2103bd58-cb86-4551-937e-0170e06384b6")
 		)
@@ -6580,7 +7020,7 @@
 			(uuid "9f181119-7547-40e7-bfc1-02bcf82ff3c9")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J5")
 					(unit 1)
@@ -6622,7 +7062,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_THT_Wurth:J_Wurth_WR-PHD_61301021121"
+		(property "Footprint" "User_lib:J_Wurth_WR-PHD_61301021121"
 			(at 124.46 139.065 0)
 			(hide yes)
 			(show_name no)
@@ -6765,6 +7205,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 124.46 155.575 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 124.46 155.575 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 124.46 155.575 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 124.46 155.575 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "ad2a16d2-84db-4e74-bde2-ac036193ac89")
 		)
@@ -6796,7 +7280,7 @@
 			(uuid "3b494651-2b36-481d-ac71-00f262b328d5")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "J4")
 					(unit 1)
@@ -6869,6 +7353,50 @@
 				)
 			)
 		)
+		(property "Mount" ""
+			(at 128.27 179.07 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Pin Plating" ""
+			(at 128.27 179.07 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Device" ""
+			(at 128.27 179.07 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Sim.Pins" ""
+			(at 128.27 179.07 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "2"
 			(uuid "41d5c1f2-b134-4317-bf00-0cea1e7a2210")
 		)
@@ -6876,7 +7404,7 @@
 			(uuid "4389d9db-63d2-4cbe-88b8-1ef7cbf4bc6d")
 		)
 		(instances
-			(project "LIMB_Hand"
+			(project "Hand_Pressure"
 				(path "/14a7bb68-d564-4df1-8012-0634cb7c3d63"
 					(reference "R3")
 					(unit 1)

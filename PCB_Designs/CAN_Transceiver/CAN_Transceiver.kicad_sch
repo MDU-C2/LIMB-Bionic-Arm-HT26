@@ -1057,26 +1057,6 @@
 	)
 	(wire
 		(pts
-			(xy 138.43 111.76) (xy 143.51 111.76)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "11a4a2b1-062f-4f21-8a91-9485501f5810")
-	)
-	(wire
-		(pts
-			(xy 137.16 99.06) (xy 140.97 99.06)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1c2b3319-fd80-4868-a682-58f042f9996e")
-	)
-	(wire
-		(pts
 			(xy 151.13 111.76) (xy 156.21 111.76)
 		)
 		(stroke
@@ -1087,26 +1067,6 @@
 	)
 	(wire
 		(pts
-			(xy 137.16 106.68) (xy 156.21 106.68)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2227751c-ed65-4a26-8440-9ebd86595948")
-	)
-	(wire
-		(pts
-			(xy 137.16 101.6) (xy 140.97 101.6)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2cd6e8b1-9399-44c5-a778-c9c423b5ffbf")
-	)
-	(wire
-		(pts
 			(xy 204.47 113.03) (xy 204.47 114.3)
 		)
 		(stroke
@@ -1114,6 +1074,16 @@
 			(type default)
 		)
 		(uuid "322c9536-bb09-459e-a0ee-53d458aaf4e8")
+	)
+	(wire
+		(pts
+			(xy 139.7 109.22) (xy 140.97 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4ef00947-21ad-4db7-98f2-2bac73393bce")
 	)
 	(wire
 		(pts
@@ -1167,6 +1137,16 @@
 	)
 	(wire
 		(pts
+			(xy 139.7 111.76) (xy 140.97 111.76)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9a95c873-e9b0-44c0-9725-e94563643a80")
+	)
+	(wire
+		(pts
 			(xy 185.42 102.87) (xy 190.5 102.87)
 		)
 		(stroke
@@ -1197,6 +1177,16 @@
 	)
 	(wire
 		(pts
+			(xy 151.13 119.38) (xy 151.13 124.46)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "abebc040-3164-4e69-9b5c-2cd67dd400ca")
+	)
+	(wire
+		(pts
 			(xy 201.93 102.87) (xy 201.93 114.3)
 		)
 		(stroke
@@ -1217,6 +1207,16 @@
 	)
 	(wire
 		(pts
+			(xy 139.7 106.68) (xy 156.21 106.68)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "be89a58e-ddc0-435e-a7ee-78a5ebfa8fb1")
+	)
+	(wire
+		(pts
 			(xy 190.5 113.03) (xy 204.47 113.03)
 		)
 		(stroke
@@ -1227,13 +1227,13 @@
 	)
 	(wire
 		(pts
-			(xy 137.16 104.14) (xy 156.21 104.14)
+			(xy 139.7 104.14) (xy 156.21 104.14)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "d31595ee-01cd-4cca-9ca8-540968ff553c")
+		(uuid "d87fb714-6ccb-49a6-aa34-d3c1cf70677c")
 	)
 	(wire
 		(pts
@@ -1377,7 +1377,7 @@
 		(dnp no)
 		(uuid "2fcdbc92-ce37-4697-a717-b048d75394b5")
 		(property "Reference" "J2"
-			(at 204.4701 93.98 0)
+			(at 201.676 91.948 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1387,8 +1387,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "Conn_01x02"
-			(at 201.9301 93.98 0)
+		(property "Value" "CAN BUS"
+			(at 198.12 93.98 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1398,7 +1398,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm"
+		(property "Footprint" "User_lib:J_Wurth_WR-WTB_68800211722"
 			(at 204.47 96.52 0)
 			(hide yes)
 			(show_name no)
@@ -1448,7 +1448,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 140.97 101.6 90)
+		(at 140.97 109.22 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -1459,7 +1459,7 @@
 		(fields_autoplaced yes)
 		(uuid "35f97b68-cd24-4401-9533-0b9adbeea12f")
 		(property "Reference" "#PWR03"
-			(at 147.32 101.6 0)
+			(at 147.32 109.22 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1470,7 +1470,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 144.78 101.5999 90)
+			(at 144.78 109.2199 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1481,7 +1481,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 140.97 101.6 0)
+			(at 140.97 109.22 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1492,7 +1492,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 140.97 101.6 0)
+			(at 140.97 109.22 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1503,7 +1503,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 140.97 101.6 0)
+			(at 140.97 109.22 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1527,7 +1527,7 @@
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x04")
-		(at 132.08 101.6 0)
+		(at 134.62 106.68 0)
 		(mirror y)
 		(unit 1)
 		(body_style 1)
@@ -1538,7 +1538,7 @@
 		(dnp no)
 		(uuid "5e1d4a61-92c8-4da5-8e2d-0be6ce92b156")
 		(property "Reference" "J1"
-			(at 132.334 96.266 0)
+			(at 134.874 101.346 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1548,7 +1548,7 @@
 			)
 		)
 		(property "Value" "Conn_01x04"
-			(at 132.08 110.49 0)
+			(at 134.62 115.57 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1558,8 +1558,8 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
-			(at 132.08 101.6 0)
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Horizontal"
+			(at 134.62 106.68 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1569,8 +1569,8 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
-			(at 132.08 101.6 0)
+		(property "Datasheet" "https://www.we-online.com/components/products/datasheet/61300411021.pdf"
+			(at 134.62 106.68 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1581,7 +1581,7 @@
 			)
 		)
 		(property "Description" "Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 132.08 101.6 0)
+			(at 134.62 106.68 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1614,7 +1614,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 140.97 99.06 270)
+		(at 140.97 111.76 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -1625,7 +1625,7 @@
 		(fields_autoplaced yes)
 		(uuid "90438d9f-32c7-41f4-a379-208d8bb7eefa")
 		(property "Reference" "#PWR01"
-			(at 137.16 99.06 0)
+			(at 137.16 111.76 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1636,7 +1636,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 144.78 99.0599 90)
+			(at 144.78 111.7599 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1647,7 +1647,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 140.97 99.06 0)
+			(at 140.97 111.76 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1658,7 +1658,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 140.97 99.06 0)
+			(at 140.97 111.76 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1669,7 +1669,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 140.97 99.06 0)
+			(at 140.97 111.76 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1693,7 +1693,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 138.43 111.76 270)
+		(at 151.13 124.46 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -1704,7 +1704,7 @@
 		(fields_autoplaced yes)
 		(uuid "9e30befe-3f2f-4bc4-b46d-6a8d917356cc")
 		(property "Reference" "#PWR05"
-			(at 132.08 111.76 0)
+			(at 151.13 130.81 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1715,18 +1715,18 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 134.62 111.7599 90)
+			(at 153.67 125.7299 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify right)
+				(justify left)
 			)
 		)
 		(property "Footprint" ""
-			(at 138.43 111.76 0)
+			(at 151.13 124.46 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1737,7 +1737,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 138.43 111.76 0)
+			(at 151.13 124.46 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1748,7 +1748,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 138.43 111.76 0)
+			(at 151.13 124.46 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1772,7 +1772,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 147.32 111.76 270)
+		(at 151.13 115.57 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -1782,7 +1782,7 @@
 		(dnp no)
 		(uuid "b8dc2d22-fc23-4a80-8aa3-23d11646a590")
 		(property "Reference" "R3"
-			(at 146.558 114.554 90)
+			(at 153.924 116.332 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1792,7 +1792,7 @@
 			)
 		)
 		(property "Value" "10kOhm"
-			(at 147.32 108.712 90)
+			(at 148.082 115.57 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1802,7 +1802,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder"
-			(at 147.32 109.982 90)
+			(at 149.352 115.57 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1813,7 +1813,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 147.32 111.76 0)
+			(at 151.13 115.57 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1824,7 +1824,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 147.32 111.76 0)
+			(at 151.13 115.57 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -1940,7 +1940,7 @@
 		(dnp no)
 		(uuid "c86362ea-afc3-4ddb-8d27-5d18bc17e4db")
 		(property "Reference" "J3"
-			(at 201.9299 121.92 0)
+			(at 203.962 122.174 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1950,8 +1950,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "Conn_01x02"
-			(at 204.4699 121.92 0)
+		(property "Value" "CAN BUS"
+			(at 207.772 123.952 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -1961,7 +1961,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm"
+		(property "Footprint" "User_lib:J_Wurth_WR-WTB_68800211722"
 			(at 201.93 119.38 0)
 			(hide yes)
 			(show_name no)
@@ -1972,7 +1972,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.we-online.com/en/components/products/WTB_WR_WTB_2_50_MM_J_MALE#/articles/WTB_WR_WTB_2_50_MM_MALE_J_HORIZONTAL"
 			(at 201.93 119.38 0)
 			(hide yes)
 			(show_name no)
@@ -2099,7 +2099,7 @@
 		(dnp no)
 		(uuid "ce96d315-f4c1-4d61-b307-304b5942d2d2")
 		(property "Reference" "R2"
-			(at 185.166 114.3 0)
+			(at 192.024 106.172 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -2110,7 +2110,7 @@
 			)
 		)
 		(property "Value" "120 Ohm"
-			(at 187.96 114.3 0)
+			(at 192.024 108.204 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects

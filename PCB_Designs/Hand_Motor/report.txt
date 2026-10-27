@@ -1,0 +1,10 @@
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Cu.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-B_Cu.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Paste.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-B_Paste.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Silkscreen.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-F_Mask.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-B_Mask.gbr'.
+Plottade till 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-Edge_Cuts.gbr'.
+Skapade Gerber-jobbfil 'C:\Users\jge21002\Documents\GitHub\LIMB-Bionic-Arm-HT26\PCB_Designs\Hand_Motor\Gerber\Hand_Motor-job.gbrjob'.
+Information: Färdig.

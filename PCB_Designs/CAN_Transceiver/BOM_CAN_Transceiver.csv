@@ -1,0 +1,7 @@
+Reference;Qty;Value;Footprint;Datasheet;Comments
+J1;1;Conn_01x04;Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Horizontal;https://www.we-online.com/components/products/datasheet/61300411021.pdf;
+J2,J3;2;CAN_01x02_male;User_lib:J_Wurth_WR-WTB_68800211722;https://www.we-online.com/en/components/products/WTB_WR_WTB_2_50_MM_J_MALE#/articles/WTB_WR_WTB_2_50_MM_MALE_J_HORIZONTAL;
+J2,J3;2;Conn_01x02_female;User_lib:J_Wurth_WR-WTB_688002113322;https://www.we-online.com/en/components/products/WTB_2_50_J_TYPE_FEMALE_TERMINAL_HOUSING_6880XX113322;Used for cords
+R2;1;120 Ohm;Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder;;
+R3;1;10kOhm;Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder;;
+U2;1;SN65HVD230;Package_SO:SOIC-8_3.9x4.9mm_P1.27mm;http://www.ti.com/lit/ds/symlink/sn65hvd230.pdf;

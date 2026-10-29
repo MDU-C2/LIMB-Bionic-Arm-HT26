@@ -5,34 +5,9 @@ The upper-arm and forearm IMUs provide faster motion updates. EMG supplies
 one grip command after rest and firm-grip calibration. It does not measure
 finger positions or shoulder angles.
 
-## Start control
-
-Open **Control → Connect + open live setup**. Movement starts paused.
-
-1. Sit upright, shoulder relaxed, elbow bent to about 90 degrees. Rest the open hand at
-   marker 1 with the thumb up. Show both shoulders, hips, elbow and wrist.
-2. Enter the subject ID and start guided mounting calibration. Stereo depth is
-   enabled by default. Follow still, raise, bend, turn and return, starting each
-   step when ready. Wait for the mounting checks to pass.
-3. Press **Calibrate relaxed EMG** while relaxed.
-4. Press **Calibrate firm grip**, hold for three seconds, then relax.
-5. Return to marker 1 and press **Start interactive control**.
-
-Camera grip skips the two EMG calibration steps. Both IMUs are still required
-by the guided setup.
-
-First bend the elbow without lifting the upper arm, then raise the arm, move
-it sideways and turn the forearm. Check each direction. `0x6B` belongs on the
-upper arm and `0x6A` on the forearm. Repeat preparation if a fit fails or a sensor
-moves. A resting pose cannot identify every mounting error.
-
-**Pause / start setup again** and `R` pause live movement. A Bluetooth reconnect
-requires calibration again. EMG and IMU streams expire independently.
-
-With **Physics mode** off, live preview follows bounded joint targets directly.
-Physics mode models gravity, contact and the configured motor speeds, so it can
-lag behind a person's movement. Both modes keep robot joint limits. Live grip
-secures a cup only when enough fingertips contact it; opening the hand releases it.
+Use the [workflow guide](workflow-guide.md#control) for illustrated preparation,
+calibration reuse, pause, mounting changes and replay. This page describes the
+estimator and validity rules.
 
 ## Fusion
 
@@ -74,8 +49,9 @@ Subject recording and stereo live setup use the same functional mounting fit.
 Passed rotations and gyro biases are consumed by that connection's live
 estimator and by saved replay. Profiles bind the subject, arm,
 mounting session and connection generation. They cannot be transferred to a new
-connection as a current live calibration. Live setup saves distinct attempts in
-`outputs/calibration`, with normalized input vectors, source timestamps, stereo
+connection as a current live calibration. The app saves distinct live attempts in
+`SUBJECT/references/` under the selected recording root (standalone CLI defaults
+to `outputs/calibration`), with normalized input vectors, source timestamps, stereo
 points, cue windows and hashes. These inputs do not replace raw trial recordings.
 Fitting and saving run outside the control loop. Failed and cancelled captures
 are retained when a reference step has started.
@@ -106,6 +82,28 @@ orientation and alignment to the arm are needed. Camera points can estimate
 segment lengths, but accurate centimetres require a scale reference or calibrated
 depth. Integrating acceleration twice is not used to recover hand position.
 
+## EMG amplitude and depth
+
+At 4 kHz, live EMG uses a causal 20–450 Hz band-pass, a 50 Hz mains notch and
+an 80 ms RMS envelope. Rest sets the noise floor. The strong-grip trial fixes
+the normalization range, which does not shrink during relaxation. Before this
+trial the UI labels the scale as estimated. Clipped ADC samples and an inadequate
+strong-grip trial are reported. Legacy low-rate streams retain envelope processing
+because they cannot resolve the raw-EMG frequency band.
+
+Rest calibration excludes the filter's initial settling transient. Activation
+starts above 1.5 times the measured rest RMS (at least one ADC count). A valid
+strong-grip trial must sustain a further increase of at least half the rest RMS
+or one ADC count. The median contraction level fixes the scale, so a brief
+movement spike does not calibrate full grip. Failure reports measured rest/grip
+levels and the required level. Missing BLE samples interrupt a grip trial and
+pause activation while the filter settles again; repeat calibration after the
+stream becomes continuous.
+
+Stereo depth aligns OAK monochrome-camera depth with RGB landmarks. The live
+pipeline uses FAST_DENSITY without subpixel processing. RGB-only diagnostics
+use estimated monocular geometry and cannot provide metric stereo points.
+
 ## Check without hardware
 
 The [offline fusion comparison](fusion-comparison.md) checks experimental
@@ -113,8 +111,8 @@ baselines with synthetic or independently referenced planar motion. It does
 not change live fusion. Optional [EMG models](emg-learning.md) can be selected
 in the advanced live settings after reviewing participant results.
 
-Choose **Replay a recorded cup trial**, select its `trial.json`, then press
-**Play recording**. Replay decodes the raw BLE packets with the saved calibration
+Choose **Replay a recorded cup trial (no sensors)**. The current trial is reused
+when available; otherwise select its `trial.json`. Replay decodes the raw BLE packets with the saved calibration
 and feeds the saved camera observations through the same alignment and fusion.
 No camera inference or BLE connection is opened. The video is the saved operator
 view; it is not a new tracking result.

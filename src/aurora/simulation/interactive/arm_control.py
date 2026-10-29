@@ -363,17 +363,6 @@ def build_joint_index_map(robot_id: int, client) -> dict[str, int]:
     return joint_map
 
 
-def build_link_name_index_map(robot_id: int, client) -> dict[str, int]:
-    """Map every URDF link name to its PyBullet link index."""
-    base_name = client.getBodyInfo(robot_id)[0].decode("utf-8")
-    link_map = {base_name: -1}
-    for joint_index in range(client.getNumJoints(robot_id)):
-        joint_info = client.getJointInfo(robot_id, joint_index)
-        child_link_name = joint_info[12].decode("utf-8")
-        link_map[child_link_name] = joint_index
-    return link_map
-
-
 def resolve_link_index(
     link_indices_by_name: dict[str, int],
     preferred_names: tuple[str, ...],

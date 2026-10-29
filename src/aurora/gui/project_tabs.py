@@ -10,8 +10,6 @@ from tkinter import messagebox, ttk
 
 from aurora.gui.project_support import (
     CARD,
-    DOCUMENTATION_FILE,
-    GUI_DOCUMENTATION_FILE,
     INK,
     INTERACTIVE_SIMULATION_SCRIPT,
     MOVEMENT_RECOGNITION_SCRIPT,
@@ -29,10 +27,6 @@ from aurora.paths import RESOURCE_DIRECTORY
 
 class ProjectTabsMixin:
     """Build robot/tooling pages and summarize repository readiness."""
-
-    @staticmethod
-    def _discover_firmware_projects():
-        return discover_firmware_projects()
 
     def _build_robot_tab(self, tab: ttk.Frame) -> None:
         """Populate firmware build, flash, and serial-monitor controls."""
@@ -130,13 +124,8 @@ class ProjectTabsMixin:
         ).pack(side="left", padx=(0, 8))
         ttk.Button(
             actions,
-            text="Open simulation guide",
-            command=lambda: self._open_existing(DOCUMENTATION_FILE),
-        ).pack(side="left", padx=(0, 8))
-        ttk.Button(
-            actions,
-            text="Open GUI guide",
-            command=lambda: self._open_existing(GUI_DOCUMENTATION_FILE),
+            text="Open workflow guide",
+            command=self._open_workflow_guide,
         ).pack(side="left", padx=(0, 8))
         ttk.Button(
             actions,
@@ -147,7 +136,7 @@ class ProjectTabsMixin:
     def _refresh_firmware(self) -> None:
         """Refresh firmware projects and currently visible serial ports."""
         previous = self.firmware_project.get()
-        self.firmware_projects = self._discover_firmware_projects()
+        self.firmware_projects = discover_firmware_projects()
         values = list(self.firmware_projects)
         self.firmware_project_box.configure(values=values)
         if previous in self.firmware_projects:

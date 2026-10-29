@@ -31,7 +31,7 @@ class ReferenceMatch:
 class MovementRecognizer:
     """Run the portable ONNX model and compare recording embeddings."""
 
-    def __init__(self, model_path: Path = DEFAULT_MODEL) -> None:
+    def __init__(self, model_path: Path = DEFAULT_MODEL, *, require_manifest: bool = False) -> None:
         try:
             import onnxruntime as ort
         except ImportError as error:
@@ -41,7 +41,7 @@ class MovementRecognizer:
 
         if not model_path.is_file():
             raise FileNotFoundError(f"Movement model not found: {model_path}")
-        verify_model_manifest(model_path)
+        self.provenance = verify_model_manifest(model_path, require_manifest=require_manifest)
         self.session = ort.InferenceSession(
             str(model_path),
             providers=["CPUExecutionProvider"],

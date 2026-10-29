@@ -50,7 +50,8 @@ clearly labeled simulation controller caps rather than hardware ratings.
 
 ## Saved simulation torque
 
-Physics mode can save `outputs/simulation/torque_<timestamp>.csv`. Each row
+Motor physics can save `derived/simulation/torque_<timestamp>.csv` below the
+selected output root. Each row
 identifies the logical motion, URDF joint, HT25 motor mapping and published
 rating, joint angle and velocity, applied PyBullet motor torque, calculated
 gravity torque, inverse dynamics torque, simulation effort limit, and payload

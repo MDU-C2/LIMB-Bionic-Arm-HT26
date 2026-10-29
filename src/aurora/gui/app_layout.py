@@ -96,21 +96,14 @@ class AppLayoutMixin:
             padx=12,
             pady=6,
         )
-        ttk.Button(
-            header,
-            text="Connect BLE / show graphs",
-            command=self.open_ble_monitor,
-        ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(0, 10))
-        self.camera_monitor_button = ttk.Button(
-            header,
-            text="Open camera monitor",
-            command=self.open_camera_monitor,
-        )
-        self.camera_monitor_button.grid(row=0, column=2, rowspan=2, sticky="e", padx=(0, 10))
-        self.status_label.grid(row=0, column=3, rowspan=2, sticky="e")
+        self.status_label.grid(row=0, column=1, rowspan=2, sticky="e")
         ttk.Label(header, textvariable=self.ble_sensor_connection, style="HeaderSub.TLabel").grid(
-            row=2, column=0, columnspan=4, sticky="w", pady=(5, 0)
+            row=2, column=0, columnspan=2, sticky="w", pady=(5, 0)
         )
+
+        ttk.Label(
+            header, textvariable=self.session.notice, style="HeaderSub.TLabel", wraplength=900
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
     def _build_notebook(self) -> None:
         """Create registered tabs in their declared order."""

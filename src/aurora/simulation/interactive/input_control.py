@@ -238,14 +238,7 @@ class InputMixin:
                     self.pause_live_control()
                 set_live_alignment_pose(self.arm)
                 if getattr(self, "live_setup", None) is not None:
-                    from aurora.simulation.interactive.live_setup import LiveSetup
-
-                    self.live_setup.cancel()
-                    self.live_setup = LiveSetup(
-                        self.live_sensor_input,
-                        anatomical_reference_angles(get_angles_deg(self.arm)),
-                        subject_id=getattr(self.args, "subject", "diagnostic"),
-                    )
+                    self.live_setup.pause()
                 elif self.args.transport == "serial":
                     self.setup_text.set(
                         "USB control paused. Match the tabletop pose, then align and start."

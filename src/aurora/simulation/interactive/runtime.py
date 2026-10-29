@@ -182,6 +182,9 @@ class InteractiveSimulator(
                         self.live_sensor_input,
                         anatomical_reference_angles(get_angles_deg(self.arm)),
                         subject_id=getattr(self.args, "subject", "diagnostic"),
+                        output=(self.args.output_root / self.args.subject / "references")
+                        if getattr(self.args, "output_root", None)
+                        else None,
                     )
                     self.setup_button.configure(state="normal")
                 else:
@@ -239,6 +242,11 @@ class InteractiveSimulator(
             self.setup_text.set("Recording paused. Press Play recording to continue.")
             return
         self.live_reset_requested = True
+
+    def repeat_live_preparation(self):
+        self.live_feedback_active = False
+        if self.live_setup is not None:
+            self.live_setup.repeat()
 
     def close(self) -> None:
         print("Simulation finished.")

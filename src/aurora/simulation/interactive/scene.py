@@ -13,7 +13,6 @@ from aurora.simulation.interactive.arm_control import (
     AuroraArm,
     ManualMotion,
     build_joint_index_map,
-    build_link_name_index_map,
     resolve_link_index,
     set_live_alignment_pose,
     set_ready_pose,
@@ -39,7 +38,13 @@ from aurora.simulation.interactive.settings import (
 )
 from aurora.simulation.model.contact_feedback import estimate_contact_force_n
 from aurora.simulation.model.dynamics import ArmDynamics
-from aurora.simulation.model.robot_model import LEFT_ARM_JOINTS, LEFT_GRIP_OFFSET_M, LEFT_HAND_LINK
+from aurora.simulation.model.robot_model import (
+    LEFT_ARM_JOINTS,
+    LEFT_GRIP_OFFSET_M,
+    LEFT_HAND_LINK,
+    link_name_index,
+    load_left_arm,
+)
 
 
 class SceneMixin:
@@ -199,21 +204,7 @@ class SceneMixin:
             print("Attempting to load robot...")
             base_orientation = p.getQuaternionFromEuler([0, 0, math.radians(ARM_BASE_YAW_DEG)])
 
-            # PyBullet on Windows cannot open a non-ASCII absolute path reliably. Load
-            # the repository-relative path while this directory is the working folder.
-            previous_directory = os.getcwd()
-            os.chdir(self.model_dir)
-            try:
-                p.setAdditionalSearchPath(".")
-                self.robot_body = p.loadURDF(
-                    "arm/left_arm.urdf",
-                    ARM_BASE_POSITION_M,
-                    base_orientation,
-                    useFixedBase=True,
-                )
-            finally:
-                os.chdir(previous_directory)
-                p.setAdditionalSearchPath(pybullet_data.getDataPath())
+            self.robot_body = load_left_arm(p, ARM_BASE_POSITION_M, base_orientation)
 
             print("\nRobot loaded successfully!")
 
@@ -265,7 +256,7 @@ class SceneMixin:
             hand_link=LEFT_HAND_LINK,
             grip_offset=LEFT_GRIP_OFFSET_M,
         )
-        self.link_indices_by_name = build_link_name_index_map(self.robot_body, p)
+        self.link_indices_by_name = link_name_index(self.robot_body, p)
 
         try:
             self.hand_link_name, self.hand_link_index = resolve_link_index(

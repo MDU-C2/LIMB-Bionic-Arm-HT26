@@ -5,7 +5,7 @@
 The subject sits upright at a 60 x 60 cm table with an empty cup. The camera
 faces the subject and includes the shoulders, selected arm, hand and table.
 The hips may be hidden behind the table.
-The subject does not need to see or operate the computer. The operator controls
+The participant view is optional; the subject does not operate the computer. The operator controls
 recording and gives the start signal.
 
 | Marker | Position or action |
@@ -17,28 +17,10 @@ recording and gives the start signal.
 
 ## Subject instructions
 
-Before the cup trials, the subject completes a reference recording under the
-operator's guidance. The subject remains upright and keeps all movements clear
-of the table. The sensors remain fixed. Before each step, the operator positions
-the subject and starts a three-second countdown. The subject begins on the
-operator's GO signal. Preparation between steps has no time limit.
-
-1. The upper arm rests beside the body, elbow about 90 degrees, forearm pointing
-   forward and thumb up. The subject holds still for five seconds.
-2. With the elbow angle fixed and thumb up, the subject raises the arm forward
-   first, then lowers it. The movement repeats slowly for ten seconds.
-3. After returning to the starting pose, the subject keeps the upper arm still
-   and bends the elbow further first, then returns. This repeats for ten seconds.
-4. With the elbow about 90 degrees and upper arm still, the subject turns the
-   palm down first, then up, for ten seconds.
-5. The subject returns to the original thumb-up pose and holds still for five
-   seconds. The operator allows time to reset between movements.
-6. With the forearm supported, the subject relaxes the open hand, grips the empty
-   cup and releases it. Relax and grip last five seconds each; release lasts
-   three seconds.
-
-The operator checks the calibration result before beginning cup trials. A missed
-step, blocked movement or loose sensor requires a new calibration attempt.
+Complete the illustrated reference movements in the
+[workflow guide](workflow-guide.md#prepare-and-calibrate) before collecting.
+The operator checks the result and positions the cup back at marker 2.
+The participant can use the larger guidance window or follow the operator.
 
 1. The subject starts with the open hand at position 1. The other arm remains
    beside the body.

@@ -55,7 +55,6 @@ from aurora.gui.process_manager import ProcessManagerMixin
 from aurora.gui.project_support import (
     ACCENT,
     CONSOLE,
-    DEFAULT_REFERENCE_DIRECTORY,
     ERROR,
     INTERACTIVE_SIMULATION_SCRIPT,
     MOVEMENT_RECOGNITION_SCRIPT,
@@ -72,9 +71,9 @@ from aurora.gui.project_support import (
 )
 from aurora.gui.project_tabs import ProjectTabsMixin
 from aurora.gui.recording_tab import RecordingTabMixin
+from aurora.gui.session import ApplicationSession
 from aurora.gui.simulation_tabs import SimulationTabsMixin
 from aurora.gui.workflow_tools import WorkflowTools
-from aurora.sensors.settings import DEFAULT_GRIP_SOURCE
 
 # Application
 
@@ -90,7 +89,7 @@ class ProjectGui(
 ):
     """Build the app and share state between its tabs."""
 
-    def __init__(self, window: tk.Tk) -> None:
+    def __init__(self, window: tk.Tk, *, preferences_path=None) -> None:
         """Build the interface and start the background checks."""
         self.window = window
         self.style = ttk.Style(window)
@@ -103,18 +102,12 @@ class ProjectGui(
         self.movement_ai_ready = False
         self.capability_status = "Checking optional capabilities..."
 
-        self.dynamic_simulation = tk.BooleanVar(value=False)
-        self.save_simulation_torque = tk.BooleanVar(value=True)
-        self.save_simulation_telemetry = tk.BooleanVar(value=False)
-        self.fusion_camera_weight = tk.StringVar(value="0.25")
-        self.fusion_depth = tk.BooleanVar(value=True)
-        self.table_width_cm = tk.StringVar(value="60")
-        self.table_depth_cm = tk.StringVar(value="60")
-        self.fusion_grip_source = tk.StringVar(value=DEFAULT_GRIP_SOURCE.upper())
-        self.fusion_shoulder_twist_axis = tk.StringVar(value="y")
-        self.fusion_wrist_twist_axis = tk.StringVar(value="y")
+        self.session = ApplicationSession(self, preferences_path)
+        self.session.bind(self)
         self.motion_recording = tk.StringVar()
-        self.motion_references = tk.StringVar(value=str(DEFAULT_REFERENCE_DIRECTORY))
+        self.motion_references = tk.StringVar(
+            value=str(REPOSITORY_ROOT / self.recording_output.get() / "movement")
+        )
         self.loop_pose_playback = tk.BooleanVar(value=False)
         self.motion_ai_status = tk.StringVar()
         self._initialize_recording_state()
@@ -212,6 +205,8 @@ class ProjectGui(
         self.log.grid(row=1, column=0, sticky="ew")
         scrollbar.grid(row=1, column=1, sticky="ns")
         self._append_log("AURORA Control Center ready.\n")
+        if self.session.preference_error:
+            self._append_log(self.session.preference_error + "\n")
 
     # Simulation actions
 
@@ -234,7 +229,9 @@ class ProjectGui(
         self.fusion_button.configure(state="disabled" if running or not fusion_ready else "normal")
         if hasattr(self, "replay_button"):
             self.replay_button.configure(
-                state="disabled" if running or not fusion_ready else "normal"
+                state="normal"
+                if fusion_ready and (not running or self._idle_cup_session())
+                else "disabled"
             )
         camera_preview_running = any(
             process.key == "preview:record_oak_pose.py"
@@ -323,7 +320,9 @@ class ProjectGui(
         self.workflow.update_controls()
         if hasattr(self, "control_readiness"):
             self.control_readiness.set(
-                "Stop the active program before starting another control session."
+                "Cup session connected. Replay a saved trial, or Finish subject before starting another control session."
+                if self._idle_cup_session()
+                else "Stop the active program before starting another control session."
                 if non_preview_running
                 else "Ready: open live setup and complete calibration, or start keyboard control."
                 if interactive_ready
@@ -408,6 +407,11 @@ class ProjectGui(
                 self._sensor_close_deadline = time.monotonic() + 15
             return
         self.background_tasks.close()
+        try:
+            self.session.save()
+        except OSError as error:
+            self._append_log(f"Could not save preferences: {error}\n")
+        self.session.close()
         if self.imu_monitor is not None and self.imu_monitor.exists:
             self.imu_monitor.close()
         for callback in self.window.tk.call("after", "info"):

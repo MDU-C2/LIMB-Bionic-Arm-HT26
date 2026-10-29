@@ -28,9 +28,6 @@ class EmgToolsMixin:
             process_key="review:emg",
         )
 
-    def _train_emg_dialog(self) -> None:
-        self.workflow.show_tool("emg_train")
-
     def _select_emg_model(self) -> None:
         filename = filedialog.askopenfilename(
             title="Choose an EMG bundle model.json", filetypes=(("EMG model", "model.json"),)

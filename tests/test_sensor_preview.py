@@ -31,7 +31,7 @@ from aurora.sensors.ble_protocol import CURRENT_EMG_PACKET, HIGH_RATE_IMU_PACKET
 class SensorPreviewTests(unittest.TestCase):
     def test_standalone_ble_preview_expires_each_role_while_emg_continues(self):
         clock = [100.0]
-        orientations, statuses, frames = [], [], []
+        orientations, statuses, frames, plots = [], [], [], []
         callbacks = {}
 
         class Variable:
@@ -91,6 +91,9 @@ class SensorPreviewTests(unittest.TestCase):
                 None,
                 struct.pack("<HIQH", 0x101, sequence, 1000 + sequence * 100_000, 2048),
             )
+            callbacks["piezo"](
+                None, struct.pack("<HIQ10H", 1, sequence, 1000 + sequence * 100_000, *([123] * 10))
+            )
 
         fake_tk = types.SimpleNamespace(
             Tk=Widget,
@@ -103,15 +106,19 @@ class SensorPreviewTests(unittest.TestCase):
             TclError=RuntimeError,
         )
         args = argparse.Namespace(
-            address="test", device="test", scan_timeout=1, preview_sensor="imu"
+            address="test", device="test", scan_timeout=1, preview_sensor="all"
         )
+        sensors = {"imu": "imu", "emg": "emg", "piezo": "piezo"}
         with (
             patch("aurora.recording.ble_preview.tk", fake_tk),
             patch("aurora.recording.ble_preview.time.monotonic", side_effect=lambda: clock[0]),
             patch("aurora.recording.ble_preview.asyncio.sleep", side_effect=deliver),
             patch("aurora.recording.ble_preview.threading.Thread", ImmediateThread),
             patch("aurora.recording.ble_preview.sys.stdin", io.StringIO("show imu\n" * 100)),
-            patch("aurora.recording.ble_preview.draw_traces"),
+            patch(
+                "aurora.recording.ble_preview.draw_traces",
+                side_effect=lambda canvas, traces: plots.append(traces),
+            ),
             patch(
                 "aurora.recording.ble_preview.draw_orientation",
                 side_effect=lambda canvas, values: orientations.append(dict(values)),
@@ -120,15 +127,24 @@ class SensorPreviewTests(unittest.TestCase):
                 sys.modules,
                 {"bleak": types.SimpleNamespace(BleakClient=Client, BleakScanner=object)},
             ),
-            redirect_stdout(io.StringIO()),
+            redirect_stdout(io.StringIO()) as output,
         ):
-            result = asyncio.run(run_ble_preview(args, BleRecorder, {"imu": "imu", "emg": "emg"}))
-        self.assertEqual(result, 0)
+            result = asyncio.run(
+                run_ble_preview(
+                    args,
+                    lambda session, sink: BleRecorder(session, sink, sensors=tuple(sensors)),
+                    sensors,
+                )
+            )
+        self.assertEqual(result, 0, output.getvalue())
         self.assertIn({0, 1}, [set(values) for values in orientations])
         self.assertEqual(set(orientations[-1]), {0})
         self.assertTrue(any("IMUs 1/2" in status for status in statuses))
         self.assertTrue(any("command overruns " in status for status in statuses))
         self.assertEqual(frames, list(range(10)))
+        self.assertTrue(any("ch1 centered RMS 0.0 ADC" in status for status in statuses))
+        self.assertTrue(any("Piezo mean: 123.0" in status for status in statuses))
+        self.assertTrue(any(traces and traces[0] and set(traces[0]) == {123} for traces in plots))
 
     def test_packet_totals_do_not_describe_sensor_availability(self):
         now = [100.0]

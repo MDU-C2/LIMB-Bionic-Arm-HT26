@@ -289,6 +289,15 @@ class LiveSensorInput:
             self.close()
             raise
 
+    def invalidate_calibration(self) -> None:
+        with self._source_lock:
+            self._calibration_valid = False
+            self.estimator.clear_alignment()
+            self.emg_estimator.reset()
+            self.emg_activation = None
+            if self.transport == "ble" and self.reader is not None:
+                self.reader.invalidate_calibration()
+
     def calibrate(self, reference_angles: object = None) -> None:
         with self._source_lock:
             self._calibrate(reference_angles)

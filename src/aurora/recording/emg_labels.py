@@ -3,22 +3,14 @@
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import numpy as np
 
+from aurora.file_utils import file_digest as digest
 from aurora.json_utils import read_json_object, write_json
 from aurora.recording.emg_features import PHASE_NAMES, load_emg
 from aurora.time_utils import utc_now
-
-
-def digest(path: Path) -> str:
-    checksum = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            checksum.update(block)
-    return checksum.hexdigest()
 
 
 def validate_segments(segments: list, duration: float) -> list[dict]:

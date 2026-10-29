@@ -11,6 +11,7 @@ import time
 
 from aurora.recording.ble_dataset import LabeledBleCapture
 from aurora.recording.common import (
+    announce_result,
     create_session_directory,
     enable_ctrl_break_as_interrupt,
     env_float,
@@ -328,6 +329,7 @@ async def record(args: argparse.Namespace) -> int:
         )
 
     print(f"Saved BLE session to {session}")
+    announce_result(session)
     if writer.error:
         print(writer.error)
         return 1

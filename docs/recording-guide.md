@@ -1,100 +1,10 @@
-# Recording guide
+# Recording formats and quality
 
-Use BLE for EMG and both IMUs. Connect the OAK-D camera to the PC over USB.
-The ESP32 can use a separate USB power source. Recording does not use the live
-simulator and does not need an internet connection after setup.
+Use the [workflow guide](workflow-guide.md) for the operator sequence, visual
+preparation steps, trial timing, processing and export. This page describes the
+saved data and numerical reference fit.
 
-## Cup transfers
-
-1. Mount the camera in front of the subject. Frame both shoulders, the selected
-   arm, hand and the cup's path across the 60 x 60 cm table. Keep the camera,
-   chair and table positions fixed. The table can hide the hips; recording
-   continues, but trunk-relative shoulder angles may be unavailable.
-2. Open **Record**. Enter a subject ID such as `S01`, choose the arm and
-   set the recording window. The default is **8 seconds after GO**, with a
-   **3-second countdown**. Use a longer window if a practice attempt, especially
-   at slow pace, needs more time. `0` selects manual stopping.
-3. Stereo depth is used for subject calibration and normal cup trials. The app
-   checks depth receipt and camera intrinsics before calibration. The reference
-   fit checks the saved 3D arm points; a brief tracking miss does not disable
-   the calibration button.
-4. Press **1. Connect camera + BLE**. Wait for camera frames, both IMUs and raw
-   EMG. Check **Signals** and the preview before collecting a subject.
-5. Press **2. Calibrate subject**. Each step waits while the operator reads the
-   instruction and positions the subject. Press **Start step** when ready.
-   A three-second countdown precedes each timed movement; begin on **GO**.
-   Check the result and the signal graphs. Normal trial start stays disabled
-   until IMU alignment, EMG references and current stereo checks pass. The
-   status identifies the step to repeat; earlier attempts remain saved.
-6. Use **Practice (no files)** for a cup transfer. Confirm the pace and recording
-   window, then reset the cup to 2 and the open hand to 1.
-7. Press **3. Start T001**. The operator sees **3, 2, 1, GO** and gives the
-   subject the start signal at GO. Trial files open at GO and save automatically
-   after the recording window. The subject does not need to see the screen.
-8. Follow the rest/reset countdown. Camera and BLE stay connected between
-   trials. **Restart / repeat** keeps a started attempt as incomplete and
-   prepares another. Cancel before GO to avoid creating files or using a trial ID.
-9. Press **Finish subject** before changing the subject ID.
-
-The preview shows the latest camera image. Tracking runs separately and its age,
-hand and cup status appear below the video. Saved tracking stays attached to its
-source frame. Camera transfer uses NV12 to keep RGB and aligned depth within the
-USB 2 bandwidth budget; the image size and requested frame rate stay 640 x 480
-at 25 frames/s. A USB 3 data connection gives more transfer capacity.
-
-Use the printable [subject instructions](cup-transfer-protocol.md). Collect
-natural, slow and fast as separate trials. The initial collection setting is
-three trials per pace with at least 20 seconds of rest. Rotate the pace order
-between subjects: natural/slow/fast, slow/fast/natural, fast/natural/slow.
-Keep the chosen order, duration and repetitions consistent and record any changes.
-The [related work](../research/related-work.md#recording-protocols) explains the basis.
-
-The movement is hand at 1 -> grasp at 2 -> place and release at 3 -> empty hand
-at 4. Reaching 4 ends the subject's movement. The recording timer only ends the
-capture window; it does not verify that the task was completed. If the hand
-reaches 4 early, the subject stays there until the recording ends. Increase the
-window before collecting if the full movement does not fit comfortably.
-
-**Stop early** saves a partial timed trial as incomplete. In manual mode,
-**Stop and save** ends the recording after the movement. Practice uses the same
-countdown and window without saving files. There are no marker buttons in the
-normal flow. Check actual movement events afterwards using the video and signals.
-
-Normal recording needs fresh RGB, raw EMG, both IMUs, a passed subject
-calibration and current stereo points for both shoulders, elbow and wrist at
-start. Hand/finger and cup detection are not start requirements. Once recording
-has begun, available raw streams keep saving through tracking loss. Missing
-streams or depth maps flag the attempt for review. Keep unsuccessful attempts.
-
-## Subject calibration
-
-Fix one IMU on the outside of the upper arm and one on the forearm above the
-wrist. Straps must prevent slipping. The fit estimates the sensor mounting
-rotations; fixed printed-axis alignment is not assumed. IMU spacing is not
-needed for angles. Segment lengths are needed for forward kinematics, and
-metric camera coordinates need calibrated depth.
-
-The operator guides the following steps after a three-second countdown. The
-subject remains upright, with the other arm beside the body. The camera sees
-both shoulders and the selected elbow/wrist. Hips may be behind the table.
-Keep all reference movements clear of the tabletop. Do not move the camera.
-
-| Step | Duration | Subject position or action |
-| --- | --- | --- |
-| Still | 5 s | Upper arm beside body, elbow about 90 degrees, forearm forward, thumb up. |
-| Raise | 10 s | Hold elbow angle and thumb-up position. Raise forward first, then lower; repeat slowly. |
-| Bend | 10 s | Keep upper arm still; bend the elbow further first, then return. Repeat slowly, thumb up. |
-| Turn | 10 s | Keep upper arm/elbow still. Turn palm down first, then up; repeat comfortably. |
-| Return | 5 s | Restore the original pose and remain still. |
-| Relax | 5 s | Support forearm and relax the open hand. |
-| Grip | 5 s | Maintain a firm, comfortable grip on the empty cup, forearm supported. |
-| Release | 3 s | Release and relax the open hand. |
-
-There is no time limit for reading or positioning between steps. These pauses
-and the step countdowns are saved but excluded from the alignment fit. The
-operator positions the cup for the EMG step, then restores it to marker 2.
-A still pose alone does
-not establish the mounting rotation; all movement steps are needed.
+## Reference fitting
 
 The fit uses isolated gyro axes plus the still gravity direction to construct
 proper three-dimensional sensor-to-segment rotations. A stereo reference checks
@@ -217,55 +127,13 @@ simultaneous sensor sampling. After a BLE reconnect, `packets.jsonl` records
 `connection_generation` and metadata keeps `time_sync_epochs`. Synced sample
 times stay empty until the new clock fit is available. Review epochs separately.
 
-## Inspect before processing
+## Raw diagnostics and derived data
 
-Open **Review & export**, select a trial's `trial.json`, then press **Plot / export image**.
-This shows raw EMG, both IMUs and saved camera angle estimates. Use the plot
-toolbar to zoom and pan. Selecting `emg.csv`, `imu.csv` or `pose.json` plots
-that source alone. Missing samples break the lines. Operator marker times are
-shown when the saved clocks can be aligned.
+**Advanced Tools ? Raw capture** keeps individual BLE, camera and USB entry points
+available. Sources save separate folders with shared subject/session metadata.
+Guided grip captures add `emg_trial.json` cues and `emg_trial_features.csv`.
+Cues and older operator marker observations need review against actual movement.
 
-Check the relaxed level, contraction changes, clipping and gaps before applying
-filters. Press **Process EMG** to save filtered samples, six-feature windows and
-processing settings in a new folder selected in the form. Use **Browse last outputs in Review** and select the generated
-CSV to plot it. Raw files stay unchanged. See [signal inspection](signal-inspection.md)
-for the spectrum and filter settings.
-
-Use **Review EMG labels** to check phase boundaries against the raw signal and
-video, then **Advanced Tools → EMG models → Compare EMG models** for participant evaluation. See
-[EMG learning](emg-learning.md) for labels, model settings and selection.
-
-## Advanced recordings
-
-Open **Advanced Tools → Raw capture** for individual sources, camera depth/detail
-settings or guided grip trials. USB monitoring is under **Connect & inspect**.
-The existing recorders still
-save separate source folders with shared subject and session metadata.
-
-For a guided grip trial, select Bluetooth and EMG, enable **Guided grip trial**
-and set duration to `0`. Five repeats take about 38 seconds. The operator relays
-the relax, close, hold and open cues. Stop a separate camera recorder afterward.
-
-The BLE folder adds `emg_trial.json` cue times and `emg_trial_features.csv`
-with six time-domain features. Cue times are labels to review against the
-actual movement. Cup transfers have a trial-level task name; grasp and release
-phases are not automatically labelled.
-
-Older recordings can contain operator marker observations. These do not establish
-exact grasp and release times. Assign movement labels only after checking the
-video and signals. Keep participants separate when evaluating a model on new people.
-
-Process a saved EMG file from the project environment:
-
-```powershell
-python -m aurora.recording.emg_processing --file outputs/recordings/S01/TRIAL/ble/emg.csv
-```
-
-This preserves the raw file and exports six filtered-signal features. Samples
-must be regularly spaced; review gaps before processing. To rebuild cue-derived
-features, add `--labels PATH/emg_trial.json`. Use **Review EMG labels** for
-separate reviewed training labels.
-
-Finish recording before starting live simulation. It uses the same camera and
-BLE device. See [troubleshooting](troubleshooting-guide.md) for connection problems
-and [sensor setup](sensor-data.md) for wiring.
+[Signal inspection](signal-inspection.md) describes plotting, sample-gap rejection
+and EMG filtering. [EMG learning](emg-learning.md) describes reviewed labels and
+participant evaluation. Processing creates derived files and preserves raw input.

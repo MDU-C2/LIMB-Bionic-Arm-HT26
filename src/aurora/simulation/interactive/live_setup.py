@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 
 from aurora.paths import RECORDINGS_DIRECTORY
+from aurora.recording.common import announce_result
 from aurora.recording.cup_protocol import REFERENCE_STEPS, CupReferenceGuide
 
 
@@ -23,6 +24,7 @@ class LiveSetup:
         self.previous_angles = None
         self.connection_generation = live.reader.connection_generation
         self.latest_snapshot = None
+        self.preparation = None
         self.message = (
             "Fit sensor mounting: upper-arm IMU 0x6B, forearm IMU 0x6A. "
             "Show shoulders, hips, elbow and wrist. Follow five guided movements."
@@ -45,6 +47,7 @@ class LiveSetup:
 
     def _restart(self, message):
         self.cancel()
+        self.preparation = None
         self.stage, self.pending = ("mount" if self.functional else "align"), False
         self.message = message
 
@@ -82,16 +85,13 @@ class LiveSetup:
                 "Keep your trunk and arm still for 2 seconds. Keep shoulders, hips and arm in view."
             )
         elif self.stage == "rest":
-            self.live.calibrate_emg()
+            self._prepare_emg("RELAX")
             self.pending = True
             self.message = "Keep the hand open and the muscle relaxed. Wait for the rest baseline."
         elif self.stage == "grip":
-            self.pending = bool(self.live.calibrate_emg_strength())
-            self.message = (
-                "Grip firmly for 3 seconds, then relax."
-                if self.pending
-                else "Finish the rest baseline first."
-            )
+            self._prepare_emg("GRIP")
+            self.pending = True
+            self.message = "Prepare to grip firmly for 3 seconds. Begin only on GO."
         elif self.stage == "ready":
             snapshot = self.latest_snapshot
             away = any(
@@ -120,8 +120,60 @@ class LiveSetup:
             return True
         return False
 
+    def _prepare_emg(self, cue):
+        if hasattr(self.live, "clock"):
+            self._now_ns = round(self.live.clock() * 1e9)
+        step = next(step for step in REFERENCE_STEPS if step[0] == cue)
+        self.preparation = CupReferenceGuide(clock=lambda: self._now_ns, steps=(step,))
+        self.preparation.start_step()
+
+    def repeat(self):
+        self.live.invalidate_calibration()
+        self._restart("Mounting changed. Repeat preparation before enabling control.")
+
+    def pause(self):
+        if (
+            self.stage in {"ready", "running"}
+            and self.latest_snapshot is not None
+            and self.latest_snapshot.calibration_valid
+            and self.live.reader.connection_generation == self.connection_generation
+        ):
+            self.stage, self.pending = "ready", False
+            self.message = "Paused. Calibration retained for this connection and mounting. Return to marker 1, then Start control."
+        else:
+            self._restart("Preparation interrupted. Repeat the displayed step before control.")
+
+    def view(self):
+        if self.mount_guide is not None and self.stage == "mount":
+            return self.mount_guide.view()
+        if self.preparation is not None:
+            return self.preparation.view()
+        movement = {
+            "align": "STILL",
+            "imu": "STILL",
+            "rest": "RELAX",
+            "grip": "GRIP",
+            "running": "CUP",
+        }.get(self.stage, "RETURN")
+        progress = 0
+        if self.stage == "align" and self.pending and self.still_since is not None:
+            progress = min(1, max(0, (self._now_ns / 1e9 - self.still_since) / 2))
+        if self.stage in {"rest", "grip"} and self.pending:
+            state = self.live.reader.graph_data()["emg_calibration_state"]
+            progress = state.get("progress", 0)
+        return {
+            "movement": movement,
+            "phase": self.stage,
+            "cue": f"GO: {movement}"
+            if self.pending and self.stage in {"rest", "grip"}
+            else self.button,
+            "instruction": self.message,
+            "progress": progress,
+        }
+
     def update(self, snapshot, now=None) -> None:
         now = time.monotonic() if now is None else now
+        self._now_ns = round(now * 1e9)
         self.latest_snapshot = snapshot
         if self.stage in ("running", "ready") and not snapshot.calibration_valid:
             self._restart("Sensor reference invalidated. Repeat mounting and calibration.")
@@ -141,6 +193,22 @@ class LiveSetup:
             return
         if not self.pending:
             return
+        if self.preparation is not None:
+            self.preparation.tick()
+            if self.preparation.phase == "reference_countdown":
+                view = self.preparation.view()
+                self.message = view["cue"] + ": " + view["instruction"]
+                return
+            self.preparation = None
+            if self.stage == "rest":
+                self.live.calibrate_emg()
+                self.message = "GO. Keep the hand open and muscle relaxed while the rest baseline is collected."
+            elif not self.live.calibrate_emg_strength():
+                self.pending = False
+                self.message = "Finish a valid relaxed baseline before grip calibration."
+                return
+            else:
+                self.message = "GO. Hold a firm, comfortable grip for 3 seconds, then relax."
         if self.stage == "align":
             angles = self.live.raw_camera_angles
             if (
@@ -241,6 +309,7 @@ class LiveSetup:
             except ValueError as error:
                 self._restart(str(error))
                 return
+            announce_result(self.capture.directory, "reference")
             self.stage, self.pending = "imu", True
             self.message = "Mounting passed. Keep still at marker 1; preparing EMG calibration."
             return

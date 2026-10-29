@@ -144,6 +144,18 @@ class BleSensorReader:
             self.stop_recording()
         return True
 
+    def invalidate_calibration(self) -> None:
+        """Discard mounting and baseline validity without interrupting raw capture."""
+        with self._lock:
+            self.mounting_session_id = uuid.uuid4().hex
+            self.alignment_profile = None
+            self.imu_estimator.clear_alignment()
+            self.emg_estimator.reset()
+            self.activation = None
+            if self.emg_classifier is not None:
+                self.emg_classifier.reset()
+            self.angles = None
+
     def calibrate(self, reset_emg: bool = True, reference_angles: object = None) -> None:
         with self._lock:
             self.imu_motion_gap = False

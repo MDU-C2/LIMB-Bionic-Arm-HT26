@@ -35,7 +35,7 @@ class WorkflowTools:
         self.gui = gui
         self.dialogs = {}
         self.context_widgets = []
-        self.last_output = tk.StringVar(gui)
+        self.last_output = gui.session.last_output
         self.action_status = tk.StringVar(
             gui,
             value="Choose an action. Progress and errors appear in Activity; Stop active program cancels it.",
@@ -48,6 +48,12 @@ class WorkflowTools:
             page,
             "1. Connect and inspect",
             "Inspect the available signals before calibration. Monitors do not create recordings.",
+        )
+        ttk.Label(page, textvariable=gui.session.notice, wraplength=820).grid(
+            row=7, column=0, sticky="w", pady=8
+        )
+        ttk.Button(page, text="Review current trial", command=self.review_current).grid(
+            row=8, column=0, sticky="w"
         )
         context = gui._card(
             page, 2, "Subject and arm", "These settings are shared with recording and live control."
@@ -97,9 +103,10 @@ class WorkflowTools:
         )
         row = ttk.Frame(camera, style="Card.TFrame")
         row.grid(row=2, column=0, sticky="w")
-        ttk.Button(row, text="Open camera preview", command=gui.open_camera_monitor).pack(
-            side="left", padx=(0, 12)
+        gui.camera_monitor_button = ttk.Button(
+            row, text="Open camera monitor", command=gui.open_camera_monitor
         )
+        gui.camera_monitor_button.pack(side="left", padx=(0, 12))
         ttk.Checkbutton(row, text="Stereo depth", variable=gui.recording_camera_depth).pack(
             side="left", padx=8
         )
@@ -254,12 +261,58 @@ class WorkflowTools:
     def selected_recording(self):
         gui = self.gui
         selection = gui.recordings_tree.selection()
-        return gui.recording_tree_paths.get(selection[0]) if selection else None
+        return (
+            gui.recording_tree_paths.get(selection[0]) if selection else gui.session.selected_file
+        )
+
+    def accept_result(self, path, kind):
+        if not path.exists():
+            raise ValueError("The saved output is not available on this drive.")
+        self.last_output.set(str(path))
+        selected = path
+        if path.is_dir():
+            selected = next(
+                (
+                    path / name
+                    for name in (
+                        "trial.json",
+                        "training.json",
+                        "calibration.json",
+                        "trajectory.json",
+                        "emg.filtered.csv",
+                        "pose.json",
+                        "emg.csv",
+                        "imu.csv",
+                        "serial.jsonl",
+                        "recording.csv",
+                    )
+                    if (path / name).is_file()
+                ),
+                path,
+            )
+        self.gui.session.selected_file = selected
+        self.gui.recordings_root.set(str(path if path.is_dir() else path.parent))
+        self.gui.recordings_filter.set("")
+        if selected.name == "trial.json":
+            self.gui.session.selected_trial = selected
+        if kind == "reference":
+            self.gui.session.calibration_path = selected
+        if kind == "movement":
+            self.gui.motion_recording.set(str(selected))
+        self.action_status.set(
+            f"Saved output selected for review: {selected}. Choose plot, processing, replay or export."
+        )
+        self.gui._refresh_recordings()
 
     def update_controls(self):
         busy = any(
             process.kind in {"recording", "simulation"} for process in self.gui._active_processes()
         )
+        busy = busy or self.gui._ble_handoff_pending or self.gui._cup_camera_handoff_pending
+        self.gui.session.context_locked = busy
+        self.context_widgets = [
+            (widget, normal) for widget, normal in self.context_widgets if widget.winfo_exists()
+        ]
         for widget, normal in self.context_widgets:
             widget.configure(state="disabled" if busy else normal)
         if hasattr(self, "device_change"):
@@ -281,7 +334,25 @@ class WorkflowTools:
         self.gui._open_existing(path)
 
     def review_recordings(self):
-        self.gui.recordings_root.set(self.gui.recording_output.get())
+        if self.gui.session.selected_trial:
+            return self.review_current()
+        self.gui.recordings_root.set(
+            str(project_path(self.gui.recording_output.get()) / self.gui.recording_subject.get())
+        )
+        self.gui._refresh_recordings()
+        self.gui.notebook.select(self.gui.tabs["recordings"])
+
+    def review_current(self):
+        path = self.gui.session.selected_trial
+        if path is None:
+            self.action_status.set(
+                "Record a trial first, or choose an existing recording under Review & export."
+            )
+            self.gui.notebook.select(self.gui.tabs["recordings"])
+            return
+        self.gui.session.selected_file = path
+        self.gui.recordings_root.set(str(path.parent))
+        self.gui.recordings_filter.set("")
         self.gui._refresh_recordings()
         self.gui.notebook.select(self.gui.tabs["recordings"])
 
@@ -449,8 +520,11 @@ class WorkflowTools:
             "save_optional": ".png",
         }.get(kind, "")
         return str(
-            REPOSITORY_ROOT
-            / "outputs"
+            (
+                REPOSITORY_ROOT / "outputs"
+                if category == "training"
+                else project_path(self.gui.recording_output.get()) / "derived"
+            )
             / category
             / f"{key}_{datetime.now():%Y%m%d_%H%M%S}_{uuid4().hex[:8]}{suffix}"
         )
@@ -493,8 +567,22 @@ class WorkflowTools:
         variables = {}
         defaults = dict(initial or {})
         selected = self.selected_recording()
+        shared = {
+            "subject": gui.recording_subject,
+            "side": gui.recording_camera_side,
+            "device": gui.recording_ble_device,
+            "name": gui.recording_ble_device,
+            "port": gui.recording_serial_port,
+            "baud": gui.recording_serial_baud,
+        }
         for row, setting in enumerate(tool.settings):
             value = defaults.get(setting.key, setting.default)
+            if (
+                key in {"movement_capture", "movement_train"}
+                and setting.key in {"output", "data"}
+                and setting.key not in defaults
+            ):
+                value = str(project_path(gui.recording_output.get()) / "movement")
             if (
                 not value
                 and setting.kind == "new_directory"
@@ -507,16 +595,6 @@ class WorkflowTools:
                 and setting.key in {"source", "file", "recording", "trial", "training"}
             ):
                 value = str(selected)
-            if setting.key in {"device", "name"}:
-                value = gui.recording_ble_device.get()
-            if setting.key == "subject":
-                value = gui.recording_subject.get()
-            if setting.key == "side":
-                value = gui.recording_camera_side.get()
-            if setting.key == "port":
-                value = gui.recording_serial_port.get()
-            if setting.key == "baud":
-                value = gui.recording_serial_baud.get()
             ttk.Label(form, text=setting.label, wraplength=260).grid(
                 row=row, column=0, sticky="w", pady=5, padx=(0, 10)
             )
@@ -532,7 +610,7 @@ class WorkflowTools:
                         side="left", padx=4
                     )
                 continue
-            variable = (
+            variable = shared.get(setting.key) or (
                 tk.BooleanVar(dialog, value=bool(value))
                 if setting.kind == "bool"
                 else tk.StringVar(dialog, value=value)
@@ -547,6 +625,10 @@ class WorkflowTools:
             else:
                 widget = ttk.Entry(form, textvariable=variable)
             widget.grid(row=row, column=1, sticky="ew", pady=5)
+            if setting.key in shared:
+                self.bind_context(widget)
+                if gui.session.context_locked:
+                    widget.configure(state="disabled")
             if setting.kind in {
                 "file",
                 "file_optional",
@@ -688,7 +770,19 @@ class WorkflowTools:
         gui, tool = self.gui, TOOLS[key]
         try:
             if gui._active_processes("recording"):
-                raise ValueError("Stop and save the active recording before starting this action.")
+                if key not in {"plot", "process_emg", "bundle"} or not gui._idle_cup_session():
+                    raise ValueError(
+                        "Wait for the trial to save before review/export. Finish subject before hardware, training or specialist tools."
+                    )
+                source = project_path(values.get("source") or values.get("file", "")).resolve()
+                trial = gui.session.selected_trial
+                derived = (project_path(gui.recording_output.get()) / "derived").resolve()
+                if trial is None or not (
+                    source.is_relative_to(trial.parent.resolve()) or source.is_relative_to(derived)
+                ):
+                    raise ValueError(
+                        "Choose a saved trial file for review. Finish subject before exporting the whole subject/output folder."
+                    )
             if key == "process_emg":
                 from aurora.recording.saved_signals import emg_file
 
@@ -717,6 +811,9 @@ class WorkflowTools:
             parallel=not tool.hardware and kind not in {"recording", "simulation"},
             process_key=f"tool:{key}",
             stop_input=STOP_COMMAND if tool.module in COOPERATIVE_MODULES else None,
+            output_path=(values.get("output") or values.get("save"))
+            if key != "movement_capture"
+            else None,
         )
         if started:
             output = values.get("output") or values.get("save")

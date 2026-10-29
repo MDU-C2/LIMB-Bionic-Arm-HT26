@@ -3,21 +3,16 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib.metadata
-import json
 import platform
 import subprocess
 from pathlib import Path
 
-from aurora.json_utils import write_json
+from aurora.file_utils import file_digest as sha256
+from aurora.json_utils import read_json_object, write_json
 from aurora.ml.features import COORDINATE_SYSTEM, PREPROCESSING, load_movement
 from aurora.paths import CHECKOUT_DIRECTORY, REPOSITORY_ROOT
 from aurora.time_utils import utc_now
-
-
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def create_manifest(data: Path, splits: dict[str, list[str]], settings: dict) -> dict:
@@ -94,25 +89,32 @@ def write_manifest(directory: Path, manifest: dict) -> None:
     write_json(directory / "training.json", manifest)
 
 
-def verify_model_manifest(model: Path) -> None:
+def verify_model_manifest(
+    model: Path, *, require_manifest: bool = False
+) -> tuple[dict, Path] | None:
     """Validate a sidecar or training run, allowing earlier models without either."""
     sidecar = model.with_suffix(".json")
     if not sidecar.is_file():
         sidecar = model.parent / "training.json"
     if not sidecar.is_file():
+        if require_manifest:
+            raise ValueError(
+                "Select a model with a completed training manifest or inherited sidecar"
+            )
         return
     try:
-        manifest = json.loads(sidecar.read_text(encoding="utf-8"))
+        manifest = read_json_object(sidecar)
         expected_hash = manifest["artifacts"][model.name]
         coordinates = manifest["preprocessing"]["coordinate_system"]
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise ValueError(f"Invalid model manifest: {sidecar.name}") from error
     if expected_hash != sha256(model) or coordinates != COORDINATE_SYSTEM:
         raise ValueError("Model weights or coordinate system do not match the model manifest")
-    if "format_version" in manifest:
-        if manifest["format_version"] != 1:
-            raise ValueError("Unsupported model manifest format_version")
+    if "format_version" in manifest and manifest["format_version"] != 1:
+        raise ValueError("Unsupported model manifest format_version")
+    if require_manifest or "format_version" in manifest:
         if manifest.get("status") not in {"complete", "inherited"}:
             raise ValueError("Select a completed training run")
         if any(manifest["preprocessing"].get(key) != value for key, value in PREPROCESSING.items()):
             raise ValueError("Model preprocessing does not match movement recognition")
+    return manifest, sidecar

@@ -276,17 +276,18 @@ def ui_run(browser_files=0):
 
     from aurora.gui.app import ProjectGui
 
-    temporary = tempfile.TemporaryDirectory(prefix="aurora_browser_") if browser_files else None
-    if temporary is not None:
-        for index in range(browser_files):
-            (Path(temporary.name) / f"trial_{index:05d}.json").write_text("{}", encoding="utf-8")
+    temporary = tempfile.TemporaryDirectory(prefix="aurora_browser_")
+    browser = Path(temporary.name) / "recordings"
+    browser.mkdir()
+    for index in range(browser_files):
+        (browser / f"trial_{index:05d}.json").write_text("{}", encoding="utf-8")
     window = tk.Tk()
     window.withdraw()
     start = time.perf_counter()
-    app = ProjectGui(window)
+    app = ProjectGui(window, preferences_path=Path(temporary.name) / "preferences.json")
     construction = time.perf_counter() - start
-    if temporary is not None:
-        app.recordings_root.set(temporary.name)
+    if browser_files:
+        app.recordings_root.set(str(browser))
         app._refresh_recordings()
     heartbeat = []
     previous = time.perf_counter()
@@ -325,8 +326,7 @@ def ui_run(browser_files=0):
         )
     finally:
         app.close()
-        if temporary is not None:
-            temporary.cleanup()
+        temporary.cleanup()
 
 
 def main(argv=None):

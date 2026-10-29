@@ -19,16 +19,10 @@ On Windows, run `Setup.bat` for the first setup, then use `Start.bat` to open
 the app offline. Setup needs internet once to install Python and the required packages. See the
 [setup notes](scripts/README.md) for direct launching and the macOS/Linux scripts.
 
-Power the ESP32 and connect to `AURORA` through the app. The ESP32 can use
-a separate USB power source while sending data over BLE. Earlier LIMB firmware
-advertising `LIMBServer` is also supported.
-
-Record saves raw EMG, IMU and camera data for each cup transfer. Control runs the arm with keyboard, live sensors or recorded replay. Review & export opens saved signals and derived outputs.
-Advanced Tools contains training, DMP/manual joints, diagnostics and firmware. See the
-[recording guide](docs/recording-guide.md) and
-[simulation guide](docs/simulation-guide.md) for the controls and calibration steps.
-
-Live EMG grip control is still being developed and tested.
+Follow the [workflow guide](docs/workflow-guide.md) to connect and inspect,
+prepare/calibrate, record or control, then review, process and export.
+Advanced Tools contains optional training, DMP/manual joints, diagnostics and firmware.
+See [architecture](docs/architecture.md) for code ownership and development conventions.
 
 ## Structure of repository
 

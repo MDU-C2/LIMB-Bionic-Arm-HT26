@@ -85,19 +85,8 @@ class DualImuArmEstimator:
         )
         # Human angular rates stay in degrees/s. Robot travel belongs to mapping.
         self.gyro_abduction_gain = max(0.0, float(gyro_abduction_gain))
-        self.filtered_accel: dict[str, tuple[float, float, float]] = {}
-        self.tilt_offsets: dict[str, float] = {}
-        self.gyro_bias_z: dict[str, float] = {}
-        self.yaw_delta: dict[str, float] = {}
-        self.elbow_zero = 0.0
-        self.active_roles: tuple[str, ...] = ()
-        self.reference_angles: dict[str, float] = {}
-        self.camera_offsets: dict[str, float] = {}
-        self.last_angles: dict[str, float] = {}
-        self.alignment_profile = None
-        self.sensor_rotations = {}
-        self.sensor_biases = {}
         self.initial_twist_axes = dict(self.twist.axes)
+        self.clear_alignment()
 
     def clear_alignment(self):
         self.side = self.initial_side
@@ -138,14 +127,7 @@ class DualImuArmEstimator:
         self.side = profile["side"]
         self.alignment_references = references
         self.twist.axes = dict.fromkeys(ROLES, "y")
-        self.reset_calibration(
-            {
-                "shoulder_flexion": 0.0,
-                "elbow_flexion": elbow,
-                "shoulder_abduction": 0.0,
-                "wrist_rotation": 0.0,
-            }
-        )
+        self.reset_calibration()
 
     def reset_calibration(self, reference_angles: object = None) -> None:
         if reference_angles is not None and self.alignment_profile is None:

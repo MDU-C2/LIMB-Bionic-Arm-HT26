@@ -1067,18 +1067,25 @@ class CupRecordingTests(unittest.TestCase):
         child = Mock()
         child.poll.return_value = None
         managed = SimpleNamespace(key=CUP_PROCESS_KEY, process=child)
+        from aurora.gui.session import CupViewState
+
+        state = CupViewState()
+        state.update(
+            dict(
+                ready=True,
+                streams_ready=True,
+                recording=False,
+                can_start=True,
+                can_record=True,
+                can_prepare=True,
+            )
+        )
         gui = SimpleNamespace(
+            cup_state=state,
             processes={CUP_PROCESS_KEY: managed},
             _active_processes=lambda: [managed],
             _ble_handoff_pending=False,
             _cup_camera_handoff_pending=False,
-            _cup_ready=True,
-            _cup_streams_ready=True,
-            _cup_recording=False,
-            _cup_protocol_phase="ready",
-            _cup_can_start=True,
-            _cup_can_record=True,
-            _cup_can_prepare=True,
             cup_fields=[],
             cup_condition_field=Mock(),
             cup_next_trial=Mock(),
@@ -1095,8 +1102,8 @@ class CupRecordingTests(unittest.TestCase):
         CupRecordingMixin._update_cup_controls(gui)
         self.assertEqual(gui.cup_record_button.configure.call_args.kwargs["state"], "normal")
         CupRecordingMixin._update_cup_controls(gui)
-        gui._cup_recording = True
-        gui._cup_protocol_phase = "movement"
+        gui.cup_state.status["recording"] = True
+        gui.cup_state.phase = "movement"
         CupRecordingMixin._update_cup_controls(gui)
         self.assertEqual(gui.cup_record_button.configure.call_args.kwargs["state"], "disabled")
         self.assertEqual(gui.cup_stop_button.configure.call_args.kwargs["state"], "normal")

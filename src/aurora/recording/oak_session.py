@@ -30,6 +30,7 @@ class CameraSession:
         directory=None,
         metadata=None,
         raw_video=False,
+        on_saved=None,
     ):
         self.cv2 = cv2
         self.subject = subject
@@ -38,6 +39,7 @@ class CameraSession:
         self.directory = directory
         self.metadata = metadata
         self.raw_video = raw_video
+        self.on_saved = on_saved
         self.frame_times = None
         self.depth_times = None
         self.depth_frames = 0
@@ -315,3 +317,5 @@ class CameraSession:
         )
         self._finalized = True
         print(f"REC saved: {self.session} ({len(self.pose_frames)} depth-backed pose frames)")
+        if self.on_saved is not None:
+            self.on_saved(self.session)

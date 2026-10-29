@@ -69,6 +69,7 @@ class RecordingBrowserMixin(EmgToolsMixin):
         self.recordings_tree.grid(row=0, column=0, sticky="nsew")
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.recordings_tree.bind("<Double-1>", lambda _event: self._open_selected_recording())
+        self.recordings_tree.bind("<<TreeviewSelect>>", self._remember_review_selection)
 
         bottom = ttk.Frame(tab, style="Page.TFrame")
         bottom.grid(row=4, column=0, sticky="ew", pady=(10, 0))
@@ -177,6 +178,8 @@ class RecordingBrowserMixin(EmgToolsMixin):
             for item in self.recordings_tree.selection()
             if item in self.recording_tree_paths
         }
+        if self.session.selected_file is not None:
+            selected_paths = {self.session.selected_file}
         self.recordings_tree.delete(*self.recordings_tree.get_children())
         self.recording_tree_paths.clear()
         root_value = self.recordings_root.get().strip()
@@ -203,6 +206,7 @@ class RecordingBrowserMixin(EmgToolsMixin):
             self.recording_tree_paths[item] = path
             if path in selected_paths:
                 self.recordings_tree.selection_add(item)
+                self.recordings_tree.see(item)
         if self.recordings_scan_error:
             message = self.recordings_scan_error
         elif root is None:
@@ -218,6 +222,13 @@ class RecordingBrowserMixin(EmgToolsMixin):
         else:
             message = f"{len(visible)} recording file(s)"
         self.recordings_status.configure(text=message)
+
+    def _remember_review_selection(self, _event=None):
+        items = self.recordings_tree.selection()
+        if items and items[0] in self.recording_tree_paths:
+            self.session.selected_file = self.recording_tree_paths[items[0]]
+            if self.session.selected_file.name == "trial.json":
+                self.session.selected_trial = self.session.selected_file
 
     @staticmethod
     def _format_size(size: int) -> str:

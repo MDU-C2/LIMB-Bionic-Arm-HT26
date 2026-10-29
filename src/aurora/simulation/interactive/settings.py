@@ -50,6 +50,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--camera-weight", type=float, default=0.25)
     parser.add_argument(
+        "--output-root",
+        type=Path,
+        help="Session recording root; live reference inputs are stored under the subject's references folder",
+    )
+    parser.add_argument(
         "--shoulder-twist-axis",
         choices=TWIST_AXES,
         default=DEFAULT_TWIST_AXIS,

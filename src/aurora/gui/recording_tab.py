@@ -12,7 +12,6 @@ from tkinter import messagebox
 
 from aurora.gui.cup_recording import CupRecordingMixin
 from aurora.gui.project_support import (
-    DEFAULT_RECORDINGS_DIRECTORY,
     RECORDER_DETAILS,
     console_python,
     discover_recording_programs,
@@ -33,7 +32,6 @@ from aurora.paths import PACKAGE_DIRECTORY
 from aurora.recording.common import STOP_COMMAND
 from aurora.recording.emg_trials import GripTrial
 from aurora.sensors.imu_protocol import ImuStreamDecoder
-from aurora.sensors.settings import DEFAULT_BLE_DEVICE_NAME
 
 
 class RecordingTabMixin(
@@ -43,16 +41,9 @@ class RecordingTabMixin(
 
     def _initialize_recording_state(self) -> None:
         self.recording_program = tk.StringVar()
-        self.recording_camera_depth = tk.BooleanVar(value=False)
-        self.recording_pose_model = tk.StringVar(value="Balanced")
-        self.recording_emg_format = tk.StringVar(value="auto")
-        self.recording_output = tk.StringVar(value=str(DEFAULT_RECORDINGS_DIRECTORY))
-        self.recording_subject = tk.StringVar(value="S01")
         self.recording_trial_id = tk.StringVar(value="T001")
         self.recording_test_type = tk.StringVar(value="movement_imu")
         self.recording_duration = tk.StringVar(value="0")
-        self.recording_camera_side = tk.StringVar(value="left")
-        self.recording_ble_device = tk.StringVar(value=DEFAULT_BLE_DEVICE_NAME)
         self.recording_ble_sensors = {
             name: tk.BooleanVar(value=name in DEFAULT_BLE_SENSORS)
             for name, _label in BLE_SENSOR_OPTIONS
@@ -64,8 +55,6 @@ class RecordingTabMixin(
             value="The operator relays the grip cues to the subject."
         )
         self.recording_movement_label = tk.StringVar(value="1")
-        self.recording_serial_port = tk.StringVar()
-        self.recording_serial_baud = tk.StringVar(value="115200")
         self.serial_sensor_reader = SerialSensorReader()
         self.serial_imu_decoder = ImuStreamDecoder()
         self.latest_serial_sensor_packet: dict[str, object] | None = None
@@ -75,7 +64,7 @@ class RecordingTabMixin(
             filename: tk.BooleanVar(value=filename in DEFAULT_BATCH_SOURCES)
             for filename, _title, _description in MAINTAINED_SOURCES
         }
-        self.recordings_root = tk.StringVar(value=self.recording_output.get())
+        self.recordings_root = self.session.review_root
         self.recordings_filter = tk.StringVar()
 
         self.recording_programs: dict[str, Path] = {}
@@ -89,6 +78,12 @@ class RecordingTabMixin(
         self._initialize_cup_recording_state()
 
     def _bind_recording_traces(self) -> None:
+        for variable in (
+            self.recording_subject,
+            self.recording_camera_side,
+            self.recording_ble_device,
+        ):
+            variable.trace_add("write", lambda *_: self.after_idle(self._refresh_cup_guidance))
         self.recording_program.trace_add("write", lambda *_: self._recording_selection_changed())
         self.recordings_filter.trace_add("write", lambda *_: self._schedule_recordings_filter())
         for variable in self.recording_sources.values():
@@ -222,6 +217,19 @@ class RecordingTabMixin(
         }
         return environment, camera_arguments
 
+    def _recording_arguments(self, filename, camera_arguments):
+        arguments = batch_arguments(
+            filename,
+            camera_arguments,
+            self.recording_movement_label.get().strip() if self.recording_ble_dataset.get() else "",
+            self._selected_ble_sensors(),
+            self.recording_grip_trial.get(),
+            int(self.recording_grip_repeats.get()) if self.recording_grip_trial.get() else 5,
+        )
+        if filename == "record_ble_sensors.py" and self.recording_emg_format.get() != "auto":
+            arguments += ["--emg-format", self.recording_emg_format.get()]
+        return arguments
+
     def start_selected_recordings(self) -> None:
         """Launch every checked maintained source as one recording batch."""
         filenames = [
@@ -252,21 +260,7 @@ class RecordingTabMixin(
             if not program.is_file():
                 self._append_log(f"[Recording batch] Missing source: {display_path(program)}\n")
                 continue
-            dataset_label = (
-                self.recording_movement_label.get().strip()
-                if self.recording_ble_dataset.get()
-                else ""
-            )
-            arguments = batch_arguments(
-                filename,
-                camera_arguments,
-                dataset_label,
-                self._selected_ble_sensors(),
-                self.recording_grip_trial.get(),
-                int(self.recording_grip_repeats.get()) if self.recording_grip_trial.get() else 5,
-            )
-            if filename == "record_ble_sensors.py" and self.recording_emg_format.get() != "auto":
-                arguments += ["--emg-format", self.recording_emg_format.get()]
+            arguments = self._recording_arguments(filename, camera_arguments)
             display_name = next(
                 title
                 for candidate, title, _description in MAINTAINED_SOURCES
@@ -310,24 +304,7 @@ class RecordingTabMixin(
         environment, arguments = setup
         if self._release_ble_for(self.start_single_recording):
             return
-        if program.name == "record_ble_sensors.py":
-            dataset_label = (
-                self.recording_movement_label.get().strip()
-                if self.recording_ble_dataset.get()
-                else ""
-            )
-            arguments = batch_arguments(
-                program.name,
-                arguments,
-                dataset_label,
-                self._selected_ble_sensors(),
-                self.recording_grip_trial.get(),
-                int(self.recording_grip_repeats.get()) if self.recording_grip_trial.get() else 5,
-            )
-            if self.recording_emg_format.get() != "auto":
-                arguments += ["--emg-format", self.recording_emg_format.get()]
-        elif program.name == "record_oak_pose.py":
-            arguments = ["--auto-start", *arguments]
+        arguments = self._recording_arguments(program.name, arguments)
         python = self.simulation_python or console_python(Path(sys.executable))
         self._start_program(
             program.stem,

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 from pathlib import Path
 
+from aurora.file_utils import file_digest
 from aurora.json_utils import write_json
 from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.recording.emg_features import (
@@ -26,7 +26,7 @@ def source_metadata(source: Path) -> dict:
     return {
         "format_version": 1,
         "source": source.name,
-        "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "source_sha256": file_digest(source),
         "processed_utc": utc_now(),
     }
 
@@ -77,7 +77,7 @@ def main() -> int:
                 {
                     **source_metadata(args.file),
                     "labels": args.labels.name,
-                    "labels_sha256": hashlib.sha256(args.labels.read_bytes()).hexdigest(),
+                    "labels_sha256": file_digest(args.labels),
                     **summary,
                 },
             )

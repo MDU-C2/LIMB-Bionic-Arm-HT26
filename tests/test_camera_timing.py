@@ -23,6 +23,24 @@ from aurora.sensors.live_input import LiveSensorInput
 
 
 class CameraTimingTests(unittest.TestCase):
+    def test_saved_camera_result_is_announced_once_after_metadata_is_finalized(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            received = []
+
+            def saved(path):
+                received.append((path, json.loads((path / "meta.json").read_text())))
+
+            camera = CameraSession(
+                Mock(), "S01", "left", directory=Path(temporary) / "camera", on_saved=saved
+            )
+            camera.start()
+            self.assertEqual(received, [])
+            camera.stop()
+            camera.stop()
+            self.assertEqual(len(received), 1)
+            self.assertEqual(received[0][0], camera.session)
+            self.assertIn("source_frame_count", received[0][1])
+
     def test_published_frame_identity_does_not_advance_while_inference_is_running(self):
         live = LiveSensorInput(show_monitor=False)
         live._worker = Mock()

@@ -8,9 +8,13 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
-from aurora.gui.project_support import REPOSITORY_ROOT, display_path, project_path
+from aurora.gui.project_support import (
+    DOCUMENTATION_FILE,
+    REPOSITORY_ROOT,
+    display_path,
+    project_path,
+)
 from aurora.gui.recording_settings import BLE_SENSOR_OPTIONS, MAINTAINED_SOURCES
-from aurora.paths import RESOURCE_DIRECTORY
 
 
 class RecordingViewsMixin:
@@ -65,7 +69,7 @@ class RecordingViewsMixin:
             button.grid(row=0, column=0, sticky="w", padx=(0, 10))
             ttk.Label(line, text=description, style="Card.TLabel").grid(row=0, column=1, sticky="w")
             self.recording_source_buttons[filename] = button
-        ttk.Button(source_card, text="Recording guide", command=self._open_recording_guide).grid(
+        ttk.Button(source_card, text="Workflow guide", command=self._open_workflow_guide).grid(
             row=5, column=0, sticky="w", pady=(4, 0)
         )
 
@@ -314,15 +318,15 @@ class RecordingViewsMixin:
             self.recordings_root.set(self.recording_output.get())
             self._refresh_recordings()
 
-    def _open_recording_guide(self) -> None:
-        guide = RESOURCE_DIRECTORY / "docs" / "recording-guide.md"
+    def _open_workflow_guide(self) -> None:
+        guide = DOCUMENTATION_FILE
         try:
             contents = guide.read_text(encoding="utf-8")
         except OSError:
             self._open_existing(guide)
             return
         window = tk.Toplevel(self.window)
-        window.title("Recording guide")
+        window.title("AURORA workflow guide")
         window.geometry("820x650")
         text = ScrolledText(window, wrap="word", font=("Segoe UI", 11), padx=16, pady=12)
         text.pack(fill="both", expand=True)

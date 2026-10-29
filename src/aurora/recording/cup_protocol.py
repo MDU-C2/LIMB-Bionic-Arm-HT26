@@ -131,6 +131,19 @@ class CupReferenceGuide:
                 cue = f"GO: {cue} {remaining} s"
         return {
             "phase": self.phase,
+            "movement": self.steps[self.step][0] if self.active else "RETURN",
+            "duration_s": COUNTDOWN_SECONDS if self.phase == "reference_countdown" else duration,
+            "progress": min(
+                1,
+                max(
+                    0,
+                    (self.clock() - self.phase_started_ns)
+                    / 1e9
+                    / (COUNTDOWN_SECONDS if self.phase == "reference_countdown" else duration),
+                ),
+            )
+            if self.phase in ("reference", "reference_countdown") and duration
+            else 0,
             "cue": cue,
             "instruction": instruction,
             "pace_instruction": prompt,
@@ -197,6 +210,7 @@ class CupTrialGuide:
         moved = self.go_ns is not None
         self.rest_until_ns = now + round(self.rest_s * 1e9) if moved else now
         self.phase = "rest" if now < self.rest_until_ns else "ready"
+        self.phase_started_ns = now
         self.practice = False
 
     @property
@@ -235,8 +249,18 @@ class CupTrialGuide:
             title, instruction = f"REST {remaining} s", RESET_PROMPT
         else:
             title, instruction = "READY", START_POSE
+        duration = {
+            "baseline": self.baseline_s,
+            "countdown": self.countdown_s,
+            "rest": self.rest_s,
+            "movement": self.duration_s,
+            "practice": self.duration_s,
+        }.get(self.phase, 0)
         return {
             "phase": self.phase,
+            "movement": "CUP",
+            "duration_s": duration,
+            "progress": min(1, max(0, elapsed / duration)) if duration else 0,
             "cue": title,
             "instruction": instruction,
             "pace_instruction": PACE_PROMPTS[self.condition],

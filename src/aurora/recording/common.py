@@ -21,6 +21,15 @@ from aurora.time_utils import utc_now
 DEFAULT_OUTPUT = REPOSITORY_ROOT / "outputs" / "recordings"
 
 
+def announce_result(path, kind="recording"):
+    """Publish a saved artifact to the supervising app, separately from log wording."""
+    print(
+        "[AURORA] "
+        + json.dumps({"event": "saved", "path": str(Path(path).resolve()), "kind": kind}),
+        flush=True,
+    )
+
+
 STOP_COMMAND = '{"command":"stop"}\n'
 
 

@@ -7,6 +7,7 @@ import math
 import time
 import tkinter as tk
 
+from aurora.gui.guidance import GuidanceViews
 from aurora.gui.sensor_graphs import LiveSignalGraphs
 from aurora.simulation.interactive.arm_control import rad_to_deg
 from aurora.simulation.interactive.settings import (
@@ -40,13 +41,11 @@ class DashboardMixin:
             self.sensor_window.geometry(f"560x{height}+25+25")
             setup = tk.LabelFrame(self.sensor_window, text="Live control setup", padx=10, pady=8)
             setup.pack(fill="x", padx=8, pady=6)
-            tk.Label(
-                setup,
-                text="Starting pose: sit upright, upper arm relaxed, elbow about 90°. "
-                "Rest the open hand at 1, thumb up. Keep shoulders, hips and arm in view.",
-                wraplength=510,
-                justify="left",
-            ).pack(anchor="w", pady=(0, 8))
+            self.guidance_views = GuidanceViews(setup)
+            self.guidance_views.operator.pack(fill="both", expand=True)
+            tk.Button(
+                setup, text="Open participant view", command=self.guidance_views.open_participant
+            ).pack(anchor="w")
             self.setup_text = tk.StringVar(
                 value="Connecting inputs. Movement stays paused during setup."
             )
@@ -67,8 +66,16 @@ class DashboardMixin:
             )
             self.setup_button.pack(anchor="w", pady=6)
             tk.Button(
-                setup, text="Pause / start setup again", command=self.pause_live_control
+                setup,
+                text="Pause / reset robot (retain valid calibration)",
+                command=self.pause_live_control,
             ).pack(anchor="w")
+            if not getattr(self.args, "replay", None):
+                tk.Button(
+                    setup,
+                    text="Sensors moved / repeat preparation",
+                    command=self.repeat_live_preparation,
+                ).pack(anchor="w")
 
         if self.args.control == "camera-imu" and self.args.transport == "ble":
             self.live_signal_graphs = LiveSignalGraphs(
@@ -261,14 +268,17 @@ class DashboardMixin:
     def update_dashboard(self) -> None:
         """Refresh the monitor from this frame's measurements."""
         try:
-            if self.sensor_window.state() == "withdrawn":
-                self.sensor_window.update()
-                return
             now = time.monotonic()
             if now - getattr(self, "last_dashboard_update", 0.0) < 0.1:
                 self.sensor_window.update()
                 return
             self.last_dashboard_update = now
+            guide = getattr(self, "live_setup", None)
+            if guide is not None:
+                self.guidance_views.update(guide.view(), self.args.side, guide.message)
+            if self.sensor_window.state() == "withdrawn":
+                self.sensor_window.update()
+                return
             self.torque_graph.redraw(self.dynamic_mode)
             if (
                 getattr(self.args, "replay", None)
@@ -280,7 +290,6 @@ class DashboardMixin:
                     "Recording finished. Close this simulation to choose another trial."
                 )
                 self.setup_button.configure(state="disabled")
-            guide = getattr(self, "live_setup", None)
             if self.live_snapshot is not None and hasattr(self, "measurement_text"):
                 human = (self.live_snapshot.angles or {}).get("elbow_flexion")
                 relative = (self.live_snapshot.relative_angles or {}).get("elbow_flexion")

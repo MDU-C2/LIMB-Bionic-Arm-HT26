@@ -6,16 +6,14 @@ from __future__ import annotations
 import argparse
 import contextlib
 import math
-import os
 import time
-from pathlib import Path
 
 import numpy as np
 import pybullet as p
 
 from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.simulation.model.joint_limits import HARDWARE_JOINT_LIMITS_DEG, JOINT_LIMITS_RAD
-from aurora.simulation.model.robot_model import JOINT_MAPPING, SIM_DIR, joint_index
+from aurora.simulation.model.robot_model import JOINT_MAPPING, joint_index, load_left_arm
 
 DEFAULT_ANGLES_DEG = (36.0, 37.47, 13.26, -18.95)
 SLIDER_ORDER = (1, 2, 3, 0)  # Shoulder controls first, matching Oscar's UI.
@@ -53,17 +51,11 @@ def main() -> None:
             cameraTargetPosition=(0.0, 0.0, -0.30),
         )
 
-        # PyBullet on Windows cannot open the non-ASCII parent path directly.
-        previous_directory = Path.cwd()
-        os.chdir(SIM_DIR)
-        try:
-            robot = p.loadURDF(
-                "arm/left_arm.urdf",
-                baseOrientation=p.getQuaternionFromEuler((math.pi / 2, 0, math.pi / 2)),
-                useFixedBase=True,
-            )
-        finally:
-            os.chdir(previous_directory)
+        robot = load_left_arm(
+            p,
+            base_position=(0, 0, 0),
+            base_orientation=p.getQuaternionFromEuler((math.pi / 2, 0, math.pi / 2)),
+        )
 
         joint_ids = [joint_index(robot, urdf_name) for _, urdf_name, _ in JOINT_MAPPING]
         wrist_joint = joint_index(robot, "jLeftWrist_rotation")

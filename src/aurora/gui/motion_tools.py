@@ -10,7 +10,6 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from aurora.gui.project_support import (
-    DEFAULT_RECORDINGS_DIRECTORY,
     DEFAULT_REFERENCE_DIRECTORY,
     MOVEMENT_MODEL,
     MOVEMENT_RECOGNITION_SCRIPT,
@@ -52,17 +51,19 @@ class MotionToolsMixin:
         ).grid(row=0, column=1, padx=(8, 0))
         shortcuts = ttk.Frame(recording, style="Card.TFrame")
         shortcuts.grid(row=7, column=0, sticky="w", pady=8)
-        for title, path in (
-            ("Use captured profiles", REPOSITORY_ROOT / DEFAULT_REFERENCE_DIRECTORY),
-            ("Use inherited LIMB1 profiles", REPOSITORY_ROOT / "data/legacy/limb1/training"),
-        ):
-            ttk.Button(
-                shortcuts,
-                text=title,
-                command=lambda path=path: self.motion_references.set(str(path)),
-                state="normal" if path.is_dir() else "disabled",
-            ).pack(side="left", padx=4)
-        ttk.Label(shortcuts, text="Unavailable folders stay disabled.").pack(side="left", padx=8)
+        ttk.Button(
+            shortcuts, text="Use captured profiles", command=self._use_captured_profiles
+        ).pack(side="left", padx=4)
+        inherited = REPOSITORY_ROOT / "data/legacy/limb1/training"
+        ttk.Button(
+            shortcuts,
+            text="Use inherited LIMB1 profiles",
+            command=lambda: self.motion_references.set(str(inherited)),
+            state="normal" if inherited.is_dir() else "disabled",
+        ).pack(side="left", padx=4)
+        ttk.Label(shortcuts, text="Inherited profiles need the original data folder.").pack(
+            side="left", padx=8
+        )
 
         recognition = self._card(
             tab,
@@ -137,7 +138,7 @@ class MotionToolsMixin:
 
     def _browse_motion_recording(self) -> None:
         """Choose a pose-recording JSON file."""
-        current = project_path(self.motion_recording.get() or DEFAULT_RECORDINGS_DIRECTORY)
+        current = project_path(self.motion_recording.get() or self.recording_output.get())
         initial = current.parent if current.is_file() else current
         if not initial.is_dir():
             initial = REPOSITORY_ROOT
@@ -148,6 +149,16 @@ class MotionToolsMixin:
         )
         if selected:
             self.motion_recording.set(display_path(Path(selected)))
+
+    def _use_captured_profiles(self):
+        path = project_path(self.recording_output.get()) / "movement"
+        if not path.is_dir():
+            messagebox.showinfo(
+                "No captured profiles",
+                "Capture a camera movement profile first, or browse an existing reference folder.",
+            )
+            return
+        self.motion_references.set(str(path))
 
     def _browse_motion_references(self) -> None:
         """Choose the folder containing reference pose recordings."""
@@ -220,30 +231,10 @@ class MotionToolsMixin:
             return
 
         def load(cancelled):
-            from aurora.json_utils import read_json_object
-            from aurora.ml.experiment import verify_model_manifest
-            from aurora.ml.features import PREPROCESSING
             from aurora.ml.recognition import MovementRecognizer
-            from aurora.recording.emg_labels import digest
 
             model = Path(selected).resolve()
-            manifest_path = model.with_suffix(".json")
-            if not manifest_path.is_file():
-                manifest_path = model.parent / "training.json"
-            manifest = read_json_object(manifest_path)
-            if manifest.get("status") not in {"complete", "inherited"} or manifest.get(
-                "artifacts", {}
-            ).get(model.name) != digest(model):
-                raise ValueError(
-                    "Select a model with a matching completed training manifest or inherited model sidecar."
-                )
-            if any(
-                manifest.get("preprocessing", {}).get(key) != value
-                for key, value in PREPROCESSING.items()
-            ):
-                raise ValueError("The model preprocessing does not match movement profiles.")
-            verify_model_manifest(model)
-            MovementRecognizer(model)
+            manifest, manifest_path = MovementRecognizer(model, require_manifest=True).provenance
             return model, manifest, manifest_path
 
         def ready(result, error):

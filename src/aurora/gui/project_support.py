@@ -44,12 +44,13 @@ MOVEMENT_RECOGNITION_SCRIPT = PACKAGE_DIRECTORY / "ml" / "recognition.py"
 MOVEMENT_MODEL = MODEL_DIRECTORY / "movement_gru.onnx"
 DEFAULT_RECORDINGS_DIRECTORY = Path("outputs/recordings")
 DEFAULT_REFERENCE_DIRECTORY = Path("outputs/recordings/movement")
-DEFAULT_SIMULATION_OUTPUT_DIRECTORY = Path("outputs/simulation")
-DOCUMENTATION_FILE = RESOURCE_DIRECTORY / "docs" / "simulation-guide.md"
-GUI_DOCUMENTATION_FILE = GUI_DIR / "README.md"
+DOCUMENTATION_FILE = RESOURCE_DIRECTORY / "docs" / "workflow-guide.md"
 FIRMWARE_WORKSPACE_SCRIPT = GUI_DIR / "firmware_workspace.py"
 
 RECORDING_EXTENSIONS = {
+    ".jsonl",
+    ".png",
+    ".zip",
     ".avi",
     ".bag",
     ".csv",

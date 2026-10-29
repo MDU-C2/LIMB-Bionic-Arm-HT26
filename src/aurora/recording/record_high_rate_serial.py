@@ -6,27 +6,14 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 
-from aurora.recording.common import env_float
+from aurora.recording.record_serial_sensors import parse_args as serial_args
 from aurora.recording.record_serial_sensors import record
 from aurora.sensors.serial_protocol import AXES, COLUMNS, parse_sensor_line
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", default=os.environ.get("AURORA_SERIAL_PORT", ""))
-    parser.add_argument(
-        "--baud", type=int, default=int(os.environ.get("AURORA_SERIAL_BAUD", "115200"))
-    )
-    parser.add_argument("--duration", type=float, default=env_float("AURORA_DURATION_SECONDS", 0))
-    parser.add_argument(
-        "--subject-id",
-        "--subject",
-        dest="subject",
-        default=os.environ.get("AURORA_SUBJECT", "session"),
-    )
-    return parser.parse_args()
+    return serial_args(preview=False, description=__doc__)
 
 
 def export_samples(session):

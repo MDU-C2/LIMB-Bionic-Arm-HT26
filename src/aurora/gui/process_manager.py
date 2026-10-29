@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import queue
 import re
@@ -30,10 +31,20 @@ class ManagedProcess:
     log_path: Path | None = None
     output_tail: list[str] = field(default_factory=list)
     stop_input: str | None = None
+    output_path: Path | None = None
 
 
 class ProcessManagerMixin:
     """Give a Tk widget safe supervision of multiple concurrent programs."""
+
+    def _idle_cup_session(self):
+        active = self._active_processes()
+        return (
+            bool(active)
+            and all(item.key == "recording:cup_trials" for item in active)
+            and self.session.cup.phase in {"ready", "rest"}
+            and not self.session.cup.status["recording"]
+        )
 
     def _initialize_process_manager(self) -> None:
         self.processes: dict[str, ManagedProcess] = {}
@@ -44,7 +55,7 @@ class ProcessManagerMixin:
         self._closing_processes = False
 
     def _queue_process_event(self, event):
-        if event[0] == "exit":
+        if event[0] in {"exit", "result", "cup_result"}:
             # Only the finished child's watcher waits here; acquisition never does.
             self.process_exits.put(event)
             return
@@ -76,6 +87,7 @@ class ProcessManagerMixin:
         parallel: bool = False,
         process_key: str | None = None,
         stop_input: str | None = None,
+        output_path: Path | None = None,
     ) -> bool:
         """Start a managed child and stream labelled output to Activity."""
         active = self._active_processes()
@@ -91,22 +103,25 @@ class ProcessManagerMixin:
             return False
 
         if kind in {"recording", "simulation", "firmware"}:
+
+            def retry():
+                return self._start_program(
+                    name,
+                    kind,
+                    command,
+                    working_directory=working_directory,
+                    environment=environment,
+                    parallel=parallel,
+                    process_key=process_key,
+                    stop_input=stop_input,
+                    output_path=output_path,
+                )
+
             stop_serial = getattr(self, "_stop_serial_dashboard", None)
             if stop_serial is not None and not stop_serial():
                 release_serial = getattr(self, "_release_serial_for", None)
                 if release_serial is not None:
-                    return release_serial(
-                        lambda: self._start_program(
-                            name,
-                            kind,
-                            command,
-                            working_directory=working_directory,
-                            environment=environment,
-                            parallel=parallel,
-                            process_key=process_key,
-                            stop_input=stop_input,
-                        )
-                    )
+                    return release_serial(retry)
                 self._append_log(
                     "[USB monitor] Waiting for the port to close. Try again shortly.\n"
                 )
@@ -124,18 +139,7 @@ class ProcessManagerMixin:
                     "[BLE monitor] Waiting for the connection to close. Try again shortly.\n"
                 )
                 return False
-            if release_ble(
-                lambda: self._start_program(
-                    name,
-                    kind,
-                    command,
-                    working_directory=working_directory,
-                    environment=environment,
-                    parallel=parallel,
-                    process_key=process_key,
-                    stop_input=stop_input,
-                )
-            ):
+            if release_ble(retry):
                 return True
         if stop_ble is not None and hasattr(self, "ble_sensor_connection"):
             self.ble_sensor_connection.set(f"BLE live view paused while {name} runs")
@@ -174,6 +178,7 @@ class ProcessManagerMixin:
 
         managed = ManagedProcess(key, name, kind, process)
         managed.stop_input = stop_input
+        managed.output_path = Path(output_path) if output_path else None
         log_name = re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_")
         managed.log_path = (
             REPOSITORY_ROOT / "outputs/logs" / f"{datetime.now():%Y%m%d_%H%M%S_%f}_{log_name}.log"
@@ -224,7 +229,22 @@ class ProcessManagerMixin:
                             with contextlib.suppress(OSError):
                                 log.close()
                             log = None
-                    self._queue_process_event(("line", (managed.key, managed.name, line)))
+                    event = "result" if line.startswith("[AURORA] ") else "line"
+                    if managed.key == "recording:cup_trials" and line.startswith("[CUP] "):
+                        try:
+                            if json.loads(line.removeprefix("[CUP] ")).get("event") in {
+                                "saved",
+                                "error",
+                            }:
+                                event = "cup_result"
+                        except (ValueError, AttributeError):
+                            pass
+                    self._queue_process_event(
+                        (
+                            event,
+                            (managed.key, managed.name, line),
+                        )
+                    )
         finally:
             if log is not None:
                 with contextlib.suppress(OSError):
@@ -255,8 +275,17 @@ class ProcessManagerMixin:
                     break
         try:
             for event, value in events:
-                if event == "line":
+                if event in {"line", "result", "cup_result"}:
                     key, name, line = value
+                    if event == "result":
+                        try:
+                            result = json.loads(line.removeprefix("[AURORA] "))
+                            self.workflow.accept_result(
+                                Path(result["path"]), result.get("kind", "recording")
+                            )
+                        except (ValueError, TypeError, KeyError, OSError) as error:
+                            self._append_log(f"[{name}] Could not select saved output: {error}\n")
+                        continue
                     if key == "recording:cup_trials" and str(line).startswith("[CUP] "):
                         self._handle_cup_event(str(line))
                         continue
@@ -289,18 +318,35 @@ class ProcessManagerMixin:
                 else:
                     outcome, state = f"failed (code {return_code})", "error"
                 self._append_log(f"[{name} {outcome}]\n")
+                if managed.output_path is not None and managed.output_path.exists():
+                    try:
+                        self.workflow.accept_result(managed.output_path, managed.kind)
+                    except (ValueError, OSError) as error:
+                        self._append_log(f"[{name}] Could not select saved output: {error}\n")
                 if key == "recording:cup_trials":
-                    self._cup_ready = self._cup_recording = False
-                    self._cup_can_start = self._cup_streams_ready = False
-                    self._cup_can_prepare = self._cup_can_record = False
-                    self._cup_protocol_phase = "ready"
+                    self.cup_state.reset()
                     self.cup_cue.set("PREPARE")
                     self._cup_pace_changed()
                     self.ble_sensor_connection.set("BLE: not connected")
                     self.cup_status.set(
-                        "Subject finished. Enter the next subject ID."
+                        "Session stopped. Saved captures remain available for review."
+                        if stopped
+                        else "Subject finished. Enter the next subject ID."
                         if return_code == 0
                         else "Recording stopped. Check the error in Activity."
+                    )
+                    self.session.notice.set(
+                        "Connection closed. Saved references remain reviewable; reconnecting starts a new calibration scope."
+                    )
+                    self._refresh_cup_guidance()
+                if hasattr(self, "workflow"):
+                    self.workflow.action_status.set(
+                        f"{name} {outcome}. "
+                        + (
+                            f"Output: {self.workflow.last_output.get()}"
+                            if self.workflow.last_output.get()
+                            else "See Activity for the result and errors."
+                        )
                     )
                 if return_code and not stopped:
                     self._show_process_failure(managed, return_code)

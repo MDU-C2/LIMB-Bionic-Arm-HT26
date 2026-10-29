@@ -7,8 +7,8 @@ import json
 import zipfile
 from pathlib import Path
 
+from aurora.file_utils import file_digest as digest
 from aurora.json_utils import write_json
-from aurora.recording.emg_labels import digest
 from aurora.time_utils import utc_now
 
 

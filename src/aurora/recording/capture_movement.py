@@ -14,6 +14,7 @@ from pathlib import Path
 
 from aurora.paths import RECORDINGS_DIRECTORY
 from aurora.recording.common import (
+    announce_result,
     enable_ctrl_break_as_interrupt,
     safe_label,
     utc_now,
@@ -140,6 +141,7 @@ def main(argv=None) -> None:
                             args.output / args.subject_id, args.subject_id, args.side, captured
                         )
                         print(f"Saved {len(captured)} frames to {path}")
+                        announce_result(path, "movement")
                         return
                     if not recording:
                         recording = True

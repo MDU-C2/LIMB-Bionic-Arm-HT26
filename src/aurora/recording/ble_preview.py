@@ -122,24 +122,42 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
                 else "Cannot zero yet: waiting for a valid IMU sample."
             )
 
-    def create_emg_window() -> None:
-        _window, frame = base_window("emg", "EMG signal", "900x470")
+    def create_signal_window(sensor: str) -> None:
+        piezo = sensor == "piezo"
+        title = "piezo contact and vibration" if piezo else "EMG signal"
+        _window, frame = base_window(sensor, title, "900x470")
         tk.Label(
             frame,
-            text="Raw EMG ADC samples (last 400 per channel)",
+            text="Raw piezoelectric sensor response (recent ADC samples)"
+            if piezo
+            else "Raw EMG ADC samples (last 400 per channel)",
             anchor="w",
         ).pack(fill="x")
         canvas = tk.Canvas(
             frame,
-            height=270,
+            height=250 if piezo else 270,
             bg="white",
             highlightbackground="#ccd3df",
             highlightthickness=1,
         )
         canvas.pack(fill="both", expand=True, pady=(4, 6))
-        value = tk.StringVar(master=root, value="EMG: waiting for packets")
+        value = tk.StringVar(
+            master=root, value=f"{'Piezo' if piezo else 'EMG'}: waiting for packets"
+        )
         tk.Label(frame, textvariable=value, anchor="w", font=("Consolas", 10)).pack(fill="x")
-        views["emg"] = {"canvas": canvas, "value": value}
+        if piezo:
+            tk.Label(
+                frame,
+                text=(
+                    "A piezoelectric sensor produces a signal when it is bent, tapped, or vibrated. "
+                    "Use this graph to check contact and changes, not as a calibrated force measurement."
+                ),
+                anchor="w",
+                justify="left",
+                wraplength=850,
+                fg="#667085",
+            ).pack(fill="x", pady=(8, 0))
+        views[sensor] = {"canvas": canvas, "value": value}
 
     def create_imu_window() -> None:
         _window, frame = base_window("imu", "IMU motion", "1040x680")
@@ -213,36 +231,6 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             "note": note,
         }
 
-    def create_piezo_window() -> None:
-        _window, frame = base_window("piezo", "piezo contact and vibration", "900x470")
-        tk.Label(
-            frame,
-            text="Raw piezoelectric sensor response (recent ADC samples)",
-            anchor="w",
-        ).pack(fill="x")
-        canvas = tk.Canvas(
-            frame,
-            height=250,
-            bg="white",
-            highlightbackground="#ccd3df",
-            highlightthickness=1,
-        )
-        canvas.pack(fill="both", expand=True, pady=(4, 6))
-        value = tk.StringVar(master=root, value="Piezo: waiting for packets")
-        tk.Label(frame, textvariable=value, anchor="w", font=("Consolas", 10)).pack(fill="x")
-        tk.Label(
-            frame,
-            text=(
-                "A piezoelectric sensor produces a signal when it is bent, tapped, or vibrated. "
-                "Use this graph to check contact and changes, not as a calibrated force measurement."
-            ),
-            anchor="w",
-            justify="left",
-            wraplength=850,
-            fg="#667085",
-        ).pack(fill="x", pady=(8, 0))
-        views["piezo"] = {"canvas": canvas, "value": value}
-
     def show_window(sensor: str) -> None:
         if sensor == "all":
             for name in PREVIEW_SENSORS:
@@ -254,11 +242,10 @@ async def run_ble_preview(args, recorder_type, sensor_uuids: dict[str, str]) -> 
             return
         window = windows.get(sensor)
         if window is None:
-            {
-                "emg": create_emg_window,
-                "imu": create_imu_window,
-                "piezo": create_piezo_window,
-            }[sensor]()
+            if sensor == "imu":
+                create_imu_window()
+            else:
+                create_signal_window(sensor)
             window = windows[sensor]
         window.deiconify()
         window.lift()

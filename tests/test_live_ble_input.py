@@ -333,6 +333,7 @@ class LiveBleTests(unittest.TestCase):
             simulation_python=Path(sys.executable),
             recording_ble_device=setting("AURORA"),
             recording_subject=setting("S17"),
+            recording_output=setting("outputs/recordings"),
             fusion_camera_weight=setting("0.25"),
             processes={},
             _stop_serial_dashboard=Mock(),
@@ -370,6 +371,61 @@ class LiveBleTests(unittest.TestCase):
                 command = launch.call_args.args[0]
                 self.assertEqual(command[command.index("--transport") + 1], expected)
                 self.assertEqual(command[command.index("--subject") + 1], "S09")
+
+    def test_compatibility_launcher_preserves_settings_and_validates_before_spawning(self):
+        from aurora.simulation.interactive.settings import parse_args
+
+        options = [
+            "--device",
+            "sensor A",
+            "--address",
+            "00:11:22",
+            "--baud",
+            "230400",
+            "--side",
+            "right",
+            "--subject",
+            "S23",
+            "--camera-weight",
+            "0.6",
+            "--shoulder-twist-axis=-x",
+            "--wrist-twist-axis=z",
+            "--depth",
+            "--emg-model",
+            "models with spaces/Å/model",
+            "--mode",
+            "dynamic",
+            "--table-width-cm",
+            "72",
+            "--table-depth-cm",
+            "63",
+        ]
+        with (
+            patch.object(sys, "argv", ["live_control.py", *options]),
+            patch("aurora.simulation.live_control.subprocess.call", return_value=7) as launch,
+        ):
+            self.assertEqual(launch_live(), 7)
+        args = parse_args(launch.call_args.args[0][3:])
+        self.assertEqual(args.control, "camera-imu")
+        self.assertEqual(args.transport, "ble")
+        self.assertEqual(args.emg_model, Path("models with spaces/Å/model"))
+        self.assertEqual((args.shoulder_twist_axis, args.wrist_twist_axis), ("-x", "z"))
+        self.assertEqual(
+            (args.device, args.address, args.baud, args.side, args.subject),
+            ("sensor A", "00:11:22", 230400, "right", "S23"),
+        )
+        self.assertEqual(
+            (args.camera_weight, args.depth, args.mode, args.table_width_cm, args.table_depth_cm),
+            (0.6, True, "dynamic", 72, 63),
+        )
+        with (
+            patch.object(sys, "argv", ["live_control.py", "--baud", "0"]),
+            patch("aurora.simulation.live_control.subprocess.call") as launch,
+            patch("sys.stderr"),
+            self.assertRaises(SystemExit),
+        ):
+            launch_live()
+        launch.assert_not_called()
 
 
 class BleConnectionTests(unittest.IsolatedAsyncioTestCase):

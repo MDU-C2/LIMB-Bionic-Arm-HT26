@@ -9,10 +9,8 @@ from tkinter import BooleanVar, StringVar, filedialog, messagebox, ttk
 
 from aurora.gui.motion_tools import MotionToolsMixin
 from aurora.gui.project_support import (
-    DEFAULT_RECORDINGS_DIRECTORY,
-    DEFAULT_SIMULATION_OUTPUT_DIRECTORY,
     INTERACTIVE_SIMULATION_SCRIPT,
-    REPOSITORY_ROOT,
+    project_path,
 )
 from aurora.recording.common import STOP_COMMAND
 
@@ -51,13 +49,13 @@ class SimulationTabsMixin(MotionToolsMixin):
         ).grid(row=3, column=0, sticky="w", pady=(8, 0))
         ttk.Checkbutton(
             interactive,
-            text="Save torque CSV in outputs/simulation",
+            text="Save torque CSV under the selected output / derived / simulation",
             variable=self.save_simulation_torque,
             style="Card.TCheckbutton",
         ).grid(row=4, column=0, sticky="w", pady=(4, 0))
         ttk.Checkbutton(
             interactive,
-            text="Save detailed physics telemetry in outputs/simulation",
+            text="Save physics telemetry under the selected output / derived / simulation",
             variable=self.save_simulation_telemetry,
             style="Card.TCheckbutton",
         ).grid(row=6, column=0, sticky="w", pady=(4, 0))
@@ -217,10 +215,14 @@ class SimulationTabsMixin(MotionToolsMixin):
         if self.simulation_python is None:
             messagebox.showerror("Environment missing", "Run project setup first.")
             return
-        trial = trial or filedialog.askopenfilename(
-            title="Choose trial.json from a recorded cup trial",
-            initialdir=REPOSITORY_ROOT / DEFAULT_RECORDINGS_DIRECTORY,
-            filetypes=(("Trial metadata", "trial.json"),),
+        trial = (
+            trial
+            or (str(self.session.selected_trial) if self.session.selected_trial else None)
+            or filedialog.askopenfilename(
+                title="Choose trial.json from a recorded cup trial",
+                initialdir=project_path(self.recording_output.get()),
+                filetypes=(("Trial metadata", "trial.json"),),
+            )
         )
         if not trial:
             return
@@ -241,7 +243,13 @@ class SimulationTabsMixin(MotionToolsMixin):
             self.fusion_camera_weight.get(),
             *table_arguments,
         ]
-        self._start_program("Recorded live control", "simulation", command, stop_input=STOP_COMMAND)
+        self._start_program(
+            "Recorded live control",
+            "simulation",
+            command,
+            stop_input=STOP_COMMAND,
+            parallel=self._idle_cup_session(),
+        )
 
     def start_interactive_simulation(self) -> None:
         """Launch the full AURORA task simulator in the managed environment."""
@@ -257,11 +265,7 @@ class SimulationTabsMixin(MotionToolsMixin):
             return
         command += table_arguments
         command += ["--mode", "dynamic" if self.dynamic_simulation.get() else "kinematic"]
-        if self.dynamic_simulation.get() and self.save_simulation_torque.get():
-            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S_%f}.csv"
-            torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name
-            command += ["--torque-out", str(torque_output)]
-        command += SimulationTabsMixin._telemetry_arguments(self)
+        command += SimulationTabsMixin._simulation_output_arguments(self)
         self._start_program(
             "Interactive task simulator",
             "simulation",
@@ -327,6 +331,8 @@ class SimulationTabsMixin(MotionToolsMixin):
             self.recording_camera_side.get(),
             "--subject",
             self.recording_subject.get().strip() or "diagnostic",
+            "--output-root",
+            str(project_path(self.recording_output.get()).resolve()),
             "--camera-weight",
             str(weight),
             "--grip-source",
@@ -344,24 +350,23 @@ class SimulationTabsMixin(MotionToolsMixin):
                 )
                 return
             command += ["--emg-model", str(self.emg_model_path)]
-        if self.dynamic_simulation.get() and self.save_simulation_torque.get():
-            output_name = f"torque_{datetime.now():%Y%m%d_%H%M%S_%f}.csv"
-            torque_output = REPOSITORY_ROOT / DEFAULT_SIMULATION_OUTPUT_DIRECTORY / output_name
-            command += ["--torque-out", str(torque_output)]
-        command += SimulationTabsMixin._telemetry_arguments(self)
+        command += SimulationTabsMixin._simulation_output_arguments(self)
         self._start_program(
             "Interactive live sensor control", "simulation", command, stop_input=STOP_COMMAND
         )
 
-    def _telemetry_arguments(self):
-        if self.dynamic_simulation.get() and self.save_simulation_telemetry.get():
-            path = (
-                REPOSITORY_ROOT
-                / DEFAULT_SIMULATION_OUTPUT_DIRECTORY
-                / f"telemetry_{datetime.now():%Y%m%d_%H%M%S_%f}.jsonl"
-            )
-            return ["--telemetry-out", str(path)]
-        return []
+    def _simulation_output_arguments(self):
+        arguments = []
+        if self.dynamic_simulation.get():
+            root = project_path(self.recording_output.get()) / "derived" / "simulation"
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            for enabled, option, name in (
+                (self.save_simulation_torque, "--torque-out", f"torque_{stamp}.csv"),
+                (self.save_simulation_telemetry, "--telemetry-out", f"telemetry_{stamp}.jsonl"),
+            ):
+                if enabled.get():
+                    arguments += [option, str(root / name)]
+        return arguments
 
     def _table_arguments(self) -> list[str] | None:
         values = []

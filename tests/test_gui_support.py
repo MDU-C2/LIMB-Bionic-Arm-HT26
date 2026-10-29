@@ -109,6 +109,7 @@ class RecordingBatchTests(unittest.TestCase):
                 _stop_ble_dashboard=lambda: True,
                 _stop_serial_dashboard=lambda: True,
                 background_tasks=Mock(),
+                session=Mock(),
                 imu_monitor=None,
             )
             gui_app.ProjectGui.close(host)
@@ -297,6 +298,64 @@ class RecordingBatchTests(unittest.TestCase):
                 )
             )
         launch.assert_not_called()
+
+    def test_deferred_launch_keeps_settings_after_either_device_handoff(self):
+        for transport in ("serial", "ble"):
+            pending = []
+            manager = types.SimpleNamespace(
+                processes={},
+                _append_log=Mock(),
+                _set_status=Mock(),
+                _display_command=Mock(return_value="python recorder.py"),
+                _update_controls=Mock(),
+                _refresh_info=Mock(),
+                _watch_process=Mock(),
+                _stop_serial_dashboard=Mock(return_value=transport != "serial"),
+                _stop_ble_dashboard=Mock(return_value=transport != "ble"),
+            )
+            manager._active_processes = types.MethodType(
+                ProcessManagerMixin._active_processes, manager
+            )
+            manager._start_program = types.MethodType(ProcessManagerMixin._start_program, manager)
+            setattr(
+                manager,
+                f"_release_{transport}_for",
+                lambda action, pending=pending: pending.append(action) or True,
+            )
+            process = Mock()
+            process.poll.return_value = None
+            output = Path("trial output Å")
+            with (
+                self.subTest(transport=transport),
+                patch("aurora.gui.process_manager.threading.Thread"),
+                patch(
+                    "aurora.gui.process_manager.subprocess.Popen", return_value=process
+                ) as launch,
+            ):
+                self.assertTrue(
+                    manager._start_program(
+                        "Capture",
+                        "recording",
+                        ["python", "recorder.py"],
+                        working_directory=output.parent,
+                        environment={"AURORA_SUBJECT": "S22"},
+                        parallel=True,
+                        process_key="recording:chosen",
+                        stop_input="stop\n",
+                        output_path=output,
+                    )
+                )
+                launch.assert_not_called()
+                getattr(manager, f"_stop_{transport}_dashboard").return_value = True
+                self.assertEqual(len(pending), 1)
+                pending.pop()()
+                launch.assert_called_once()
+                self.assertEqual(launch.call_args.kwargs["cwd"], output.parent)
+                environment = launch.call_args.kwargs["env"]
+                self.assertEqual(environment["AURORA_SUBJECT"], "S22")
+                self.assertEqual(environment["AURORA_GUI_CONTROL"], "1")
+                managed = manager.processes["recording:chosen"]
+                self.assertEqual((managed.output_path, managed.stop_input), (output, "stop\n"))
 
     def test_log_flood_cannot_discard_process_completion(self):
         manager = types.SimpleNamespace()

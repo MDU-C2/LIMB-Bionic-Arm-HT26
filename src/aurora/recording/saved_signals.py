@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from aurora.json_utils import read_json_object
+from aurora.json_utils import read_json_object as read_json
 from aurora.recording.sensor_csv import iter_recording, load_recording
 from aurora.sensors.serial_protocol import AXES
 
@@ -35,10 +35,6 @@ class SavedSignals:
     panels: list[Panel]
     events: list[tuple[float, str]]
     title: str
-
-
-def read_json(path: Path) -> dict:
-    return read_json_object(path)
 
 
 def video_frame_times(directory: Path):

@@ -11,22 +11,17 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from aurora.gui.guidance import GuidanceViews
 from aurora.gui.project_support import console_python, project_path
 from aurora.paths import PACKAGE_DIRECTORY
-from aurora.recording.cup_protocol import PACE_PROMPTS, START_POSE, TRIAL_SECONDS
+from aurora.recording.cup_protocol import PACE_PROMPTS, START_POSE
 
 CUP_PROCESS_KEY = "recording:cup_trials"
 
 
 class CupRecordingMixin:
     def _initialize_cup_recording_state(self) -> None:
-        self.cup_duration = tk.StringVar(value=str(int(TRIAL_SECONDS)))
-        self.cup_condition = tk.StringVar(value="natural")
-        self._cup_streams_ready = False
-        self._cup_can_start = False
-        self._cup_can_prepare = False
-        self._cup_can_record = False
-        self._cup_protocol_phase = "ready"
+        self.cup_state = self.session.cup
         self.cup_cue = tk.StringVar(value="PREPARE")
         self.cup_instruction = tk.StringVar(value=START_POSE)
         self.cup_progress = tk.StringVar(value="Saved trials: natural 0 | slow 0 | fast 0")
@@ -34,15 +29,14 @@ class CupRecordingMixin:
             value="Connect camera + BLE, prepare the subject, then choose the trial pace."
         )
         self.cup_next_trial = tk.StringVar(value="T001")
-        self._cup_ready = False
-        self._cup_recording = False
         self._cup_camera_handoff_pending = False
         self.cup_condition.trace_add("write", self._cup_pace_changed)
 
     def _cup_pace_changed(self, *_args):
-        if self._cup_protocol_phase not in ("ready", "rest"):
+        if self.cup_state.phase not in ("ready", "rest"):
             return
         self.cup_instruction.set(START_POSE + " " + PACE_PROMPTS[self.cup_condition.get()])
+        self._refresh_cup_guidance()
         managed = self.processes.get(CUP_PROCESS_KEY)
         if managed is not None and managed.process.poll() is None:
             self._cup_command("pace", condition=self.cup_condition.get())
@@ -118,28 +112,19 @@ class CupRecordingMixin:
         )
         self.cup_reference_step_button.pack(side="left", padx=8)
         cue = ttk.Frame(card, style="Card.TFrame")
-        cue.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        cue.grid(row=6, column=0, sticky="ew", pady=(10, 0))
         cue.columnconfigure(0, weight=1)
-        ttk.Label(
-            cue, textvariable=self.cup_cue, style="Card.TLabel", font=("Segoe UI", 20, "bold")
-        ).grid(row=0, column=0, sticky="w")
-        instruction = ttk.Label(
-            cue,
-            textvariable=self.cup_instruction,
-            style="Card.TLabel",
-            wraplength=620,
-            font=("Segoe UI", 12),
-        )
-        instruction.grid(row=1, column=0, sticky="ew", pady=(4, 0))
-        cue.bind(
-            "<Configure>",
-            lambda event: instruction.configure(wraplength=max(200, event.width - 12)),
-        )
+        self.cup_guidance = GuidanceViews(cue)
+        self.cup_guidance.operator.grid(row=0, column=0, sticky="ew")
+        ttk.Button(
+            prepare, text="Open participant view", command=self.cup_guidance.open_participant
+        ).pack(side="left", padx=8)
+        self._refresh_cup_guidance()
         ttk.Label(card, textvariable=self.cup_status, style="CardText.TLabel", wraplength=820).grid(
             row=5, column=0, sticky="w", pady=8
         )
         actions = ttk.Frame(card, style="Card.TFrame")
-        actions.grid(row=6, column=0, sticky="w")
+        actions.grid(row=4, column=0, sticky="w")
         self.cup_record_button = ttk.Button(
             actions,
             text="Record next trial",
@@ -167,9 +152,9 @@ class CupRecordingMixin:
             actions, text="Signals", command=lambda: self._cup_command("graphs")
         )
         self.cup_graphs_button.grid(row=1, column=1, padx=(0, 8), sticky="w")
-        ttk.Button(actions, text="Saved recordings", command=self.workflow.review_recordings).grid(
-            row=1, column=3, sticky="w"
-        )
+        ttk.Button(
+            actions, text="Review current trial", command=self.workflow.review_recordings
+        ).grid(row=1, column=3, sticky="w")
         ttk.Label(
             card,
             textvariable=self.cup_progress,
@@ -248,10 +233,8 @@ class CupRecordingMixin:
             str(output.resolve()),
             "--duration",
             str(duration),
-            "--shoulder-twist-axis",
-            self.fusion_shoulder_twist_axis.get(),
-            "--wrist-twist-axis",
-            self.fusion_wrist_twist_axis.get(),
+            f"--shoulder-twist-axis={self.fusion_shoulder_twist_axis.get()}",
+            f"--wrist-twist-axis={self.fusion_wrist_twist_axis.get()}",
         ]
         preview_x = min(
             self.window.winfo_rootx() + self.window.winfo_width() + 12,
@@ -260,11 +243,11 @@ class CupRecordingMixin:
         preview_y = max(0, min(self.window.winfo_rooty(), self.window.winfo_screenheight() - 420))
         command.extend(("--preview-position", str(preview_x), str(preview_y)))
         command.append("--depth")
-        self._cup_ready = self._cup_recording = False
-        self._cup_streams_ready = False
-        self._cup_can_start = False
-        self._cup_protocol_phase = "ready"
-        self._cup_can_prepare = self._cup_can_record = False
+        self.cup_state.status["ready"] = self.cup_state.status["recording"] = False
+        self.cup_state.status["streams_ready"] = False
+        self.cup_state.status["can_start"] = False
+        self.cup_state.phase = "ready"
+        self.cup_state.status["can_prepare"] = self.cup_state.status["can_record"] = False
         self.cup_status.set("Connecting camera and BLE...")
         self._start_program(
             "Cup recording",
@@ -291,20 +274,21 @@ class CupRecordingMixin:
         if not sent:
             self.cup_status.set("Connect camera + BLE first.")
         elif action in ("record", "practice", "reference", "reference_step"):
-            self._cup_can_start = False
-            self._cup_can_prepare = self._cup_can_record = False
-            self._cup_protocol_phase = "arming"
+            self.cup_state.status["can_start"] = False
+            self.cup_state.status["can_prepare"] = self.cup_state.status["can_record"] = False
+            self.cup_state.phase = "arming"
             self.cup_cue.set("PREPARING")
             self._update_cup_controls()
 
     def _set_cup_protocol(self, data):
-        previous_phase = self._cup_protocol_phase
+        previous_phase = self.cup_state.phase
         changed = self.cup_cue.get() != data["cue"]
         reference_step_changed = data.get("reference_step") != getattr(
             self, "_cup_reference_step", None
         )
         self._cup_reference_step = data.get("reference_step")
-        self._cup_protocol_phase = data["phase"]
+        self.cup_state.protocol = dict(data)
+        self.cup_state.phase = data["phase"]
         self.cup_cue.set(data["cue"])
         self.cup_instruction.set(data["instruction"] + " " + data["pace_instruction"])
         if data["practice"]:
@@ -330,20 +314,15 @@ class CupRecordingMixin:
             if message:
                 self._append_log("[Cup recording] " + message + "\n")
         if event == "status":
-            self._cup_ready = data["ready"]
-            self._cup_recording = data["recording"]
-            self._cup_streams_ready = data.get("streams_ready", False)
+            self.cup_state.update(data)
             self.ble_sensor_connection.set(
                 "BLE: cup recorder receiving EMG and both IMUs. Use Signals below."
-                if self._cup_streams_ready
+                if self.cup_state.status["streams_ready"]
                 else "BLE: waiting for the cup recorder's sensor streams."
             )
-            self._cup_can_start = data.get("can_start", False)
-            self._cup_can_prepare = data.get("can_prepare", False)
-            self._cup_can_record = data.get("can_record", False)
             if "protocol" in data:
                 self._set_cup_protocol(data["protocol"])
-            if self._cup_protocol_phase == "ready" and not self._cup_can_record:
+            if self.cup_state.phase == "ready" and not self.cup_state.status["can_record"]:
                 if data.get("calibration_ready"):
                     self.cup_cue.set("CHECK CAMERA VIEW")
                     self.cup_instruction.set(
@@ -353,11 +332,13 @@ class CupRecordingMixin:
                     )
                 else:
                     self.cup_cue.set(
-                        "CALIBRATE SUBJECT" if self._cup_can_prepare else "CHECK CONNECTIONS"
+                        "CALIBRATE SUBJECT"
+                        if self.cup_state.status["can_prepare"]
+                        else "CHECK CONNECTIONS"
                     )
                     self.cup_instruction.set(
                         "Press 2. Calibrate subject and guide each movement shown here."
-                        if self._cup_can_prepare
+                        if self.cup_state.status["can_prepare"]
                         else "Wait for camera, both IMUs, raw EMG and stereo depth. Check the status below."
                     )
             if "saved_counts" in data:
@@ -368,7 +349,7 @@ class CupRecordingMixin:
             self.cup_next_trial.set(data["next_trial"])
             self.cup_status.set(data["message"])
         elif event in ("recording", "practice", "reference"):
-            self._cup_recording = event != "practice"
+            self.cup_state.status["recording"] = event != "practice"
             self.cup_status.set(
                 data.get(
                     "message", "Preparing. Subject stays at 1; operator signals the start at GO."
@@ -380,7 +361,7 @@ class CupRecordingMixin:
             self.cup_condition.set(data["condition"])
             self.cup_status.set(data["message"])
         elif event == "saved":
-            self._cup_recording = False
+            self.cup_state.status["recording"] = False
             self.cup_status.set(
                 "Calibration saved. Check Signals and start a cup trial."
                 if data["complete"] and data.get("reference")
@@ -410,17 +391,37 @@ class CupRecordingMixin:
                         else checks.get("emg_message", "")
                     )
                 )
+            self.session.select_saved(data["path"], reference=data.get("reference", False))
+            self.recordings_root.set(str(Path(data["path"])))
+            self.recordings_filter.set("")
             self._refresh_recordings()
         elif event in ("cue", "error"):
             self.cup_status.set(data["message"])
         self._update_cup_controls()
+        self._refresh_cup_guidance()
+
+    def _refresh_cup_guidance(self):
+        if hasattr(self, "cup_guidance"):
+            view = {
+                **self.cup_state.protocol,
+                "cue": self.cup_cue.get(),
+                "instruction": self.cup_instruction.get(),
+            }
+            managed = self.processes.get(CUP_PROCESS_KEY)
+            if managed is None or managed.process.poll() is not None:
+                view = {
+                    "phase": "ready",
+                    "cue": "PREPARE",
+                    "instruction": START_POSE + " " + PACE_PROMPTS[self.cup_condition.get()],
+                }
+            self.cup_guidance.update(view, self.recording_camera_side.get(), self.cup_status.get())
 
     def _update_cup_controls(self) -> None:
         if not hasattr(self, "cup_connect_button"):
             return
         managed = self.processes.get(CUP_PROCESS_KEY)
         connected = managed is not None and managed.process.poll() is None
-        active = self._cup_protocol_phase in (
+        active = self.cup_state.phase in (
             "arming",
             "baseline",
             "countdown",
@@ -438,12 +439,14 @@ class CupRecordingMixin:
         self.cup_connect_button.configure(state="disabled" if blocked else "normal")
         if hasattr(self, "cup_reference_button"):
             self.cup_reference_button.configure(
-                state="normal" if connected and self._cup_can_prepare and not active else "disabled"
+                state="normal"
+                if connected and self.cup_state.status["can_prepare"] and not active
+                else "disabled"
             )
         if hasattr(self, "cup_reference_step_button"):
             self.cup_reference_step_button.configure(
                 state="normal"
-                if connected and self._cup_protocol_phase == "reference_prepare"
+                if connected and self.cup_state.phase == "reference_prepare"
                 else "disabled"
             )
         for index, widget in enumerate(self.cup_fields):
@@ -458,7 +461,9 @@ class CupRecordingMixin:
             )
         self.cup_condition_field.configure(state="disabled" if active else "readonly")
         self.cup_record_button.configure(
-            state="normal" if connected and self._cup_can_record and not active else "disabled",
+            state="normal"
+            if connected and self.cup_state.status["can_record"] and not active
+            else "disabled",
             text=f"3. Start {self.cup_next_trial.get()}",
         )
         try:
@@ -468,11 +473,11 @@ class CupRecordingMixin:
         self.cup_stop_button.configure(
             state="normal" if connected and active else "disabled",
             text="Cancel reference"
-            if self._cup_protocol_phase.startswith("reference")
+            if self.cup_state.phase.startswith("reference")
             else "Cancel countdown"
-            if self._cup_protocol_phase in ("arming", "baseline", "countdown")
+            if self.cup_state.phase in ("arming", "baseline", "countdown")
             else "Finish practice"
-            if self._cup_protocol_phase == "practice"
+            if self.cup_state.phase == "practice"
             else "Stop early"
             if timed_capture
             else "Stop and save",
@@ -480,12 +485,20 @@ class CupRecordingMixin:
         self.cup_retry_button.configure(
             state="normal" if connected else "disabled",
             text="Restart calibration"
-            if self._cup_protocol_phase.startswith("reference")
+            if self.cup_state.phase.startswith("reference")
             else "Restart / repeat",
         )
         self.cup_practice_button.configure(
-            state="normal" if connected and self._cup_can_start and not active else "disabled"
+            state="normal"
+            if connected and self.cup_state.status["can_start"] and not active
+            else "disabled"
         )
         self.cup_finish_button.configure(state="normal" if connected else "disabled")
         self.cup_graphs_button.configure(state="normal" if connected else "disabled")
         self.recording_advanced_button.configure(state="disabled" if connected else "normal")
+        if connected and hasattr(self, "replay_button"):
+            self.replay_button.configure(
+                state="normal"
+                if self.simulation_python is not None and self._idle_cup_session()
+                else "disabled"
+            )

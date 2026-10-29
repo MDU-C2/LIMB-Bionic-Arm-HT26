@@ -30,6 +30,31 @@ def profile(subject, run):
 
 
 class TrainingManifestTests(unittest.TestCase):
+    def test_explicit_selection_requires_provenance_without_removing_legacy_loading(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            model = Path(temporary) / "movement_gru.onnx"
+            model.write_bytes(b"test model")
+            self.assertIsNone(verify_model_manifest(model))
+            with self.assertRaisesRegex(ValueError, "manifest"):
+                verify_model_manifest(model, require_manifest=True)
+            manifest = {
+                "artifacts": {model.name: sha256(model)},
+                "preprocessing": dict(PREPROCESSING),
+            }
+            path = model.parent / "training.json"
+            path.write_text(json.dumps(manifest))
+            verify_model_manifest(model)
+            with self.assertRaisesRegex(ValueError, "completed"):
+                verify_model_manifest(model, require_manifest=True)
+            manifest["status"] = "inherited"
+            path.write_text(json.dumps(manifest))
+            self.assertEqual(verify_model_manifest(model, require_manifest=True), (manifest, path))
+            model.with_suffix(".json").write_text(
+                json.dumps({**manifest, "preprocessing": {**PREPROCESSING, "centering": "none"}})
+            )
+            with self.assertRaisesRegex(ValueError, "preprocessing"):
+                verify_model_manifest(model, require_manifest=True)
+
     def test_incompatible_or_unfinished_model_manifests_are_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             model = Path(temporary) / "movement_gru.onnx"

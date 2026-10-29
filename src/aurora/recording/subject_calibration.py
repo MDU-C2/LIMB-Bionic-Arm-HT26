@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 from pathlib import Path
 
 import numpy as np
 
+from aurora.file_utils import file_digest as digest
 from aurora.json_utils import read_json_object
 from aurora.sensors.arm_alignment import (
     METHOD,
@@ -18,10 +18,6 @@ from aurora.sensors.arm_alignment import (
     fit_alignment,
     rotation_matrix,
 )
-
-
-def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def reference_windows(manifest):

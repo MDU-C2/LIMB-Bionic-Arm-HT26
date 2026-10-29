@@ -167,7 +167,9 @@ class NativeWorkflowTests(unittest.TestCase):
         )
         self.error_patch.start()
         self.addCleanup(self.error_patch.stop)
-        self.gui = ProjectGui(self.root)
+        self.gui = ProjectGui(
+            self.root, preferences_path=Path(self.temporary.name) / "preferences.json"
+        )
         self.addCleanup(self.close_gui)
         self.directory = Path(self.temporary.name)
         self.trial = self.directory / "original trial"
@@ -218,6 +220,7 @@ class NativeWorkflowTests(unittest.TestCase):
             self.gui._kill_process_tree_if_running(process.process)
             process.process.wait(timeout=10)
         self.gui.close()
+        self.gui = None
         # Tk objects must be finalized on their owning thread between desktop cases.
         gc.collect()
 
@@ -248,6 +251,162 @@ class NativeWorkflowTests(unittest.TestCase):
         self.assertEqual(managed.process.returncode, expected_code, "\n".join(managed.output_tail))
         self.assertEqual(self.source.read_bytes(), self.original)
         return managed
+
+    def start_idle_recorder(self, trial, *, flood=False):
+        """A real child emits the recorder contract without opening physical devices."""
+        from aurora.recording.common import STOP_COMMAND
+
+        code = """
+import sys,time
+from aurora.recording.common import announce_result,enable_ctrl_break_as_interrupt
+from aurora.recording.cup_protocol import CupTrialGuide
+from aurora.recording.record_cup_trials import emit
+enable_ctrl_break_as_interrupt(stdin_stop=True)
+for n in range(int(sys.argv[2])): print('progress',n)
+announce_result(sys.argv[1])
+emit('saved',path=sys.argv[1],complete=False)
+guide=CupTrialGuide()
+try:
+    while True:
+        emit('status',ready=True,recording=False,streams_ready=True,can_start=True,can_prepare=True,can_record=True,next_trial='T002',message='Synthetic recorder idle',protocol=guide.view())
+        time.sleep(0.25)
+except KeyboardInterrupt:
+    raise SystemExit(130)
+"""
+        key = "recording:cup_trials"
+        self.gui._start_program(
+            "Synthetic idle recorder",
+            "recording",
+            [sys.executable, "-u", "-c", code, str(trial), "4000" if flood else "0"],
+            process_key=key,
+            stop_input=STOP_COMMAND,
+        )
+        owner = self.gui.processes[key]
+        self.pump(
+            lambda: (
+                self.gui.session.selected_trial == trial / "trial.json"
+                and self.gui.session.cup.status["can_record"]
+            )
+        )
+        return owner
+
+    def test_single_and_batch_capture_send_the_same_source_specific_settings(self):
+        self.gui.recording_subject.set("S17")
+        self.gui.recording_camera_side.set("right")
+        self.gui.recording_output.set(str(self.directory / "raw output Å"))
+        self.gui.recording_serial_port.set("COM9")
+        self.gui.recording_serial_baud.set("230400")
+        self.gui.recording_ble_device.set("AURORA test")
+        self.gui.recording_emg_format.set("legacy-prefix")
+        self.gui.recording_camera_depth.set(True)
+        self.gui.recording_pose_model.set("Fast")
+        self.gui.recording_grip_repeats.set("3")
+        for filename in self.gui.recording_sources:
+            with (
+                self.subTest(filename=filename),
+                patch.object(self.gui, "_release_ble_for", return_value=False),
+                patch.object(self.gui, "_stop_serial_dashboard", return_value=True),
+                patch.object(self.gui, "_start_program", return_value=True) as launch,
+            ):
+                self.gui.recording_grip_trial.set(filename == "record_ble_sensors.py")
+                self.gui.recording_program.set(
+                    next(
+                        name
+                        for name, path in self.gui.recording_programs.items()
+                        if path.name == filename
+                    )
+                )
+                for source, variable in self.gui.recording_sources.items():
+                    variable.set(source == filename)
+                self.gui.start_single_recording()
+                single = launch.call_args
+                self.gui.start_selected_recordings()
+                batch = launch.call_args
+                self.assertEqual(launch.call_count, 2)
+                self.assertEqual(single.args[2], batch.args[2])
+                environment = batch.kwargs["environment"]
+                self.assertEqual(environment["AURORA_SUBJECT"], "S17")
+                self.assertEqual(environment["AURORA_CAMERA_SIDE"], "right")
+                self.assertEqual(
+                    Path(environment["AURORA_OUTPUT_DIR"]), self.directory / "raw output Å"
+                )
+                self.assertEqual(environment["AURORA_SERIAL_PORT"], "COM9")
+                self.assertEqual(environment["AURORA_SERIAL_BAUD"], "230400")
+                if filename == "record_ble_sensors.py":
+                    self.assertIn("--grip-trial", batch.args[2])
+                    self.assertIn("legacy-prefix", batch.args[2])
+                    self.assertNotIn("--pose-model", batch.args[2])
+                elif filename == "record_oak_pose.py":
+                    self.assertEqual(
+                        batch.args[2][3:], ["--auto-start", "--pose-model", "0", "--depth"]
+                    )
+                else:
+                    self.assertEqual(batch.args[2][3:], [])
+        self.assertEqual(self.errors, [])
+
+    def test_replay_keeps_an_idle_recorder_connection_and_current_context(self):
+        from test_recorded_control import make_trial
+
+        trial = self.directory / "synthetic replay"
+        trial.mkdir()
+        make_trial(trial)
+        self.pump(lambda: self.gui.simulation_python is not None)
+        owner = self.start_idle_recorder(trial)
+        self.assertEqual(str(self.gui.replay_button.cget("state")), "normal")
+        self.gui.replay_button.invoke()
+        key = "simulation:Recorded live control"
+        self.assertIn(key, self.gui.processes)
+        replay = self.gui.processes[key]
+        self.pump(lambda: any("Initializing sensor window" in line for line in replay.output_tail))
+        self.assertIsNone(owner.process.poll())
+        self.gui._stop_processes([replay])
+        self.pump(lambda: key not in self.gui.processes)
+        self.assertIsNone(owner.process.poll())
+        self.assertTrue(self.gui.session.context_locked)
+        self.gui._stop_processes([owner])
+        self.pump(lambda: owner.key not in self.gui.processes)
+        self.assertEqual(self.errors, [])
+
+    def test_shared_context_and_saved_event_carry_results_into_processing_and_review(self):
+        button(self.gui, "Open workflow guide").invoke()
+        guide = next(
+            child
+            for child in self.root.winfo_children()
+            if isinstance(child, tk.Toplevel) and child.title() == "AURORA workflow guide"
+        )
+        self.assertTrue(guide.winfo_exists())
+        guide.destroy()
+        self.gui.recording_subject.set("S09")
+        self.gui.recording_camera_side.set("right")
+        self.gui.recording_output.set(str(self.directory / "captures Å"))
+        dialog = self.gui.workflow.show_tool("movement_capture")
+        self.assertIs(dialog.tool_variables["subject"], self.gui.recording_subject)
+        self.assertIs(dialog.tool_variables["side"], self.gui.recording_camera_side)
+        self.assertIn("captures Å", dialog.tool_variables["output"].get())
+        button(dialog, "Cancel").invoke()
+        self.assertNotIn("tool:movement_capture", self.gui.processes)
+        owner = self.start_idle_recorder(self.trial, flood=True)
+        self.assertEqual(self.gui.session.selected_trial, self.trial / "trial.json")
+        self.assertGreater(self.gui.log_overruns, 0)
+        self.pump(lambda: self.gui.workflow.selected_recording() == self.trial / "trial.json")
+        process = self.form("process_emg", {})
+        self.assertEqual(process.tool_variables["source"].get(), str(self.trial / "trial.json"))
+        output = Path(process.tool_variables["output"].get())
+        self.assertTrue(output.is_relative_to(self.directory / "captures Å" / "derived"))
+        process.run_button.invoke()
+        self.pump(lambda: "tool:process_emg" not in self.gui.processes)
+        self.pump(lambda: self.gui.workflow.selected_recording() == output / "emg.filtered.csv")
+        self.assertTrue((output / "emg.processing.json").is_file())
+        button(self.gui, "Review current trial").invoke()
+        self.pump(lambda: self.gui.workflow.selected_recording() == self.trial / "trial.json")
+        bundle = self.form("bundle", {})
+        self.assertEqual(bundle.tool_variables["source"].get(), str(self.trial / "trial.json"))
+        button(bundle, "Cancel").invoke()
+        self.assertEqual(self.source.read_bytes(), self.original)
+        self.assertIsNone(owner.process.poll())
+        self.gui._stop_processes([owner])
+        self.pump(lambda: owner.key not in self.gui.processes)
+        self.assertEqual(self.errors, [])
 
     def test_review_processing_and_spectrum_export_use_selected_settings(self):
         output = self.directory / "processed EMG"
@@ -449,7 +608,7 @@ class NativeWorkflowTests(unittest.TestCase):
             button(self.gui, "Review / select movement model").invoke()
         self.pump(lambda: bool(self.errors))
         self.assertEqual(self.gui.movement_model_path, MOVEMENT_MODEL)
-        self.assertIn("matching completed training manifest", self.errors[-1][1])
+        self.assertIn("do not match", self.errors[-1][1])
 
     def test_manual_joints_and_recorded_pose_route_to_existing_previews(self):
         from test_movement_features import measured_frame

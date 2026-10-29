@@ -8,7 +8,7 @@ import math
 import os
 import time
 
-from aurora.recording.common import enable_ctrl_break_as_interrupt, env_float
+from aurora.recording.common import announce_result, enable_ctrl_break_as_interrupt, env_float
 from aurora.recording.oak_session import CameraSession as CameraSession
 from aurora.sensors.camera.cup_detection import CupDetector
 from aurora.sensors.camera.hand_tracking import ArmHandTracker
@@ -201,7 +201,7 @@ def main() -> int:
         except Exception as error:
             print(f"Camera calibration unavailable; stereo angles disabled: {error}")
 
-    session = CameraSession(cv2, args.subject, args.side, args.depth)
+    session = CameraSession(cv2, args.subject, args.side, args.depth, on_saved=announce_result)
     controls = {"toggle": False, "button": None}
 
     def on_mouse(event, x, y, _flags, _userdata):

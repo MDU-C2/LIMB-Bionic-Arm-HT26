@@ -12,6 +12,7 @@ import os
 import time
 
 from aurora.recording.common import (
+    announce_result,
     create_session_directory,
     enable_ctrl_break_as_interrupt,
     env_float,
@@ -21,9 +22,9 @@ from aurora.recording.common import (
 )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(*, preview: bool = True, description: str = __doc__) -> argparse.Namespace:
     """Read GUI defaults and optional command-line overrides."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--port", default=os.environ.get("AURORA_SERIAL_PORT", ""))
     parser.add_argument(
         "--baud",
@@ -36,16 +37,17 @@ def parse_args() -> argparse.Namespace:
         dest="subject",
         default=os.environ.get("AURORA_SUBJECT", "session"),
     )
-    parser.add_argument(
-        "--preview",
-        action="store_true",
-        help="Print live serial messages without creating a recording session.",
-    )
-    parser.add_argument(
-        "--preview-window",
-        action="store_true",
-        help="Show a live serial log and graphs without saving a session.",
-    )
+    if preview:
+        parser.add_argument(
+            "--preview",
+            action="store_true",
+            help="Print live serial messages without creating a recording session.",
+        )
+        parser.add_argument(
+            "--preview-window",
+            action="store_true",
+            help="Show a live serial log and graphs without saving a session.",
+        )
     parser.add_argument(
         "--duration",
         type=float,
@@ -191,6 +193,7 @@ def record(args, *, source="serial", sample_exporter=None) -> int:
 
     if output_path is not None and output_path.is_file():
         print(f"Saved {lines_written} messages to {output_path}")
+        announce_result(session)
     return result
 
 

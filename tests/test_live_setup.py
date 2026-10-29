@@ -99,26 +99,33 @@ class LiveSetupTests(unittest.TestCase):
         self.guide.update(snapshot(), 10)
         self.assertEqual(self.guide.stage, "rest")
         self.live.calibrate_emg.assert_not_called()
+        self.live.reader.graph_data.return_value = {
+            "emg_calibration_state": {"phase": "rest", "message": "Collecting relaxed baseline"}
+        }
         self.guide.action()
+        self.live.calibrate_emg.assert_not_called()
+        self.guide.update(snapshot(), 12.9)
+        self.live.calibrate_emg.assert_not_called()
+        self.guide.update(snapshot(), 13.1)
         self.live.calibrate_emg.assert_called_once()
         self.live.reader.graph_data.return_value = {
             "emg_calibration_state": {"phase": "grip_reference_needed", "message": "Rest saved"}
         }
-        self.guide.update(snapshot(), 11)
+        self.guide.update(snapshot(), 14)
         self.assertEqual(self.guide.stage, "grip")
         self.live.calibrate_emg_strength.assert_not_called()
         self.guide.action()
         self.live.reader.graph_data.return_value = {
             "emg_calibration_state": {"phase": "failed", "message": "Grip too weak; repeat"}
         }
-        self.guide.update(snapshot(), 14)
+        self.guide.update(snapshot(), 17.1)
         self.assertEqual(self.guide.stage, "grip")
         self.assertFalse(self.guide.pending)
         self.guide.action()
         self.live.reader.graph_data.return_value = {
             "emg_calibration_state": {"phase": "ready", "message": "Grip reference saved"}
         }
-        self.guide.update(snapshot(), 18)
+        self.guide.update(snapshot(), 20.2)
         self.assertEqual(self.guide.stage, "ready")
         self.assertTrue(self.guide.action())
 
@@ -141,6 +148,32 @@ class LiveSetupTests(unittest.TestCase):
         self.guide.stage = "running"
         self.guide.update(snapshot(camera_ready=False, imu_ready=False, emg_raw=None), 11)
         self.assertEqual(self.guide.stage, "align")
+
+    def test_pause_retains_only_same_connection_calibration_and_mounting_repeat_invalidates(self):
+        self.guide.stage = "running"
+        self.guide.update(snapshot(), 10)
+        self.guide.pause()
+        self.assertEqual(self.guide.stage, "ready")
+        self.live.calibrate.assert_not_called()
+        self.assertTrue(self.guide.action())
+        self.live.reader.connection_generation = 2
+        self.guide.pause()
+        self.assertEqual(self.guide.stage, "align")
+        self.live.invalidate_calibration = Mock()
+        self.guide.repeat()
+        self.live.invalidate_calibration.assert_called_once()
+        self.assertIn("Mounting changed", self.guide.message)
+
+    def test_explicit_invalidation_removes_live_validity_without_stopping_raw_sources(self):
+        live = LiveSensorInput(show_monitor=False, clock=lambda: 1000)
+        live.reader = BleSensorReader(clock=live.clock)
+        live.calibrate()
+        self.assertTrue(live.poll().calibration_valid)
+        live.invalidate_calibration()
+        self.assertFalse(live.poll().calibration_valid)
+        self.assertIsNone(live.reader.alignment_profile)
+        self.assertFalse(live.reader._stop.is_set())
+        live.close()
 
     def test_real_elbow_change_above_robot_limit_survives_alignment(self):
         clock = [1000.0]

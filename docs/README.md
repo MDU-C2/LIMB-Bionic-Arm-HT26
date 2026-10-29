@@ -1,13 +1,17 @@
 # Guides
 
+Start with the [workflow guide](workflow-guide.md): shared session settings,
+illustrated calibration, recording/control and review/process/export.
+See [architecture](architecture.md) for maintained code boundaries.
+
 - [Setup](../scripts/README.md): install and start the app.
 - [Troubleshooting](troubleshooting-guide.md): connection, calibration and live simulation problems.
-- [Recording](recording-guide.md): check signals, record a session and run a grip trial.
+- [Recording](recording-guide.md): saved formats, reference provenance and completeness.
 - [Signal inspection](signal-inspection.md): plot raw recordings before processing.
 - [EMG learning](emg-learning.md): review labels, compare classifiers and select a model.
 - [Fusion comparison](fusion-comparison.md): offline filter checks with a known reference.
 - [Cup transfer protocol](cup-transfer-protocol.md): printable subject instructions.
-- [Live control](live-control.md): guided calibration, fusion and recorded replay.
+- [Live control](live-control.md): fusion, validity and recorded replay.
 - [Simulation](simulation-guide.md): arm controls and live input.
 - [Sensors](sensor-data.md): wiring, sample formats and calibration.
 - [Bluetooth timing](bluetooth-sync.md): align sensor data with camera frames.

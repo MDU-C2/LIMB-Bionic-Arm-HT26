@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import math
-import os
 import time
 from pathlib import Path
 
@@ -21,7 +20,7 @@ from aurora.simulation.model.joint_limits import (
     HARDWARE_JOINT_LIMITS_DEG,
     clamp_dmp_vector,
 )
-from aurora.simulation.model.robot_model import JOINT_MAPPING, SIM_DIR, joint_index
+from aurora.simulation.model.robot_model import JOINT_MAPPING, joint_index, load_left_arm
 
 EXAMPLE_PATH = RESOURCE_DIRECTORY / "examples" / "simulation" / "demo"
 
@@ -133,18 +132,11 @@ def main() -> None:
             ):
                 p.configureDebugVisualizer(preview, 0)
         p.setGravity(0, 0, 0)
-        # PyBullet on Windows cannot open the non-ASCII parent path directly.
-        # Loading from this directory keeps all URDF and mesh paths ASCII-only.
-        previous_directory = Path.cwd()
-        os.chdir(SIM_DIR)
-        try:
-            robot = p.loadURDF(
-                "arm/left_arm.urdf",
-                baseOrientation=p.getQuaternionFromEuler((math.pi / 2, 0, math.pi / 2)),
-                useFixedBase=True,
-            )
-        finally:
-            os.chdir(previous_directory)
+        robot = load_left_arm(
+            p,
+            base_position=(0, 0, 0),
+            base_orientation=p.getQuaternionFromEuler((math.pi / 2, 0, math.pi / 2)),
+        )
         joint_ids = [joint_index(robot, urdf_name) for _, urdf_name, _ in JOINT_MAPPING]
         wrist_joint = joint_index(robot, "jLeftWrist_rotation")
         for index in range(p.getNumJoints(robot)):

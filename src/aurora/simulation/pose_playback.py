@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import time
 from pathlib import Path
 
@@ -14,7 +13,7 @@ import pybullet as p
 
 from aurora.recording.common import enable_ctrl_break_as_interrupt
 from aurora.simulation.model.joint_limits import finger_joint_angles_rad
-from aurora.simulation.model.robot_model import JOINT_MAPPING, SIM_DIR, joint_index
+from aurora.simulation.model.robot_model import JOINT_MAPPING, joint_index, load_left_arm
 from aurora.simulation.pose_mapping import (
     CameraArmMapper,
     FingerMotionLimiter,
@@ -78,16 +77,11 @@ def load_robot(headless: bool) -> tuple[int, list[int], dict[str, tuple[int, ...
         p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         p.resetDebugVisualizerCamera(1.7, 145, -12, [0.0, 0.25, 0.25])
 
-    previous_directory = Path.cwd()
-    os.chdir(SIM_DIR)
-    try:
-        robot = p.loadURDF(
-            "arm/left_arm.urdf",
-            baseOrientation=p.getQuaternionFromEuler((math.pi / 2, 0, math.pi / 2)),
-            useFixedBase=True,
-        )
-    finally:
-        os.chdir(previous_directory)
+    robot = load_left_arm(
+        p,
+        base_position=(0, 0, 0),
+        base_orientation=p.getQuaternionFromEuler((math.pi / 2, 0, math.pi / 2)),
+    )
 
     for index in range(p.getNumJoints(robot)):
         p.setJointMotorControl2(robot, index, p.POSITION_CONTROL, force=0.0)

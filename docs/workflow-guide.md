@@ -7,6 +7,54 @@ package leaves the other tools available. See [setup](../scripts/README.md).
 
 ## Connect and inspect
 
+To learn before connecting hardware, choose **Learn signals and mounting (no
+hardware)** on this page, or under **Advanced Tools → Diagnostics**. The learning
+window shows an animated arm, both sensor coordinate frames, acceleration in g,
+angular velocity in degrees/s, raw 12-bit EMG and its causal RMS/activation.
+Known model angles, human estimates, relative changes and robot commands have
+separate labels. The camera reference is generated from the model; no camera,
+BLE board, serial port or trained neural model is opened. Acceleration models
+gravity as the sensor rotates; it omits the extra acceleration of real movement.
+
+On **Explore signals**, choose a movement, or choose **Manual movement** and move
+one joint slider at a time. **Pause**, **Advance 10 ms** and **Restart experiment**
+remain available below the controls. Open **Setup / Save** for rehearsal and export.
+Manual angles use the signed values shown as known model angles for either arm.
+Robot commands use the CAD frame and actuator limits: a 90° human elbow can
+remain 90° in the estimate while its robot command is limited to 60°.
+Mounting choices rotate the virtual sensors, changing the raw XYZ channels.
+Use **Rehearse mounting + EMG**, then **Start preparation step** for each of the
+same reference movements used below. Countdown and progress use simulated time;
+pause, slow motion and single steps do not change the sample intervals. The
+existing fitting routine processes the generated reference movements, followed
+by relaxed and firm-grip EMG preparation. Moving a virtual sensor invalidates
+that window's fit. It never creates a valid physical calibration.
+
+The sensor drawings show coordinate axes schematically. Match the actual board's
+markings and chip orientation when mounting physical hardware. Each IMU belongs
+to its own arm segment, not across a joint. The EMG enclosure and skin electrodes
+are separate placements; follow the electrode manufacturer's instructions and
+confirm a reproducible rest/grip difference with real signals.
+
+Inspect noise, missing forearm/camera input, mains interference, clipping and
+gyro bias with **Signal condition**. A still IMU retains approximately 1 g of
+gravity across its axes; gyro returns near zero after a rotation stops. Raw EMG
+is irregular: contraction increases its fluctuations, not a constant ADC level.
+The contraction control is an illustrative amplitude setting, not measured force.
+
+**Rehearse cup countdown** uses the normal task cues with an illustrative arm
+motion. **Pause** enables inspection of the last 20 simulated seconds; choose
+**Save last ≤20 s of signals** to export that bounded window. `lesson.json`
+marks the source as synthetic and includes calibration provenance; `signals.csv`
+separates generated IMU values from received roles, `emg.csv` retains every
+generated ADC sample in that window, and `angles.csv` keeps known, estimated,
+relative and robot-command values in separate columns. **Open export folder**
+opens the output folder, below the selected root's `derived/sensor_learning`
+when launched here.
+These files are teaching diagnostics, not cup-trial manifests or EMG training
+labels. They cannot establish electrode quality, radio performance or anatomical
+accuracy. Participant collection still follows the real connection flow below.
+
 1. Open **Connect & inspect**. Enter the subject ID, select the human arm and
    device, and choose the recording output folder. These inputs are shared with
    Record, Control and the applicable Advanced Tools forms.

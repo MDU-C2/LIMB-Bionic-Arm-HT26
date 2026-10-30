@@ -13,6 +13,20 @@ from aurora.simulation.dmp.trajectory_io import load_dmp_trajectory
 
 
 class DmpPlaybackTests(unittest.TestCase):
+    def test_duration_changes_preserve_the_fitted_motion_at_the_same_phase(self):
+        phase = np.linspace(0, 1, 201)
+        demo = (0.4 * np.sin(2 * np.pi * phase) + 0.3 * phase)[:, None]
+        reference = None
+        for fit_duration in (1, 0.5, 2):
+            model = fit([demo], fit_duration, 0.005 * fit_duration, 30, 4, 25, 6.25)
+            for duration in (1, 0.5, 2):
+                with self.subTest(fit_duration=fit_duration, duration=duration):
+                    generated = rollout_simple(model, demo[0], demo[-1], duration, 0.005 * duration)
+                    self.assertLess(float(np.sqrt(np.mean((generated - demo) ** 2))), 0.035)
+                    if reference is None:
+                        reference = generated
+                    np.testing.assert_allclose(generated, reference, atol=1e-10, rtol=0)
+
     def test_returning_movements_keep_their_amplitude_for_equal_and_nearby_endpoints(self):
         time = np.linspace(0, 1, 201)
         for displacement in (0, 0.005, -0.005, 0.3):

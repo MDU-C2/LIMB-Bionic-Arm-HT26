@@ -7,6 +7,7 @@ import math
 from typing import Any
 
 from aurora.sensors.imu_twist import DEFAULT_TWIST_AXIS, ImuTwistEstimator
+from aurora.simulation.model.joint_limits import LEFT_ARM_LIMITS_DEG
 
 CONTROL_NAMES = (
     "elbow_flexion",
@@ -457,18 +458,18 @@ def interactive_control_targets(angles: object) -> dict[str, float] | None:
         return None
     result: dict[str, float] = {}
     if "elbow_flexion" in fused:
-        result["elbow_x"] = min(60.0, max(0.0, fused["elbow_flexion"]))
+        result["elbow_x"] = fused["elbow_flexion"]
     if "shoulder_flexion" in fused:
-        result["shoulder_y"] = min(75.0, max(0.0, 90.0 - fused["shoulder_flexion"]))
+        result["shoulder_y"] = 90.0 - fused["shoulder_flexion"]
     if "shoulder_abduction" in fused:
-        result["shoulder_z"] = min(-5.0, max(-40.0, -fused["shoulder_abduction"]))
+        result["shoulder_z"] = -fused["shoulder_abduction"]
     if "shoulder_rotation_proxy" in fused:
         # Camera axial-positive is a medial/right movement for the tracked
         # left arm.  The mirrored left-arm URDF uses the opposite joint sign.
-        result["shoulder_x"] = min(60.0, max(-60.0, -fused["shoulder_rotation_proxy"]))
+        result["shoulder_x"] = -fused["shoulder_rotation_proxy"]
     if "wrist_rotation" in fused:
-        result["wrist_rotation"] = min(140.0, max(0.0, fused["wrist_rotation"]))
-    return result or None
+        result["wrist_rotation"] = fused["wrist_rotation"]
+    return {name: LEFT_ARM_LIMITS_DEG[name].clamp(value) for name, value in result.items()} or None
 
 
 def retarget_reference(angles, human_reference, robot_reference):

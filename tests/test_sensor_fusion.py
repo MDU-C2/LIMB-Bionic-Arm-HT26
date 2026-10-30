@@ -10,16 +10,27 @@ from aurora.sensors.emg_protocol import EmgActivationEstimator, extract_emg, sel
 from aurora.sensors.fusion import (
     ControlAngleSmoother,
     DualImuArmEstimator,
+    anatomical_reference_angles,
     camera_control_angles,
     camera_hand_curl,
     fuse_control_angles,
     interactive_control_targets,
 )
 from aurora.sensors.imu_protocol import ImuStreamDecoder, extract_imus, imu_configuration
+from aurora.simulation.model.joint_limits import LEFT_ARM_LIMITS_DEG
 
 
 class SensorFusionTests(unittest.TestCase):
     """Sensor normalization, calibration, fusion, and grip behavior."""
+
+    def test_robot_reference_round_trip_keeps_model_limits_and_joint_signs(self):
+        for position in ("lower", "home", "upper"):
+            with self.subTest(position=position):
+                joints = {
+                    name: getattr(limit, position) for name, limit in LEFT_ARM_LIMITS_DEG.items()
+                }
+                human_reference = anatomical_reference_angles(joints)
+                self.assertEqual(interactive_control_targets(human_reference), joints)
 
     def test_camera_grip_ignores_emg_packets_without_electrode_contact(self):
         self.assertEqual(select_grip_source(0.0, 0.9, "camera"), (0.9, "camera"))

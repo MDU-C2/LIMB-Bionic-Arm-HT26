@@ -17,6 +17,7 @@ from aurora.recording.common import STOP_COMMAND
 COOPERATIVE_MODULES = frozenset(
     (
         "aurora.gui.tool_jobs",
+        "aurora.gui.sensor_learning",
         "aurora.recording.emg_processing",
         "aurora.recording.capture_movement",
         "aurora.recording.record_ble_sensors",
@@ -55,6 +56,18 @@ class WorkflowTools:
         ttk.Button(page, text="Review current trial", command=self.review_current).grid(
             row=8, column=0, sticky="w"
         )
+        ttk.Button(
+            page,
+            text="Learn signals and mounting (no hardware)",
+            command=lambda: self.show_tool(
+                "sensor_learning",
+                {
+                    "output": str(
+                        project_path(gui.recording_output.get()) / "derived/sensor_learning"
+                    )
+                },
+            ),
+        ).grid(row=9, column=0, sticky="w", pady=8)
         context = gui._card(
             page, 2, "Subject and arm", "These settings are shared with recording and live control."
         )
@@ -222,6 +235,7 @@ class WorkflowTools:
             row=0, column=0, sticky="w", pady=8
         )
         diagnostic_keys = (
+            "sensor_learning",
             "serial_control",
             "legacy_ble_preview",
             "ble_check",

@@ -104,9 +104,21 @@ for tool in TOOLS.values():
 sys.argv = package_arguments
 for name in ('aurora.ml.train_emg', 'aurora.ml.emg_model', 'aurora.ml.emg_network',
              'aurora.ml.emg_results', 'aurora.gui.emg_review',
-             'aurora.recording.emg_labels', 'aurora.sensors.fusion_comparison'):
+             'aurora.recording.emg_labels', 'aurora.sensors.fusion_comparison',
+             'aurora.sensors.sensor_lesson', 'aurora.gui.sensor_learning'):
     module = importlib.import_module(name)
     assert pathlib.Path(module.__file__).is_relative_to(PACKAGE_DIRECTORY), name
+from aurora.sensors.sensor_lesson import SensorLesson
+lesson = SensorLesson()
+try:
+    lesson.configure({'lesson': 'STILL'})
+    for _ in range(20):
+        lesson.advance()
+    exported = lesson.export(pathlib.Path('synthetic learning \u00c5'))
+    assert json.loads((exported / 'lesson.json').read_text())['participant_data'] is False
+    assert (exported / 'emg.csv').is_file()
+finally:
+    lesson.close()
 expected = json.loads(sys.argv[2])
 for name, digest in expected.items():
     assert hashlib.sha256((MODEL_DIRECTORY / name).read_bytes()).hexdigest() == digest

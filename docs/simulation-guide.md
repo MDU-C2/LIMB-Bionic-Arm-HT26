@@ -54,6 +54,12 @@ one second. Endpoint changes below 0.02 radians retain the demonstration's
 absolute amplitude, including returns to the start. Exports keep unclipped
 radians; playback maps them into robot limits.
 
+DMP durations and timesteps are in seconds. Fitting and rollout use the same
+time scaling, including the velocity term, so changing duration preserves the
+motion at the same phase. This follows the first-order equations in
+[Ijspeert et al. (2013), equation 2.1](https://viterbik12.usc.edu/wp-content/uploads/2017/06/Dynamical-Movement-Primitives_-Learning-Attractor-Models-for-Motor-Behaviors.pdf).
+Motor speed limits can lengthen actual playback beyond the requested duration.
+
 **Advanced Tools / Movement profiles** retains camera profile playback,
 comparison and optional recognition. Training results need independent evaluation.
 See [live fusion](live-control.md) for sensor timing and observability limits.

@@ -47,6 +47,22 @@ MODE = Setting(
 )
 SIDE = Setting("side", "Human arm", "--side", "left", "choice", ("left", "right"))
 TOOLS = {
+    "sensor_learning": Tool(
+        "Learn signals and mounting (no hardware)",
+        "aurora.gui.sensor_learning",
+        (
+            SIDE,
+            Setting(
+                "output",
+                "Synthetic signal export root",
+                "--output-root",
+                "outputs/diagnostics/sensor_learning",
+                "output_directory",
+            ),
+        ),
+        ("numpy",),
+        "An animated arm, sensor axes and raw/processed plots. Rehearse mounting, EMG and cup cues without devices. Synthetic exports are not participant recordings or proof of tracking accuracy.",
+    ),
     "legacy_ble_preview": Tool(
         "Legacy BLE compatibility preview",
         "aurora.recording.record_ble_sensors",

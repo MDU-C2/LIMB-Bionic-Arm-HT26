@@ -110,7 +110,7 @@ def _compute_f_target(
     f_target = (
         tau**2 * ddq
         - alpha_transformation * beta_transformation * (g_joint - q_joint)
-        + alpha_transformation * dq
+        + alpha_transformation * tau * dq
     ) / scale
     return f_target
 
@@ -298,7 +298,7 @@ def rollout_simple(
         forcing = phase * (model.weights @ normalized_activations)
         acceleration = (
             model.alpha_transformation * model.beta_transformation * (goal - position)
-            - model.alpha_transformation * velocity
+            - model.alpha_transformation * tau * velocity
             + spatial_scale * forcing
         ) / tau**2
         velocity += acceleration * dt

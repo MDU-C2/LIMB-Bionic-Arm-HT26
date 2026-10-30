@@ -7,7 +7,9 @@ import contextlib
 import io
 import os
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from aurora.recording import (
@@ -20,6 +22,39 @@ from aurora.recording.common import env_float
 
 
 class RecordingOptionTests(unittest.TestCase):
+    def test_diagnostics_reject_nonfinite_waits_before_device_access(self):
+        from scripts import check_ble, check_dual_imu, check_emg_calibration
+
+        with tempfile.TemporaryDirectory() as temporary:
+            for module in (check_ble, check_dual_imu, check_emg_calibration):
+                for invalid in ("nan", "inf", "-inf"):
+                    arguments = [module.__name__, f"--seconds={invalid}"]
+                    if module is check_emg_calibration:
+                        arguments += ["--out", str(Path(temporary) / "diagnostic.json")]
+                    with (
+                        self.subTest(tool=module.__name__, seconds=invalid),
+                        patch.object(sys, "argv", arguments),
+                        contextlib.redirect_stdout(io.StringIO()),
+                        contextlib.redirect_stderr(io.StringIO()),
+                        patch.object(
+                            check_ble, "scan", side_effect=AssertionError("Unexpected scan")
+                        ) as scan,
+                        patch.object(
+                            check_dual_imu,
+                            "select_port",
+                            side_effect=AssertionError("Unexpected port access"),
+                        ) as port,
+                        patch(
+                            "aurora.sensors.ble_input.BleSensorReader.start",
+                            side_effect=AssertionError("Unexpected connection"),
+                        ) as start,
+                    ):
+                        with self.assertRaises((ValueError, SystemExit)):
+                            module.main()
+                        scan.assert_not_called()
+                        port.assert_not_called()
+                        start.assert_not_called()
+
     def test_serial_recorders_share_overrides_but_keep_preview_exclusive_to_the_monitor(self):
         environment = {
             "AURORA_SERIAL_PORT": "COM6",

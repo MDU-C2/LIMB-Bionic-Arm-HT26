@@ -176,8 +176,13 @@ def verify_stream(
 
 def main() -> int:
     args = parse_args()
-    if args.baud < 1 or args.seconds <= 0 or args.min_samples < 1:
-        raise ValueError("baud, seconds, and min-samples must be positive")
+    if (
+        not math.isfinite(args.seconds)
+        or args.baud < 1
+        or args.seconds <= 0
+        or args.min_samples < 1
+    ):
+        raise ValueError("baud, seconds, and min-samples must be finite and positive")
     port = select_port(args.port)
     return (
         0

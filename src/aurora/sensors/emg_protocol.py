@@ -7,9 +7,9 @@ import math
 from typing import Any
 
 from aurora.sensors.emg_filter import RawEmgFilter
+from aurora.sensors.emg_packets import ADC_MAX as ADC_MAX
 
 ADC_MIN = 0
-ADC_MAX = 4095
 
 
 def extract_emg(packet: object) -> dict[str, Any]:

@@ -94,6 +94,30 @@ def make_trial(root):
 
 
 class RecordedControlTests(unittest.TestCase):
+    def test_replay_rejects_nonfinite_duration_and_seek_times(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            make_trial(root)
+            path = root / "trial.json"
+            manifest = json.loads(path.read_text())
+            for invalid in (float("nan"), float("inf"), -1):
+                with self.subTest(duration=invalid):
+                    path.write_text(json.dumps({**manifest, "duration_seconds": invalid}))
+                    with self.assertRaisesRegex(ValueError, "duration"):
+                        RecordedSensorInput(root, show_monitor=False)
+            path.write_text(json.dumps(manifest))
+            replay = RecordedSensorInput(root, show_monitor=False)
+            try:
+                replay.start()
+                for invalid in (float("nan"), float("inf"), -1):
+                    with self.subTest(seek=invalid):
+                        with self.assertRaises(ValueError):
+                            replay.advance_to(invalid)
+                        self.assertEqual(replay.elapsed, 0)
+                self.assertTrue(replay.advance_to(0.5).imu_ready)
+            finally:
+                replay.close()
+
     def test_video_release_failure_still_releases_sensor_input_and_can_retry(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

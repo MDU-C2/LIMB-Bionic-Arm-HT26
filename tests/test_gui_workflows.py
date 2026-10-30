@@ -221,6 +221,7 @@ class NativeWorkflowTests(unittest.TestCase):
             process.process.wait(timeout=10)
         self.gui.close()
         self.gui = None
+        self.root = None
         # Tk objects must be finalized on their owning thread between desktop cases.
         gc.collect()
 
@@ -342,6 +343,25 @@ except KeyboardInterrupt:
                     )
                 else:
                     self.assertEqual(batch.args[2][3:], [])
+        self.assertEqual(self.errors, [])
+
+    def test_learning_action_launches_without_hardware_and_stops_cleanly(self):
+        output = self.directory / "learning output Å"
+        dialog = self.form(
+            "sensor_learning",
+            {"side": "right", "output": str(output)},
+            via="Learn signals and mounting (no hardware)",
+        )
+        dialog.run_button.invoke()
+        managed = self.gui.processes["tool:sensor_learning"]
+        self.pump(
+            lambda: any("Synthetic signal learning ready" in line for line in managed.output_tail)
+        )
+        self.assertIsNone(self.gui.ble_reader)
+        self.assertFalse(output.exists())
+        self.gui._stop_processes([managed])
+        self.pump(lambda: managed.key not in self.gui.processes)
+        self.assertEqual(managed.process.returncode, 0, managed.output_tail)
         self.assertEqual(self.errors, [])
 
     def test_replay_keeps_an_idle_recorder_connection_and_current_context(self):

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 
 
 async def scan(seconds: float, name: str = "") -> bool:
@@ -35,8 +36,8 @@ def main() -> int:
     parser.add_argument("--seconds", type=float, default=8.0)
     parser.add_argument("--name", default="", help="Only show names containing this text.")
     args = parser.parse_args()
-    if args.seconds <= 0:
-        parser.error("--seconds must be positive")
+    if not math.isfinite(args.seconds) or args.seconds <= 0:
+        parser.error("--seconds must be finite and positive")
     try:
         from bleak.exc import BleakError
     except ImportError:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -47,8 +48,8 @@ def main():
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument("--out", type=Path, default=ROOT / "outputs/emg_calibration_check.json")
     args = parser.parse_args()
-    if args.seconds < 4:
-        parser.error("--seconds must be at least 4")
+    if not math.isfinite(args.seconds) or args.seconds < 4:
+        parser.error("--seconds must be finite and at least 4")
     import numpy as np
 
     from aurora.sensors.ble_input import BleSensorReader

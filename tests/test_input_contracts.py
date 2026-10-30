@@ -16,7 +16,7 @@ from aurora.recording.packet_writer import PacketWriter
 from aurora.sensors.ble_input import BleSensorReader
 from aurora.sensors.ble_protocol import HIGH_RATE_EMG_HEADER, HIGH_RATE_IMU_PACKET, BleRecorder
 from aurora.sensors.clock_sync import SYNC_RESPONSE, ClockSynchronizer
-from aurora.sensors.emg_packets import decode_emg
+from aurora.sensors.emg_packets import CURRENT_EMG_PACKET, decode_emg
 from aurora.sensors.imu_packets import decode_imu
 from aurora.sensors.imu_protocol import ImuStreamDecoder, connected_roles
 from aurora.sensors.live_input import LiveSensorInput
@@ -24,6 +24,33 @@ from aurora.simulation.stepping import FixedStepClock
 
 
 class InputContractsTests(unittest.TestCase):
+    def test_invalid_current_adc_values_are_counted_and_retained_only_as_raw_packets(self):
+        for invalid in (4096, 65535):
+            for payload in (
+                CURRENT_EMG_PACKET.pack(0x101, 1, 1000, invalid),
+                HIGH_RATE_EMG_HEADER.pack(0x100, 1, 1000, 250, 3, 0)
+                + struct.pack("<3H", 0, invalid, 4095),
+            ):
+                with self.subTest(value=invalid, size=len(payload)):
+                    with self.assertRaisesRegex(ValueError, "12-bit"):
+                        decode_emg(payload)
+                    with tempfile.TemporaryDirectory() as temporary:
+                        root = Path(temporary)
+                        recorder = BleRecorder(root)
+                        try:
+                            recorder.handle("emg", payload)
+                            self.assertEqual(recorder.packet_health()["emg"]["decode_errors"], 1)
+                        finally:
+                            recorder.close()
+                        raw = json.loads((root / "packets.jsonl").read_text())
+                        self.assertEqual(base64.b64decode(raw["data_base64"]), payload)
+                        with (root / "emg.csv").open() as source:
+                            self.assertEqual(list(csv.DictReader(source)), [])
+        valid = HIGH_RATE_EMG_HEADER.pack(0x100, 1, 1000, 250, 2, 0)
+        self.assertEqual(decode_emg(valid + struct.pack("<2H", 0, 4095)).channels, ((0, 4095),))
+        # The single-sample adapter has a presence bit; its unused field is not a reading.
+        self.assertEqual(decode_emg(CURRENT_EMG_PACKET.pack(0x100, 1, 1000, 65535)).channels, ())
+
     def test_wire_saturated_gyros_remain_raw_but_do_not_integrate_or_command_control(self):
         clock = [100.0]
         live = LiveSensorInput(show_monitor=False, clock=lambda: clock[0])

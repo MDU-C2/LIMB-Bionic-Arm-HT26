@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -16,6 +17,9 @@ class RecordedSensorInput(LiveSensorInput):
     def __init__(self, trial: Path, **kwargs):
         self.directory = trial.parent if trial.is_file() else trial
         self.manifest = json.loads((self.directory / "trial.json").read_text(encoding="utf-8"))
+        self.duration = float(self.manifest["duration_seconds"])
+        if not math.isfinite(self.duration) or self.duration < 0:
+            raise ValueError("Replay duration must be finite and nonnegative")
         self.replay_time = 1000.0
         kwargs.pop("clock", None)
         kwargs["transport"] = "ble"
@@ -25,7 +29,6 @@ class RecordedSensorInput(LiveSensorInput):
         self.events = []
         self.index = 0
         self.elapsed = 0.0
-        self.duration = float(self.manifest["duration_seconds"])
         self.ended = False
         self.playing = False
         self.capture = None
@@ -116,6 +119,8 @@ class RecordedSensorInput(LiveSensorInput):
         """Replay decodes saved packets and does not run camera inference."""
 
     def advance_to(self, elapsed: float):
+        if not math.isfinite(elapsed):
+            raise ValueError("Replay time must be finite")
         if elapsed < self.elapsed:
             raise ValueError("Restart the replay before moving backward")
         elapsed = min(elapsed, self.duration)

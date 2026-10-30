@@ -53,6 +53,10 @@ ADC sample. The default BLE transport sends every acquired EMG sample.
 The live monitor also recognizes the older line-oriented `IMU1 ACC` / `IMU1
 GYRO` diagnostic stream still flashed on some lab boards, including the
 `WHO_AM_I` result used to distinguish one connected IMU from two.
+That text adapter retains historical scale assumptions of 1/4096 g and 1/65.5
+degrees/s per count. The text does not identify full-scale register settings;
+absolute units cannot be verified without the flashed source/configuration.
+Use the current tagged USB or BLE format for measurements with explicit units.
 
 For a terminal-level hardware check that requires valid vectors from both
 sensors, run:

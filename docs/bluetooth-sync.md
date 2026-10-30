@@ -97,6 +97,8 @@ header plus 1–40 unsigned 16-bit ADC readings; the header includes sequence,
 first sample time, sample period, count, and offset in the ADC read block.
 Each BLE notification has its own sequence number so missing packets can be
 detected. The recorder saves each decoded EMG sample with its individual time.
+Current ADC readings must be in the 12-bit range 0–4095. Out-of-range current
+packets count as decode errors; their original bytes remain in `packets.jsonl`.
 
 Unsupported versions and malformed current packets are rejected. Timestamped
 inherited layouts remain separate decoder rules. Headerless EMG requires known

@@ -67,6 +67,9 @@ def draw_traces(
         points: list[float] = []
         for sample, value in enumerate(trace):
             if not math.isfinite(value):
+                if len(points) >= 4:
+                    canvas.create_line(*points, fill=AXIS_COLORS[index % len(AXIS_COLORS)], width=2)
+                points = []
                 continue
             points.extend(
                 (

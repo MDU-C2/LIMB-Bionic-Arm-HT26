@@ -122,6 +122,8 @@ settling can differ from a live session that was already running before the tria
 Replay checks timing, mapping and consistency. It does not establish anatomical
 accuracy. The camera estimates are not ground truth, hidden fingers can be missed,
 and fast motion is limited by the recorded camera observation rate.
+Replay rejects negative or non-finite durations and non-finite seek times before
+advancing the recorded state.
 
 ## Basis
 

@@ -33,21 +33,25 @@ def announce_result(path, kind="recording"):
 STOP_COMMAND = '{"command":"stop"}\n'
 
 
-def enable_ctrl_break_as_interrupt(*, stdin_stop=False) -> None:
-    """Let the GUI's Windows stop request reach recorder cleanup blocks."""
+def enable_ctrl_break_as_interrupt(*, stdin_stop=False, on_stop=None) -> None:
+    """Reach CLI cleanup blocks, or let a GUI schedule cleanup on its event loop."""
 
     def interrupt(_number: int, _frame: object) -> None:
-        raise KeyboardInterrupt
+        if on_stop is None:
+            raise KeyboardInterrupt
+        on_stop()
 
-    for name in ("SIGBREAK", "SIGTERM"):
+    for name in ("SIGBREAK", "SIGTERM") + (("SIGINT",) if on_stop else ()):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), interrupt)
     if stdin_stop and os.environ.get("AURORA_GUI_CONTROL") == "1":
-        threading.Thread(target=_read_stop_command, daemon=True).start()
+        threading.Thread(
+            target=_read_stop_command, args=(on_stop or _thread.interrupt_main,), daemon=True
+        ).start()
 
 
-def _read_stop_command():
-    """Interrupt the main loop from a GUI command, including console-free Windows children."""
+def _read_stop_command(on_stop):
+    """Receive a stop command, including in console-free Windows children."""
     pending = b""
     try:
         descriptor = sys.stdin.fileno()
@@ -62,7 +66,7 @@ def _read_stop_command():
                 except (ValueError, UnicodeError):
                     continue
                 if isinstance(command, dict) and command.get("command") == "stop":
-                    _thread.interrupt_main()
+                    on_stop()
                     return
             if len(pending) > 4096:
                 return

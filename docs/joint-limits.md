@@ -63,7 +63,7 @@ diagnostics use a half-second rest baseline. Integrated human measurements remai
 unclipped; command mapping applies the robot ranges above. Upper-arm drift can be
 corrected by camera; the old camera mapping has no forearm-twist observation.
 Wrist drift therefore needs recalibration. Q/E and Left/Right provide manual
-fallback for unavailable twist targets. See [mounting checks](simulation-guide.md#mounting-and-twist-calibration).
+fallback for unavailable twist targets. See [mounting checks](workflow-guide.md#prepare-and-calibrate).
 
 Runtime arm commands and both loaded URDFs use the ranges above. No extra
 constraint fixes the shoulder or wrist in place. The scene's fixed constraints

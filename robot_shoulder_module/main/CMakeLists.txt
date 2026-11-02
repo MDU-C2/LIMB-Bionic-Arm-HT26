@@ -1,0 +1,13 @@
+idf_component_register(
+  SRCS
+  "robot_shoulder_module.c"
+  INCLUDE_DIRS
+  "."
+  REQUIRES
+  adc_manager
+  can_driver
+  imu
+  potentiometer
+  continuous_servo
+  stepper
+  limb_utils)

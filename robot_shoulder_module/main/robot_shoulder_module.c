@@ -14,6 +14,14 @@
 #include "soc/gpio_num.h"
 #include "stepper.h"
 
+      //TODO: Change to stepper motor control functions for cases
+      //CAN_ID_ROBOT_SHOULDER_UP_DOWN_STOP, CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_STOP, CAN_ID_ROBOT_SHOULDER_UP_DOWN_ACTUATION, CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_ACTUATION
+      //
+      //motors_update_task uses potentiometer functions and need a encoder.h file to update this function
+      //All motor configuration structs use potentiometer functions and need a encoder.h file to update
+      //GPIO enums for all GPIOs should correspond to GPIO on new PCB layout
+      //Change configurations to have all motors on seperate .timers
+
 static const char* const TAG = "Shoulder module";
 
 enum {
@@ -37,17 +45,37 @@ enum {
   STEPPER_UPPER_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
   STEPPER_UPPER_ARM_ROTATION_DIR_GPIO = GPIO_NUM_10,
   STEPPER_UPPER_ARM_ROTATION_STEP_GPIO = GPIO_NUM_7,
+
+  STEPPER_UP_DOWN_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
+  STEPPER_UP_DOWN_ROTATION_DIR_GPIO = GPIO_NUM_NC, //Change to correct GPIO for UP_DOWN when board layout is complete
+  STEPPER_UP_DOWN_ROTATION_STEP_GPIO = GPIO_NUM_NC, //Change to correct GPIO for UP_DOWN when board layout is complete
+
+  STEPPER_LEFT_RIGHT_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
+  STEPPER_LEFT_RIGHT_ROTATION_DIR_GPIO = GPIO_NUM_NC, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
+  STEPPER_LEFT_RIGHT_ROTATION_STEP_GPIO = GPIO_NUM_NC, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
+  
   // Microstepping pins.
   // NOTE: Since we're setting the stepper driver's pins in the hardware, we
   // don't need to use these pins in software.
   STEPPER_UPPER_ARM_ROTATION_M0_GPIO = GPIO_NUM_NC,
   STEPPER_UPPER_ARM_ROTATION_M1_GPIO = GPIO_NUM_NC,
   STEPPER_UPPER_ARM_ROTATION_M2_GPIO = GPIO_NUM_NC,
+
+  STEPPER_LEFT_RIGHT_ROTATION_M0_GPIO = GPIO_NUM_NC,
+  STEPPER_LEFT_RIGHT_ROTATION_M1_GPIO = GPIO_NUM_NC,
+  STEPPER_LEFT_RIGHT_ROTATION_M2_GPIO = GPIO_NUM_NC,
+
+  STEPPER_UP_DOWN_ROTATION_M0_GPIO = GPIO_NUM_NC,
+  STEPPER_UP_DOWN_ROTATION_M1_GPIO = GPIO_NUM_NC,
+  STEPPER_UP_DOWN_ROTATION_M2_GPIO = GPIO_NUM_NC,
+
   CAN_TX_GPIO = GPIO_NUM_6,
   CAN_RX_GPIO = GPIO_NUM_5,
 };
 
-// Motors are hv2060
+
+
+// Motors are Joyit NEMA17-06
 
 static const ContinuousServoConfig kUpDownServoConfig = {
     .gpio_pin = SERVO_UP_DOWN_GPIO,
@@ -170,6 +198,7 @@ static uint16_t s_potentiometer_up_down_underlying_buffer[1024] = {0};
 static uint16_t s_potentiometer_left_right_underlying_buffer[1024] = {0};
 static uint16_t s_potentiometer_rotation_underlying_buffer[1024] = {0};
 
+//The function below Will need revision or removal
 static AdcMgrReadResults s_adc_read_results = {
     .channel_buffers =
         {

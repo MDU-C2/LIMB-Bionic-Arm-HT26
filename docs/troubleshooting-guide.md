@@ -3,8 +3,12 @@
 ## Start asks for internet
 
 Use **Start** after the first **Setup**. Start only launches the saved environment;
-it does not run installation. Setup and the first firmware build need internet.
+it does not run installation. Setup needs internet and prepares the firmware toolchain.
 If the environment is missing, run Setup explicitly.
+
+If Build and Flash are disabled because a tool is missing, run Setup again,
+then press Refresh in Firmware. Setup installs PlatformIO and checks a firmware
+build before reporting success. Flashing remains a separate action over USB.
 
 ## Record raw signals
 
@@ -39,7 +43,13 @@ programs.
 data connection, close other camera previews and retry after a few seconds.
 Failed programs show an error dialog and keep their output in `outputs/logs/`.
 
+If a camera tool reports a missing lite or heavy pose model, run Setup again.
+Setup installs and checks all three pose models before reporting success.
+Start and the camera tools do not download missing models during use.
+
 If the camera reports `X_LINK_ERROR`, try live control with stereo depth off.
+If this starts after closing and reopening a preview, run Setup to install the
+pinned DepthAI update, then restart the app.
 Close other camera programs before retrying. The stereo pipeline uses the
 FAST_DENSITY preset with subpixel processing disabled to reduce its load.
 

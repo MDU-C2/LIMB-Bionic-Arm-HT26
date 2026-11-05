@@ -56,7 +56,7 @@ if [[ ! -x "$micromamba" ]]; then
     rm -f -- "$state_directory/micromamba.tar.bz2"
 fi
 
-echo 'Installing Python, GUI, simulation, camera, and sensor dependencies...'
+echo 'Installing Python and preparing the AURORA environment...'
 operation=create
 if [[ -f "$prefix/conda-meta/history" ]]; then operation=install; fi
 "$micromamba" --no-rc "$operation" -y -p "$prefix" -f environment.yml

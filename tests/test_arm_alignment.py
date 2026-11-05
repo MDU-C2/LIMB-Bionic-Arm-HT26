@@ -199,6 +199,15 @@ class ArmAlignmentTests(unittest.TestCase):
                 )
             manifest["complete"] = False
             self.assertEqual(fit_subject_reference(root, manifest)["status"], "failed")
+            manifest["packet_health"] = {
+                "imu": {"missing_packets": 96},
+                "emg": {"missing_packets": 142},
+            }
+            result = fit_subject_reference(root, manifest)
+            self.assertEqual(result["status"], "failed")
+            self.assertIn("IMU lost 96 packets", result["message"])
+            self.assertIn("EMG lost 142 packets", result["message"])
+            self.assertEqual(before, path.read_bytes())
 
     def test_arbitrary_sensor_mountings_recover_proper_rotations_for_both_arms(self):
         for side in ("left", "right"):

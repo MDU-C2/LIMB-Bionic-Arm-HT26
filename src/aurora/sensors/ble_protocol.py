@@ -86,6 +86,8 @@ class BleRecorder:
         self.reordered_packets = {name: 0 for name in self.sensors}
         self.sample_time_gaps = {name: 0 for name in self.sensors}
         self.gyro_saturation_samples = 0
+        self.emg_sample_count = 0
+        self.emg_adc_rail_samples = 0
         self._emg_end_us = None
         self.last_sequences: dict[str, int] = {}
         self.raw_file = None
@@ -263,6 +265,14 @@ class BleRecorder:
                 "reordered_packets": self.reordered_packets[name],
                 "sample_time_gaps": self.sample_time_gaps[name],
                 "gyro_saturation_samples": self.gyro_saturation_samples if name == "imu" else 0,
+                **(
+                    {
+                        "sample_count": self.emg_sample_count,
+                        "adc_rail_samples": self.emg_adc_rail_samples,
+                    }
+                    if name == "emg"
+                    else {}
+                ),
             }
             for name in self.sensors
         }
@@ -332,6 +342,9 @@ class BleRecorder:
         )
         self.last_packet = packet
         channels = [list(channel) for channel in packet.channels]
+        for values in channels:
+            self.emg_sample_count += len(values)
+            self.emg_adc_rail_samples += sum(value <= 2 or value >= 4093 for value in values)
         previous = self.last_sequences.get("emg")
         new_packet = previous is None or 0 < (packet.sequence - previous) & 0xFFFFFFFF < 0x80000000
         if new_packet and packet.first_time_us is not None and packet.period_us is not None:

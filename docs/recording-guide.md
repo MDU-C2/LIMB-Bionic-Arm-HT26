@@ -4,6 +4,28 @@ Use the [workflow guide](workflow-guide.md) for the operator sequence, visual
 preparation steps, trial timing, processing and export. This page describes the
 saved data and numerical reference fit.
 
+## Before the first trial
+
+Attach both IMUs securely, connect camera + BLE under **Record**, then choose
+**Calibrate subject**. Start each step with **Start step** when the subject is ready.
+During **STILL**, hold the upper arm beside the body, elbow about 90 degrees and
+thumb up for five seconds. IMU zeroing starts in this step. Complete the guided
+raise, bend, turn and return movements, followed by EMG relax, grip and release.
+Finish all reference steps before starting raw trials. Fit and EMG amplitude
+checks are saved for review; they do not block raw recording. No table-zero
+step is needed. Mount the sensors before the still reference.
+
+Zeroing establishes a reference and estimates gyro bias; it does not make a bent
+human elbow anatomically zero degrees or remove gravity from raw acceleration.
+The movement steps also fit the sensor mounting directions. The saved raw IMU
+samples remain unchanged.
+
+Reuse the reference across natural, slow and fast trials while the same
+subject, arm, sensor mounting, camera position and BLE connection remain unchanged.
+Return the hand to marker 1 and the cup to marker 2 before each trial. Repeat the
+full calibration after changing the subject or arm, moving a sensor or camera,
+or reconnecting BLE. Do not re-zero during a trial.
+
 ## Reference fitting
 
 The fit uses isolated gyro axes plus the still gravity direction to construct
@@ -22,9 +44,12 @@ References go in `SUBJECT/references/R001_DATE_TIME/`. They contain raw signals,
 video, depth, actual cue timestamps and `alignment.json`. This file keeps passed
 or failed status, mounting matrices, gyro biases, checks, settings, source hashes
 and code hashes. `reference_checks` also keeps IMU zero and EMG results. References which
-fail remain available for inspection but do not enable normal trials.
+fail remain available for inspection. A finished sequence enables raw trials
+even when these checks fail or reference packets were lost. A cancelled sequence,
+failed file save or BLE reconnect requires a new reference sequence.
 
-Trials link the subject reference and carry a copy of its alignment profile.
+Trials link the subject reference and copy its checks. They carry an alignment
+profile only when its fit passed and the connection remains valid.
 `sensor_to_arm_alignment: fitted` means a numerical fit passed these collection
 checks. `accuracy_validated: false` records the remaining need for physical
 validation. A new subject, moved sensor or BLE reconnect needs a new calibration.
@@ -32,7 +57,7 @@ Moving the camera also requires a new reference. The fit does not independently
 track the trunk or resolve six-axis heading drift during later motion.
 
 For diagnostics only, the command-line recorder accepts `--raw-only`, optionally
-with `--no-depth`. This explicitly bypasses subject alignment; it is not the
+with `--no-depth`. This explicitly skips the reference sequence; it is not the
 normal participant collection workflow. It still saves all available raw data
 and its calibration status. Existing raw-only recordings remain readable.
 
@@ -66,7 +91,10 @@ capture completion, not task success. New trials keep `movement_labels: not_revi
 `task_completion_verified: false` and `quality_review_required: true`.
 
 Guided cup trials use `protocol_version: 3`. Calibrated captures use
-`recording_mode: raw_with_alignment`; diagnostic captures use `raw_signals`.
+`recording_mode: raw_with_alignment` when alignment is available, otherwise
+`raw_signals`. Both preserve the received samples. Failed alignment never creates
+an aligned IMU file. Raw capture needs camera, both IMUs and EMG receipt, plus
+depth receipt when enabled. Arm, hand, cup and grip detection are not start gates.
 `movement_go_host_monotonic_ns` marks the software GO cue.
 `recording_ended_host_monotonic_ns` marks capture end.
 `movement_duration_seconds` is time recorded after GO, not measured movement time.
@@ -85,9 +113,18 @@ and does not contain joint angles. The raw file remains unchanged.
 Nominal high-rate firmware sends
 EMG at 4,000 samples/s and each IMU at about 100 samples/s. Review actual periods,
 missing samples, sequence gaps and decode errors in the recording metadata.
+`quality_flags` lists calibration, packet, camera and signal warnings separately
+from capture completion. EMG `packet_health` includes `sample_count` and
+`adc_rail_samples` (ADC <= 2 or >= 4093). Rail samples require review; they do
+not identify a disconnected wire or prove muscle activation. Clipping warnings
+do not discard raw samples or create grip labels. EMG training still excludes
+invalid windows through its own processing and reviewed labels.
 
 `video.mp4` is unmirrored RGB with lossy MP4 compression. The operator preview is
-mirrored and annotated. `frame_times.jsonl` maps each received RGB frame to host
+mirrored and shows the latest tracked image with arm and finger lines. Its footer
+shows that image's age. Tracking older than one second or unavailable tracking
+falls back to live video without lines. Capture and saving continue independently
+of this display. `frame_times.jsonl` maps each received RGB frame to host
 receipt time, source/device sequence numbers, OAK device time and encoded video
 indices/copies. Fixed-rate video can repeat frames to approximate playback time;
 use the timestamp mapping for analysis.

@@ -135,6 +135,7 @@ class ProjectTabsMixin:
 
     def _refresh_firmware(self) -> None:
         """Refresh firmware projects and currently visible serial ports."""
+        resolve_firmware_tool.cache_clear()
         previous = self.firmware_project.get()
         self.firmware_projects = discover_firmware_projects()
         values = list(self.firmware_projects)
@@ -163,8 +164,7 @@ class ProjectTabsMixin:
             self.firmware_status.configure(
                 text=(
                     f"{project.system} project found, but its build tool is missing. "
-                    "Install the optional firmware tools from the setup notes, "
-                    "then press Refresh."
+                    "Run Setup to install and check the firmware tools, then press Refresh."
                 )
             )
         self._update_controls()
@@ -180,7 +180,7 @@ class ProjectTabsMixin:
             messagebox.showerror(
                 "Tool unavailable",
                 f"The build tool for {project.system} is missing. "
-                "Install the optional firmware tools from the setup notes, then press Refresh.",
+                "Run Setup to install and check the firmware tools, then press Refresh.",
             )
             return
 

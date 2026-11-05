@@ -142,6 +142,7 @@ def configure_depthai_runtime() -> None:
     """Use stable, local DepthAI diagnostics on Windows lab machines."""
     os.environ.setdefault("DEPTHAI_CRASHDUMP", "0")
     os.environ.setdefault("DEPTHAI_TELEMETRY", "0")
+    os.environ.setdefault("DEPTHAI_DISABLE_STARTUP_NOTIFICATIONS", "1")
     os.environ.setdefault(
         "DEPTHAI_CACHE_DIR",
         str(Path(tempfile.gettempdir()) / "aurora_depthai_cache"),

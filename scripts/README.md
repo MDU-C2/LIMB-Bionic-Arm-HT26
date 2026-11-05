@@ -1,7 +1,7 @@
 # Setup and checks
 
 Run `Setup.bat` once on Windows, or `Setup.command` on macOS/Linux. Setup needs
-internet to install Python and the recording/simulation packages.
+internet to install Python and all app packages, including training and firmware tools.
 
 Use `Start.bat` or `Start.command` afterwards. Start only launches the installed
 app. It does not install packages, build firmware or require internet. Run Setup
@@ -19,16 +19,12 @@ Running `src/aurora/gui/app.py` directly also selects the saved environment.
 It does not run installation. The managed Windows launcher sets `Library/bin`
 on PATH for native libraries.
 
-Training and firmware tools are optional. From the project Python:
-
-```powershell
-python -m pip install -r requirements-training.txt
-python -m pip install -r requirements-firmware.txt
-```
-
-The first firmware build downloads its toolchain. Training and firmware downloads
-are not needed to open the app or record signals. On Windows/Linux, a CPU-only
-PyTorch install can be selected using the index at https://download.pytorch.org/whl/cpu.
+Setup downloads and checks all three MediaPipe pose models: Fast (lite), Balanced
+(full) and Detailed (heavy). Camera tools can use them offline after Setup.
+It also downloads the pinned ESP32 toolchain and checks a firmware build.
+It does not flash the board or require connected hardware. A failed dependency,
+pose-model or firmware check stops Setup before it reports success. Run Setup again to
+repair an earlier installation that is missing tools.
 
 ## Sensor checks
 
@@ -61,7 +57,7 @@ $env:PATH = "$runtimePrefix/Library/bin;$env:PATH"
 ```
 
 The default check suite covers runtime software without connected devices.
-`--suite training` requires the optional training packages; `--suite all` includes
+`--suite training` checks the training packages; `--suite all` includes
 both suites. A missing training prerequisite is reported separately.
 
 `benchmark_runtime.py --output outputs/diagnostics/runtime.json --ui --physics-gui`
@@ -74,4 +70,5 @@ updates disabled/enabled, or `--ui --browser-files 2000` to stress the browser.
 
 The package base needs NumPy and SciPy. Optional groups are `simulation`, `sensors`,
 `camera`, `inference`, `plots`, `training`, `firmware` and `dev`. Setup installs the
-normal recording/simulation groups. Ordinary Start never installs missing groups.
+app feature groups, including training and firmware. The `dev` group is separate.
+Ordinary Start never installs missing groups.

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -11,7 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -140,20 +142,28 @@ class SetupTests(unittest.TestCase):
             checks.assert_not_called()
 
     def test_camera_metadata_warning_still_requires_native_camera_import(self) -> None:
-        with (
-            patch.object(
-                setup_project.subprocess,
-                "run",
-                return_value=subprocess.CompletedProcess(
-                    ["python", "-m", "pip", "check"],
-                    1,
-                    "depthai 3.10.0 is not supported on this platform\n",
+        for version in ("3.10.0", "3.12.0"):
+            with (
+                self.subTest(version=version),
+                patch.object(
+                    setup_project.subprocess,
+                    "run",
+                    return_value=subprocess.CompletedProcess(
+                        ["python", "-m", "pip", "check"],
+                        1,
+                        f"depthai {version} is not supported on this platform\n",
+                    ),
                 ),
-            ),
-            patch.object(setup_project, "run_python") as checks,
-        ):
-            setup_project.verify()
-            self.assertIn(call("-c", "import depthai"), checks.call_args_list)
+                patch.object(setup_project, "run_python") as checks,
+            ):
+                setup_project.verify()
+                self.assertIn(call("-c", "import depthai"), checks.call_args_list)
+                for module in ("torch", "onnx", "platformio"):
+                    self.assertIn(call("-c", f"import {module}"), checks.call_args_list)
+                self.assertIn(call("-m", "platformio", "--version"), checks.call_args_list)
+                self.assertIn(
+                    call(str(ROOT / "scripts/setup_pose_models.py")), checks.call_args_list
+                )
 
     def test_launch_does_not_install_or_verify_dependencies(self) -> None:
         root = ROOT / "clone with spaces and ?"
@@ -173,14 +183,93 @@ class SetupTests(unittest.TestCase):
             verify.assert_not_called()
             self.assertEqual(os.environ["AURORA_SIMULATION_PYTHON"], sys.executable)
 
-    def test_setup_does_not_download_training_or_build_firmware(self) -> None:
+    def test_setup_includes_training_and_firmware_dependencies(self) -> None:
+        requirements = (ROOT / "requirements-setup.txt").read_text(encoding="utf-8")
+        extras = next(line for line in requirements.splitlines() if line.startswith("-e .["))
+        groups = extras.removeprefix("-e .[").removesuffix("]").split(",")
+        self.assertTrue({"training", "firmware"}.issubset(groups))
+
+    def test_setup_checks_packages_and_prepares_firmware_before_success(self) -> None:
         with (
             patch.object(setup_project, "run_python") as run,
             patch.object(setup_project, "verify") as verify,
+            patch.object(setup_project, "prepare_firmware") as firmware,
         ):
+            steps = Mock()
+            steps.attach_mock(run, "install")
+            steps.attach_mock(verify, "verify")
+            steps.attach_mock(firmware, "firmware")
             setup_project.install()
-        run.assert_called_once_with("-m", "pip", "install", "-r", "requirements-setup.txt")
-        verify.assert_called_once_with()
+        self.assertEqual(
+            steps.mock_calls,
+            [
+                call.install("-m", "pip", "install", "-r", "requirements-setup.txt"),
+                call.verify(install_models=True),
+                call.firmware(),
+            ],
+        )
+
+    def test_setup_builds_in_a_mirror_without_uploading(self) -> None:
+        with patch.object(setup_project, "run_python") as run:
+            setup_project.prepare_firmware()
+        run.assert_called_once_with(
+            str(ROOT / "src/aurora/gui/firmware_workspace.py"),
+            "--project",
+            str(ROOT / "firmware/high_rate_emg_imu"),
+            "--",
+            sys.executable,
+            "-m",
+            "platformio",
+            "run",
+        )
+
+    def test_pose_model_failure_stops_setup_before_firmware_or_launch(self) -> None:
+        model_setup = str(ROOT / "scripts/setup_pose_models.py")
+
+        def run(*arguments):
+            if arguments[0] == model_setup:
+                self.assertEqual(arguments[1:], ("--install",))
+                raise subprocess.CalledProcessError(1, list(arguments))
+
+        output = io.StringIO()
+        with (
+            patch.object(setup_project, "run_python", side_effect=run),
+            patch.object(
+                setup_project.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0, "No broken requirements found.\n"),
+            ),
+            patch.object(setup_project, "prepare_firmware") as firmware,
+            patch.object(setup_project.subprocess, "call") as launch,
+            patch.dict(os.environ),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(output),
+        ):
+            self.assertEqual(setup_project.main(["--install", "--launch"]), 1)
+        firmware.assert_not_called()
+        launch.assert_not_called()
+        self.assertIn("Setup failed:", output.getvalue())
+        self.assertNotIn("Setup complete.", output.getvalue())
+
+    def test_failed_firmware_build_fails_setup_without_launching(self) -> None:
+        output = io.StringIO()
+        with (
+            patch.object(setup_project, "run_python"),
+            patch.object(setup_project, "verify"),
+            patch.object(
+                setup_project,
+                "prepare_firmware",
+                side_effect=subprocess.CalledProcessError(1, ["platformio", "run"]),
+            ),
+            patch.object(setup_project.subprocess, "call") as launch,
+            patch.dict(os.environ),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(output),
+        ):
+            self.assertEqual(setup_project.main(["--install", "--launch"]), 1)
+        launch.assert_not_called()
+        self.assertIn("Setup failed:", output.getvalue())
+        self.assertNotIn("Setup complete.", output.getvalue())
 
     def test_gui_discovers_windows_cached_environment_before_system_python(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

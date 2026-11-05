@@ -1,3 +1,3 @@
 # Majd
-# Recording and simulation. Training and firmware tools are optional.
--e .[simulation,sensors,camera,inference,plots]
+# Install every app feature, including training and firmware tools.
+-e .[simulation,sensors,camera,inference,plots,training,firmware]

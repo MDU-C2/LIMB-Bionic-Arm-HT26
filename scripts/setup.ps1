@@ -71,7 +71,7 @@ try {
         Move-Item -LiteralPath $download -Destination $micromamba -Force
     }
 
-    Write-Host 'Installing Python, GUI, simulation, camera, and sensor dependencies...'
+    Write-Host 'Installing Python and preparing the AURORA environment...'
     Copy-Item -LiteralPath (Join-Path $repository 'environment.yml') -Destination $environmentFile -Force
     $operation = 'create'
     if (Test-Path -LiteralPath (Join-Path $prefix 'conda-meta\history')) { $operation = 'install' }

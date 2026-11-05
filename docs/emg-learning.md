@@ -2,6 +2,11 @@
 
 ## Review recordings
 
+Collect raw trials after the guided subject reference sequence. A failed EMG
+amplitude check does not block collection or establish a grip label. Inspect
+saved quality flags and mark corrupted intervals, including accidental wire
+disconnections, as unusable for training. Preserve the original samples.
+
 In **Review & export**, select `trial.json` or raw EMG and press **Review EMG labels**.
 Check the subject/trial IDs. Select an interval on the plot, choose its phase,
 then press **Add interval**. Check the saved video with the slider. Remove and

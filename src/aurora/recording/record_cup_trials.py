@@ -26,7 +26,7 @@ from aurora.recording.cup_protocol import (
     CupReferenceGuide,
     CupTrialGuide,
 )
-from aurora.recording.cup_trials import CupTrialSession, next_trial_number
+from aurora.recording.cup_trials import CupTrialSession, capture_quality_flags, next_trial_number
 from aurora.recording.subject_calibration import digest, fit_subject_reference
 from aurora.sensors.imu_twist import DEFAULT_TWIST_AXIS, TWIST_AXES
 from aurora.sensors.settings import DEFAULT_BLE_DEVICE_NAME
@@ -86,9 +86,9 @@ class CupRecorder:
         self.reference_path = None
         self.reference_checks = {}
         self.alignment_profile = None
-        # The CLI sets this for normal participant collection. Raw-only callers
-        # remain available for diagnostics without inventing a calibration.
-        self.require_alignment = getattr(args, "require_alignment", True)
+        # Collection needs a saved preparation sequence, not a successful fit.
+        # Diagnostics may explicitly skip preparation.
+        self.require_reference = getattr(args, "require_reference", True)
         self.depth_was_receiving = True
         self.streams_were_ready = True
         self.capture_started = {}
@@ -148,8 +148,18 @@ class CupRecorder:
                     self.trials.metadata["depth_interrupted"] = True
 
     def preview_frame(self):
-        # Never switch the video backwards to a slower inference result.
-        return getattr(self.live, "camera_frame", None)
+        """Keep annotations on their source image and the displayed sequence moving forward."""
+        tracked = getattr(self.live, "tracking_frame", None)
+        if (
+            tracked is not None
+            and not getattr(self.live, "tracking_error", "")
+            and 0 <= time.monotonic_ns() - tracked.frame_time_ns < 1_000_000_000
+        ):
+            # After showing live video, let tracking catch up before switching views.
+            if tracked.frame_sequence <= getattr(self, "last_frame", -1):
+                return None, True
+            return tracked, True
+        return getattr(self.live, "camera_frame", None), False
 
     def state(self) -> dict:
         camera, imu, emg, packet = self.stream_state()
@@ -197,17 +207,17 @@ class CupRecorder:
             "protocol": self.guide.view(),
             "saved_counts": dict(self.saved_counts),
             "can_start": available,
-            "can_prepare": available
-            and (not self.require_alignment or stereo.get("capture_ready", stereo["ready"])),
+            "can_prepare": available and (not depth_enabled or depth_receiving),
             "subject_reference": self.reference_path,
             "alignment_ready": alignment_ready,
             "calibration_ready": alignment_ready and reference_ready,
+            "reference_ready": bool(self.reference_path),
             "stereo": stereo,
             "can_record": bool(
                 available
                 and (
-                    not self.require_alignment
-                    or (alignment_ready and reference_ready and stereo["ready"])
+                    not self.require_reference
+                    or (self.reference_path and (not depth_enabled or depth_receiving))
                 )
             ),
             "message": (
@@ -230,14 +240,12 @@ class CupRecorder:
                 )
                 + f" | Arm: {'visible' if camera and getattr(tracking, 'camera_observation', {}).get('arm_visible') else 'not tracked'}"
                 + (
-                    " | Reference saved"
-                    if self.reference_path and reference_ready
-                    else " | Reference saved; check IMU/EMG references in Signals"
+                    " | Reference saved; raw recording available"
                     if self.reference_path
                     else " | Calibrate the subject before trials"
                 )
                 + (
-                    " | Calibration: " + self.reference_checks["alignment_message"]
+                    " | Alignment unavailable: " + self.reference_checks["alignment_message"]
                     if self.reference_checks.get("alignment_message") and not alignment_ready
                     else " | Alignment checks passed"
                     if alignment_ready
@@ -246,7 +254,11 @@ class CupRecorder:
                 + (
                     " | EMG reference: "
                     + self.reference_checks.get("emg_message", "Repeat relaxed and grip references")
-                    if alignment_ready and not reference_ready
+                    if self.reference_checks
+                    and not all(
+                        self.reference_checks.get(key, False)
+                        for key in ("emg_rest_ready", "emg_grip_ready")
+                    )
                     else ""
                 )
                 + (
@@ -302,6 +314,7 @@ class CupRecorder:
         }
         self.trials.cue("stop", reason=reason)
         if reference:
+            self.trials.metadata["reference_sequence_completed"] = bool(complete)
             data = self.live.reader.graph_data()
             self.trials.metadata["calibration_after"] = self.live.reader.calibration_profile()
             self.trials.metadata["reference_checks"] = {
@@ -328,6 +341,7 @@ class CupRecorder:
                 alignment_sha256=digest(path / "alignment.json"),
                 reference_checks=checks,
             )
+            manifest["quality_flags"] = capture_quality_flags(manifest, manifest)
             write_json(path / "trial.json", manifest)
             for source in ("camera", "ble"):
                 metadata_path = path / source / "meta.json"
@@ -340,12 +354,17 @@ class CupRecorder:
                             "alignment_file",
                             "alignment_sha256",
                             "reference_checks",
+                            "quality_flags",
                         )
                     }
                 )
                 write_json(metadata_path, metadata)
             self.reference_checks = checks
-            if manifest["complete"]:
+            if (
+                manifest["reference_sequence_completed"]
+                and not manifest.get("capture_stop_failed")
+                and not manifest.get("subject_reference_invalidated")
+            ):
                 self.reference_path = path.relative_to(self.trials.directory).as_posix()
                 self.alignment_profile = profile if checks["sensor_to_arm_ready"] else None
                 if self.alignment_profile is not None:
@@ -364,6 +383,8 @@ class CupRecorder:
             complete=manifest["complete"],
             reference=reference,
             checks=manifest.get("reference_checks"),
+            reference_ready=bool(self.reference_path) if reference else False,
+            quality_flags=manifest.get("quality_flags", []),
         )
         self._publish_protocol()
 
@@ -378,9 +399,8 @@ class CupRecorder:
     def begin_reference(self):
         if not self.state()["can_start"]:
             raise ValueError("Wait for camera, both IMUs, EMG and the end of rest")
-        stereo = self.state()["stereo"]
-        if self.require_alignment and not stereo.get("capture_ready", stereo["ready"]):
-            raise ValueError(stereo.get("message", "Wait for stereo depth and camera calibration"))
+        if not self.state()["can_prepare"]:
+            raise ValueError("Wait for stereo depth before preparing the subject")
         self.capture_started = self.capture_health()
         self.trials.start(
             reference=True,
@@ -415,9 +435,9 @@ class CupRecorder:
             raise ValueError("Wait for camera frames, both IMUs and raw EMG samples")
         if self.guide.active or time.monotonic_ns() < self.guide.rest_until_ns:
             raise ValueError("Finish the current trial and rest before starting again")
-        if not practice and self.require_alignment and not self.state()["can_record"]:
+        if not practice and self.require_reference and not self.state()["can_record"]:
             raise ValueError(
-                "Complete subject calibration and check stereo depth before recording. See the status for the step to repeat."
+                "Finish the subject reference sequence and check stereo depth before raw recording. Failed fit or EMG checks are saved as quality flags."
             )
         if duration is not None:
             duration = float(duration)
@@ -467,14 +487,19 @@ class CupRecorder:
                     self.stop_trial("Streams unavailable at GO", complete=False)
                     emit("error", message="Start cancelled: wait for camera, EMG and both IMUs.")
                     return
-                if self.require_alignment and not (
-                    self.state()["stereo"]["ready"] and self.state()["calibration_ready"]
+                state = self.state()
+                if self.require_reference and not (
+                    state["reference_ready"]
+                    and (
+                        not self.trials.camera_metadata.get("stereo_depth_enabled")
+                        or self.live.depth_receiving()
+                    )
                 ):
                     self.guide.go_ns = None
-                    self.stop_trial("Stereo unavailable at GO", complete=False)
+                    self.stop_trial("Reference or depth unavailable at GO", complete=False)
                     emit(
                         "error",
-                        message="Start cancelled: restore stereo arm points and repeat subject calibration if BLE reconnected.",
+                        message="Start cancelled: restore stereo depth and repeat the reference sequence if BLE reconnected.",
                     )
                     return
                 self.capture_started = self.capture_health()
@@ -483,6 +508,7 @@ class CupRecorder:
                     protocol=self.pending_protocol,
                     reference_path=self.reference_path,
                     alignment_profile=self.alignment_profile,
+                    reference_checks=self.reference_checks,
                 )
                 for cue, cue_stamp, phase in self.pending_cues:
                     self.trials.cue(
@@ -632,11 +658,11 @@ class CupRecorder:
                     message="File write failed. Attempt kept as incomplete; check the output drive.",
                 )
             self.advance_protocol()
-            frame = self.preview_frame()
+            frame, annotated = self.preview_frame()
             if frame is not None and frame.frame_sequence > self.last_frame:
                 self.last_frame = frame.frame_sequence
                 image = frame.latest_frame.copy()
-                if frame is getattr(self.live, "camera_frame", None):
+                if not annotated:
                     image = image[:, ::-1].copy()
                 label = (
                     self.trials.metadata["trial_id"] if self.trials.active else state["next_trial"]
@@ -652,15 +678,15 @@ class CupRecorder:
                     (100, 230, 140),
                     1,
                 )
-                tracked = getattr(self.live, "tracking_frame", None)
+                tracked = frame if annotated else None
                 age_ms = (time.monotonic_ns() - tracked.frame_time_ns) / 1e6 if tracked else None
-                observation = (
-                    tracked.camera_observation if age_ms is not None and age_ms < 1000 else {}
-                )
+                observation = tracked.camera_observation if tracked is not None else {}
                 tracking_label = (
-                    f"Last tracking: {age_ms:.0f} ms ago"
-                    if observation
-                    else "Waiting for arm tracking"
+                    f"Tracking view: {age_ms:.0f} ms old"
+                    if annotated
+                    else "Live video | Tracking unavailable"
+                    if getattr(self.live, "tracking_error", "")
+                    else "Live video | Waiting for arm tracking"
                 )
                 tracking_label += " | hand " + (
                     "found" if observation.get("hand_visible") else "--"
@@ -727,7 +753,7 @@ def main() -> int:
     parser.add_argument(
         "--raw-only",
         action="store_true",
-        help="Diagnostic capture without subject alignment; not the participant collection workflow.",
+        help="Diagnostic capture without the guided subject reference sequence.",
     )
     parser.add_argument("--baseline", type=float, default=BASELINE_SECONDS)
     parser.add_argument("--countdown", type=float, default=COUNTDOWN_SECONDS)
@@ -736,8 +762,8 @@ def main() -> int:
     parser.add_argument("--shoulder-twist-axis", choices=TWIST_AXES, default=DEFAULT_TWIST_AXIS)
     parser.add_argument("--wrist-twist-axis", choices=TWIST_AXES, default=DEFAULT_TWIST_AXIS)
     args = parser.parse_args()
-    args.require_alignment = not args.raw_only
-    if args.require_alignment and not args.depth:
+    args.require_reference = not args.raw_only
+    if args.require_reference and not args.depth:
         parser.error(
             "Participant recordings require stereo depth. Use --raw-only for RGB diagnostics."
         )

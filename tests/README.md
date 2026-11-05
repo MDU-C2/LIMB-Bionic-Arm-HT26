@@ -14,8 +14,8 @@ EMG checks include participant separation, causal feature parity, model export,
 metadata validation and interrupted runs. Fusion checks use synthetic motion.
 
 The default `runtime` suite includes LDA learning checks but excludes neural
-training jobs. Use `--suite training` after installing `requirements-training.txt`,
-or `--suite all` to include both. Missing training prerequisites are reported
+training jobs. Setup installs the training packages. Use `--suite training`
+to check them, or `--suite all` to include both. Missing prerequisites are reported
 separately. Package/resource checks use `python scripts/check_package.py`.
 
 `test_gui_workflows.py` runs native desktop forms through actual offline

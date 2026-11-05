@@ -28,6 +28,7 @@ from aurora.gui.project_support import (
     firmware_command,
     resolve_firmware_tool,
 )
+from aurora.gui.project_tabs import ProjectTabsMixin
 from aurora.gui.recording_tab import DEFAULT_BATCH_SOURCES, DEFAULT_BLE_SENSORS, batch_arguments
 from aurora.gui.serial_dashboard import SerialDashboardMixin
 from aurora.gui.serial_sensor import SerialLine, SerialSensorReader
@@ -531,6 +532,32 @@ class RecordingBatchTests(unittest.TestCase):
                 resolve_firmware_tool(project),
                 (str(python), "-m", "platformio"),
             )
+
+    def test_firmware_refresh_detects_tools_installed_after_a_missing_result(self) -> None:
+        projects = discover_firmware_projects()
+        key = str(Path("firmware") / "high_rate_emg_imu")
+        project = projects[key]
+        tools = []
+        host = types.SimpleNamespace(
+            firmware_project=Mock(get=lambda: key),
+            firmware_project_box=Mock(),
+            _firmware_selection_changed=lambda: tools.append(resolve_firmware_tool(project)),
+        )
+        resolve_firmware_tool.cache_clear()
+        self.addCleanup(resolve_firmware_tool.cache_clear)
+        with (
+            patch("aurora.gui.project_support.shutil.which", return_value=None),
+            patch("aurora.gui.project_support.Path.is_file", return_value=False),
+            patch(
+                "aurora.gui.project_support.importlib.util.find_spec", return_value=None
+            ) as module,
+            patch("aurora.gui.project_tabs.discover_firmware_projects", return_value=projects),
+        ):
+            self.assertIsNone(resolve_firmware_tool(project))
+            module.return_value = object()
+            self.assertIsNone(resolve_firmware_tool(project))
+            ProjectTabsMixin._refresh_firmware(host)
+        self.assertEqual(tools, [(sys.executable, "-m", "platformio")])
 
     def test_firmware_build_is_staged_when_repository_path_contains_spaces(self) -> None:
         project = FirmwareProject(ROOT / "firmware with spaces", "ESP-IDF", "idf.py")

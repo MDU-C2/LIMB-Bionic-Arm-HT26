@@ -104,9 +104,13 @@ only on GO. Keep the movements clear of the tabletop.
 | Release | Release cup and relax open hand | 3 s |
 
 The status shows stillness, missing views/signals, fit results and the step to
-repeat. Check it before continuing. Failed references remain saved. Normal trials
-require passed preparation and fresh stereo arm points; hand/cup detection is
-optional. Detailed axes and thresholds belong to diagnostics.
+repeat for usable aligned measurements. Check it before continuing. Failed
+references remain saved. Finish the reference sequence, then record raw trials
+with camera, stereo depth, both IMUs and EMG receiving. Failed alignment or EMG
+amplitude checks are quality warnings, not recording gates. Arm, hand, cup and
+grip detection are optional for raw capture. No table-zero step is required.
+Passed mounting calibration is still needed to derive aligned measurements;
+live control keeps its separate calibration requirements.
 
 Calibration separates gyro bias, sensor mounting, anatomical reference, camera
 body reference, robot retargeting and EMG rest/grip. A measured 90° human elbow

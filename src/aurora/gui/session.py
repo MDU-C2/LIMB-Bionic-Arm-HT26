@@ -173,15 +173,16 @@ class ApplicationSession:
             for mode, callback in variable.trace_info():
                 variable.trace_remove(mode, callback)
 
-    def select_saved(self, path, *, reference=False):
+    def select_saved(self, path, *, reference=False, problem=""):
         path = Path(path).resolve()
         manifest = path / "trial.json" if path.is_dir() else path
         self.selected_file = manifest
         self.last_output.set(str(path))
         if reference:
-            self.calibration_path = manifest
+            self.calibration_path = None if problem else manifest
         else:
             self.selected_trial = manifest
         self.notice.set(
-            f"{'Reference' if reference else 'Trial'} saved: {path.name}. Review, replay or export it; collection can continue."
+            f"{'Reference' if reference else 'Trial'} saved: {path.name}. "
+            + (problem if problem else "Review, replay or export it; collection can continue.")
         )

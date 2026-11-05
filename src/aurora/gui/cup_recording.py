@@ -323,12 +323,10 @@ class CupRecordingMixin:
             if "protocol" in data:
                 self._set_cup_protocol(data["protocol"])
             if self.cup_state.phase == "ready" and not self.cup_state.status["can_record"]:
-                if data.get("calibration_ready"):
-                    self.cup_cue.set("CHECK CAMERA VIEW")
+                if data.get("reference_ready"):
+                    self.cup_cue.set("CHECK DEPTH")
                     self.cup_instruction.set(
-                        data.get("stereo", {}).get(
-                            "message", "Keep both shoulders and the arm in view."
-                        )
+                        "Wait for stereo depth. Raw recording does not require arm or grip detection."
                     )
                 else:
                     self.cup_cue.set(
@@ -362,36 +360,42 @@ class CupRecordingMixin:
             self.cup_status.set(data["message"])
         elif event == "saved":
             self.cup_state.status["recording"] = False
-            self.cup_status.set(
-                "Calibration saved. Check Signals and start a cup trial."
-                if data["complete"] and data.get("reference")
-                else "Trial saved."
-                if data["complete"]
-                else "Capture saved as incomplete. Check Activity."
+            problems = []
+            reference = data.get("reference", False)
+            if reference:
+                checks = data.get("checks") or {}
+                if not checks.get("sensor_to_arm_ready"):
+                    problems.append(checks.get("alignment_message") or "Arm alignment failed.")
+                if not checks.get("imu_zero_ready"):
+                    problems.append("IMU still reference failed.")
+                if not all(checks.get(key) for key in ("emg_rest_ready", "emg_grip_ready")):
+                    problems.append(checks.get("emg_message") or "EMG reference failed.")
+            if not data["complete"] and not problems:
+                problems.append("Capture is incomplete. Check Activity.")
+            problem = (
+                (
+                    "Raw recording available; calibration quality warnings. "
+                    if reference and data.get("reference_ready")
+                    else "Calibration needs repeating. "
+                    if reference
+                    else ""
+                )
+                + " ".join(problems)
+                if problems
+                else ""
             )
-            checks = data.get("checks")
-            if (
-                data.get("reference")
-                and checks
-                and not all(
-                    checks.get(key, False)
-                    for key in (
-                        "imu_zero_ready",
-                        "emg_rest_ready",
-                        "emg_grip_ready",
-                        "sensor_to_arm_ready",
-                    )
+            message = problem or (
+                "Calibration passed. Raw recording available; review Signals before starting."
+                if reference
+                else "Trial saved."
+            )
+            self.cup_status.set(message)
+            self._append_log("[Cup recording] " + message + "\n")
+            if data.get("quality_flags"):
+                self._append_log(
+                    "[Cup recording] Quality flags: " + ", ".join(data["quality_flags"]) + "\n"
                 )
-            ):
-                self.cup_status.set(
-                    "Calibration needs repeating. "
-                    + (
-                        checks.get("alignment_message", "")
-                        if not checks.get("sensor_to_arm_ready")
-                        else checks.get("emg_message", "")
-                    )
-                )
-            self.session.select_saved(data["path"], reference=data.get("reference", False))
+            self.session.select_saved(data["path"], reference=reference, problem=problem)
             self.recordings_root.set(str(Path(data["path"])))
             self.recordings_filter.set("")
             self._refresh_recordings()

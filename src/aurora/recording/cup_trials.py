@@ -23,6 +23,50 @@ TASK_MARKERS = {
 }
 
 
+def capture_quality_flags(metadata, health):
+    """Keep signal and calibration warnings separate from capture completion."""
+    flags = []
+    for name, values in health.get("packet_health", {}).items():
+        flags.extend(
+            f"{name}_{key}"
+            for key in (
+                "missing_packets",
+                "decode_errors",
+                "sample_time_gaps",
+                "gyro_saturation_samples",
+                "adc_rail_samples",
+            )
+            if values.get(key)
+        )
+    capture = metadata.get("capture_health", {})
+    flags.extend(
+        f"camera_{key}"
+        for key, value in capture.items()
+        if value and key.endswith(("overruns", "gaps", "error"))
+    )
+    flags.extend(
+        key
+        for key in ("stream_interrupted", "depth_interrupted", "subject_reference_invalidated")
+        if metadata.get(key)
+    )
+    flags.extend(
+        key
+        for key in (
+            "raw_packet_queue_overruns",
+            "device_clock_resets",
+            "write_error",
+            "alignment_export_error",
+        )
+        if health.get(key)
+    )
+    checks = metadata.get("reference_checks") or metadata.get("calibration_status", {})
+    if not checks.get("emg_rest_ready") or not checks.get("emg_grip_ready"):
+        flags.append("emg_amplitude_reference_unavailable")
+    if metadata.get("sensor_to_arm_alignment") != "fitted":
+        flags.append("arm_alignment_unavailable")
+    return flags
+
+
 def next_trial_number(subject_directory: Path, prefix="T") -> int:
     numbers = []
     if subject_directory.is_dir():
@@ -80,6 +124,7 @@ class CupTrialSession:
         reference=False,
         reference_path=None,
         alignment_profile=None,
+        reference_checks=None,
     ) -> None:
         if self.active:
             raise RuntimeError("Stop the current trial first")
@@ -121,6 +166,7 @@ class CupTrialSession:
             "pace_condition": None if reference else condition,
             "task_markers": {} if reference else dict(TASK_MARKERS),
             "subject_reference": reference_path,
+            "reference_checks": dict(reference_checks or {}),
             "sensor_to_arm_alignment": "fitted" if alignment_profile else "not_estimated",
             "alignment_profile": alignment_profile,
             "connection_generation": self.reader.connection_generation,
@@ -349,6 +395,7 @@ class CupTrialSession:
             "camera_source_frame_count": camera.source_frames,
             "camera_depth_frame_count": camera.depth_frames,
             "quality_review_required": True,
+            "quality_flags": capture_quality_flags(final, health),
             **health,
         }
         write_json(self.path / "trial.json", manifest)

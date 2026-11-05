@@ -69,7 +69,13 @@ def fit_subject_reference(directory: Path, manifest: dict):
             "arm_alignment.py": digest(Path(__file__).parents[1] / "sensors/arm_alignment.py"),
         }
         if not manifest.get("complete"):
-            raise AlignmentError("Preparation capture is incomplete; check streams and repeat")
+            losses = [
+                f"BLE {name.upper()} lost {health['missing_packets']} packets"
+                for name, health in manifest.get("packet_health", {}).items()
+                if health.get("missing_packets")
+            ]
+            detail = "; ".join(losses) or "check streams"
+            raise AlignmentError(f"Preparation capture is incomplete: {detail}; repeat calibration")
         if not manifest.get("stereo_depth_enabled") or manifest.get("camera_intrinsics") is None:
             raise AlignmentError("Stereo depth and camera intrinsics are required for alignment")
         units = tuple(manifest.get("imu_units", ()))

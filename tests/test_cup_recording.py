@@ -70,7 +70,7 @@ def prepared_reader():
 
 def recorder_args(**values):
     """Raw-only fixtures isolate file/timer checks; normal collection opts in below."""
-    return SimpleNamespace(**{"require_alignment": False, **values})
+    return SimpleNamespace(**{"require_reference": False, **values})
 
 
 class CupRecordingTests(unittest.TestCase):
@@ -146,7 +146,7 @@ class CupRecordingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             recorder = CupRecorder(
                 recorder_args(
-                    output=Path(temporary), subject="S01", side="left", require_alignment=True
+                    output=Path(temporary), subject="S01", side="left", require_reference=True
                 ),
                 live,
             )
@@ -161,16 +161,191 @@ class CupRecordingTests(unittest.TestCase):
                 self.assertTrue(recorder.trials.active)
                 recorder.stop_trial("Test cancelled", complete=False)
 
-    def test_slow_tracking_never_replaces_a_newer_preview_frame(self):
+    def test_failed_reference_keeps_alignment_and_emg_reasons_visible(self):
+        live = SimpleNamespace(
+            reader=prepared_reader(), cv2=Mock(), frame_time_ns=time.monotonic_ns()
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            recorder = CupRecorder(
+                recorder_args(
+                    output=Path(temporary), subject="S01", side="left", require_reference=True
+                ),
+                live,
+            )
+            recorder.reference_checks = {
+                "imu_zero_ready": True,
+                "emg_rest_ready": True,
+                "emg_grip_ready": False,
+                "sensor_to_arm_ready": False,
+                "alignment_message": "BLE IMU lost 96 packets",
+                "emg_message": "No clear grip signal: rest 72.9, grip 81.8",
+            }
+            state = recorder.state()
+            self.assertFalse(state["can_record"])
+            self.assertIn("BLE IMU lost 96 packets", state["message"])
+            self.assertIn("No clear grip signal", state["message"])
+
+    def test_saved_reference_notice_distinguishes_passed_and_failed_checks(self):
+        from aurora.gui.session import ApplicationSession, CupViewState
+
+        for complete, passed, raw_ready in (
+            (False, False, False),
+            (False, False, True),
+            (True, False, True),
+            (True, True, True),
+        ):
+            with (
+                self.subTest(complete=complete, passed=passed),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                session = object.__new__(ApplicationSession)
+                session.last_output = Mock()
+                session.notice = Mock()
+                gui = SimpleNamespace(
+                    session=session,
+                    cup_state=CupViewState(),
+                    cup_status=Mock(),
+                    recordings_root=Mock(),
+                    recordings_filter=Mock(),
+                    _append_log=Mock(),
+                    _refresh_recordings=Mock(),
+                    _update_cup_controls=Mock(),
+                    _refresh_cup_guidance=Mock(),
+                )
+                data = {
+                    "event": "saved",
+                    "path": temporary,
+                    "complete": complete,
+                    "reference": True,
+                    "reference_ready": raw_ready,
+                    "checks": {
+                        "imu_zero_ready": True,
+                        "emg_rest_ready": True,
+                        "emg_grip_ready": passed,
+                        "sensor_to_arm_ready": complete,
+                        "alignment_message": "BLE IMU lost 96 packets",
+                        "emg_message": "No clear grip signal",
+                    },
+                }
+                CupRecordingMixin._handle_cup_event(gui, "[CUP] " + json.dumps(data))
+                notice = session.notice.set.call_args.args[0]
+                status = gui.cup_status.set.call_args.args[0]
+                self.assertIn("Reference saved", notice)
+                self.assertEqual(session.selected_file.name, "trial.json")
+                if passed:
+                    self.assertIn("Calibration passed", status)
+                    self.assertIn("collection can continue", notice)
+                    self.assertIsNotNone(session.calibration_path)
+                else:
+                    self.assertIn(
+                        "Raw recording available" if raw_ready else "Calibration needs repeating",
+                        notice,
+                    )
+                    self.assertIn("No clear grip signal", notice)
+                    self.assertNotIn("collection can continue", notice)
+                    self.assertIsNone(session.calibration_path)
+                    if not complete:
+                        self.assertIn("BLE IMU lost 96 packets", notice)
+                        self.assertIn("BLE IMU lost 96 packets", status)
+
+    def test_stale_tracking_falls_back_to_live_video(self):
         live = SimpleNamespace(
             camera_frame=CupCameraFrame(20, 2_000_000_000, object()),
             tracking_frame=CupCameraFrame(10, 1_700_000_000, object()),
         )
         recorder = object.__new__(CupRecorder)
         recorder.live = live
-        self.assertIs(recorder.preview_frame(), live.camera_frame)
-        live.tracking_frame = CupCameraFrame(15, 1_900_000_000, object())
-        self.assertIs(recorder.preview_frame(), live.camera_frame)
+        with patch("time.monotonic_ns", return_value=3_000_000_000):
+            frame, annotated = recorder.preview_frame()
+            self.assertIs(frame, live.camera_frame)
+            self.assertFalse(annotated)
+            live.tracking_frame = CupCameraFrame(15, 1_900_000_000, object())
+            self.assertIs(recorder.preview_frame()[0], live.camera_frame)
+
+    def test_fresh_annotations_use_their_own_frame_and_wait_before_rewinding(self):
+        live = SimpleNamespace(
+            camera_frame=CupCameraFrame(25, 2_000_000_000, object()),
+            tracking_frame=CupCameraFrame(10, 1_700_000_000, object()),
+        )
+        recorder = object.__new__(CupRecorder)
+        recorder.live = live
+        recorder.last_frame = -1
+        with patch("time.monotonic_ns", return_value=2_000_000_000):
+            frame, annotated = recorder.preview_frame()
+            self.assertIs(frame, live.tracking_frame)
+            self.assertTrue(annotated)
+            # A live frame may already have been shown while tracking was unavailable.
+            recorder.last_frame = 20
+            self.assertEqual(recorder.preview_frame(), (None, True))
+            live.tracking_frame = CupCameraFrame(21, 1_900_000_000, object())
+            self.assertIs(recorder.preview_frame()[0], live.tracking_frame)
+            recorder.last_frame = 21
+            self.assertEqual(recorder.preview_frame(), (None, True))
+            live.tracking_error = "Tracker failed"
+            frame, annotated = recorder.preview_frame()
+            self.assertIs(frame, live.camera_frame)
+            self.assertFalse(annotated)
+
+    def test_preview_renders_annotations_without_mirroring_them_or_saving_them_as_raw(self):
+        import cv2
+        import numpy as np
+
+        raw_image = np.zeros((480, 640, 3), dtype=np.uint8)
+        annotated_image = raw_image.copy()
+        cv2.line(annotated_image, (500, 200), (450, 280), (0, 220, 255), 3)
+        original_annotation = annotated_image.copy()
+        stamp = time.monotonic_ns()
+        raw = CupCameraFrame(20, stamp, raw_image)
+        tracked = CupCameraFrame(
+            10,
+            stamp - 200_000_000,
+            annotated_image,
+            camera_observation={"arm_visible": True, "hand_visible": True, "cup_visible": True},
+        )
+        display = SimpleNamespace(
+            namedWindow=Mock(),
+            resizeWindow=Mock(),
+            rectangle=cv2.rectangle,
+            putText=Mock(wraps=cv2.putText),
+            imshow=Mock(),
+            waitKey=lambda *_args: ord("q"),
+            WINDOW_NORMAL=cv2.WINDOW_NORMAL,
+            FONT_HERSHEY_SIMPLEX=cv2.FONT_HERSHEY_SIMPLEX,
+        )
+        live = SimpleNamespace(
+            reader=prepared_reader(),
+            cv2=display,
+            camera_frame=raw,
+            tracking_frame=tracked,
+            poll=Mock(),
+            drain_frames=lambda: [raw],
+            drain_tracking=lambda: [tracked],
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            recorder = CupRecorder(
+                recorder_args(
+                    output=Path(temporary), subject="S01", side="left", preview_position=None
+                ),
+                live,
+            )
+            recorder.trials.add_frame = Mock()
+            recorder.trials.add_tracking = Mock()
+            recorder.monitor_streams = Mock()
+            recorder.advance_protocol = Mock()
+            recorder.state = lambda: {"next_trial": "T001"}
+            recorder.command = lambda _action: setattr(recorder, "running", False)
+            with patch("aurora.recording.record_cup_trials.emit"):
+                recorder.run(queue.Queue())
+            recorder.trials.add_frame.assert_called_once_with(raw, save_observation=False)
+            recorder.trials.add_tracking.assert_called_once_with(tracked)
+        displayed = display.imshow.call_args.args[1]
+        np.testing.assert_array_equal(displayed[240, 475], [0, 220, 255])
+        self.assertTrue(
+            any("Tracking view:" in args.args[1] for args in display.putText.call_args_list)
+        )
+        np.testing.assert_array_equal(raw_image, np.zeros_like(raw_image))
+        np.testing.assert_array_equal(annotated_image, original_annotation)
+        self.assertEqual(recorder.last_frame, tracked.frame_sequence)
 
     def test_reconnect_during_a_trial_cannot_export_data_with_the_previous_alignment(self):
         from test_arm_alignment import generated_reference
@@ -224,17 +399,20 @@ class CupRecordingTests(unittest.TestCase):
                         camera_observation={},
                         frame_time_ns=now[0],
                         stereo_status=lambda depth_ready=depth_ready: {"ready": depth_ready[0]},
+                        depth_receiving=lambda depth_ready=depth_ready: depth_ready[0],
+                        camera_metadata=lambda: {"stereo_depth_enabled": True},
                     )
                     recorder = CupRecorder(
                         recorder_args(
                             output=Path(temporary),
                             subject="S01",
                             side="left",
-                            require_alignment=True,
+                            require_reference=True,
                         ),
                         live,
                     )
                     recorder.alignment_profile = profile
+                    recorder.reference_path = "references/R001_test"
                     recorder.reference_checks = dict.fromkeys(
                         (
                             "sensor_to_arm_ready",
@@ -313,7 +491,7 @@ class CupRecordingTests(unittest.TestCase):
                     output=Path(temporary),
                     subject="S01",
                     side="left",
-                    require_alignment=True,
+                    require_reference=True,
                     rest=0,
                 ),
                 live,
@@ -821,6 +999,117 @@ class CupRecordingTests(unittest.TestCase):
                 self.assertIsNone(recorder.reference_path)
                 self.assertEqual(recorder.guide.phase, "ready")
                 self.assertFalse(json.loads((path / "trial.json").read_text())["complete"])
+
+    def test_finished_reference_with_packet_loss_and_clipping_enables_raw_trials_only(self):
+        reader = prepared_reader()
+        live = SimpleNamespace(
+            reader=reader,
+            cv2=Mock(),
+            camera_observation={},
+            frame_time_ns=time.monotonic_ns(),
+            stereo_status=lambda: {"ready": False},
+        )
+        samples = ([0, 2, 3, 4092, 4093, 4095] * 7)[:40]
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("aurora.recording.record_cup_trials.emit"),
+        ):
+            recorder = CupRecorder(
+                recorder_args(
+                    output=Path(temporary), subject="S01", side="left", require_reference=True
+                ),
+                live,
+            )
+            self.assertFalse(recorder.state()["can_record"])
+            recorder.command("reference")
+            reference = recorder.trials.path
+            reader.emg_estimator.reference = None
+            feed_samples(reader, 2, samples)
+            feed_samples(reader, 5, samples)
+            live.frame_time_ns = time.monotonic_ns()
+            recorder.trials.add_frame(
+                SimpleNamespace(
+                    latest_frame=object(),
+                    camera_sample=None,
+                    camera_observation={},
+                    frame_time_ns=live.frame_time_ns,
+                )
+            )
+            recorder.guide.completed = True
+            recorder.stop_trial("Reference sequence finished")
+            manifest = json.loads((reference / "trial.json").read_text())
+            self.assertFalse(manifest["complete"])
+            self.assertTrue(manifest["reference_sequence_completed"])
+            self.assertFalse(manifest["reference_checks"]["emg_grip_ready"])
+            self.assertIn("emg_missing_packets", manifest["quality_flags"])
+            self.assertIn("emg_adc_rail_samples", manifest["quality_flags"])
+            self.assertEqual(manifest["packet_health"]["emg"]["sample_count"], 80)
+            self.assertEqual(
+                manifest["packet_health"]["emg"]["adc_rail_samples"],
+                2 * sum(value <= 2 or value >= 4093 for value in samples),
+            )
+            state = recorder.state()
+            self.assertTrue(state["can_record"], state["message"])
+            self.assertFalse(state["calibration_ready"])
+            self.assertIsNone(recorder.alignment_profile)
+            original = (reference / "trial.json").read_bytes()
+            with (reference / "ble/emg.csv").open(newline="") as source:
+                self.assertEqual([int(row["value"]) for row in csv.DictReader(source)], samples * 2)
+            recorder.guide = CupTrialGuide(countdown_s=0)
+            recorder.command("record")
+            recorder.advance_protocol()
+            self.assertTrue(recorder.trials.active)
+            feed_samples(reader, 6, samples)
+            live.frame_time_ns = time.monotonic_ns()
+            recorder.trials.add_frame(
+                SimpleNamespace(
+                    latest_frame=object(),
+                    camera_sample=None,
+                    camera_observation={},
+                    frame_time_ns=live.frame_time_ns,
+                )
+            )
+            recorder.stop_trial(complete=False)
+            trial = json.loads((recorder.trials.path / "trial.json").read_text())
+            self.assertEqual(trial["recording_mode"], "raw_signals")
+            self.assertEqual(trial["subject_reference"], recorder.reference_path)
+            self.assertEqual(trial["reference_checks"], manifest["reference_checks"])
+            self.assertEqual(trial["packet_health"]["emg"]["sample_count"], 40)
+            self.assertEqual(trial["movement_labels"], "not_reviewed")
+            self.assertFalse(trial["task_completion_verified"])
+            self.assertFalse((recorder.trials.path / "ble/imu_aligned.csv").exists())
+            self.assertIn("arm_alignment_unavailable", trial["quality_flags"])
+            with (recorder.trials.path / "ble/emg.csv").open(newline="") as source:
+                self.assertEqual([int(row["value"]) for row in csv.DictReader(source)], samples)
+            self.assertEqual((reference / "trial.json").read_bytes(), original)
+
+    def test_reconnect_during_finished_reference_requires_a_new_sequence(self):
+        live = SimpleNamespace(
+            reader=prepared_reader(),
+            cv2=Mock(),
+            camera_observation={},
+            frame_time_ns=time.monotonic_ns(),
+        )
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("aurora.recording.record_cup_trials.emit"),
+        ):
+            recorder = CupRecorder(
+                recorder_args(
+                    output=Path(temporary), subject="S01", side="left", require_reference=True
+                ),
+                live,
+            )
+            recorder.command("reference")
+            live.reader.connection_generation += 1
+            recorder.monitor_streams()
+            recorder.guide.completed = True
+            recorder.stop_trial("Reference sequence finished")
+            self.assertIsNone(recorder.reference_path)
+            self.assertFalse(recorder.state()["can_record"])
+            manifest = json.loads((recorder.trials.path / "trial.json").read_text())
+            self.assertTrue(manifest["reference_sequence_completed"])
+            self.assertIn("subject_reference_invalidated", manifest["quality_flags"])
 
     def test_stream_interruption_keeps_other_packets_and_marks_attempt_incomplete(self):
         reader = prepared_reader()

@@ -1,0 +1,110 @@
+{
+  "format_version": 2,
+  "finished_utc": "2026-11-09T09:03:30.961+00:00",
+  "source": "ble",
+  "subject_id": "session",
+  "device": "AURORA",
+  "service_uuid": "23011525-1212-efde-1523-785feabcd122",
+  "characteristics": {
+    "imu": "25011525-1212-efde-1523-785feabcd122",
+    "emg": "24011525-1212-efde-1523-785feabcd122"
+  },
+  "requested_sensors": [
+    "imu",
+    "emg"
+  ],
+  "subscribed_sensors": [
+    "imu",
+    "emg"
+  ],
+  "unavailable_sensors": {},
+  "time_sync_characteristic": "27011525-1212-efde-1523-785feabcd122",
+  "time_sync": {
+    "available": true,
+    "clock_domain": "host_monotonic_ns",
+    "exchange_count": 11,
+    "rate": 0.9996944849910151,
+    "drift_ppm": -305.51500898490235,
+    "offset_ns_at_latest_exchange": 248614902562942,
+    "minimum_round_trip_ns": 14989000,
+    "estimated_uncertainty_ns": 7494500,
+    "latest_exchange": {
+      "exchange_id": 12,
+      "host_midpoint_ns": 250600124500000,
+      "device_midpoint_ns": 1985223669000,
+      "round_trip_ns": 30968000
+    }
+  },
+  "duration_seconds": 28.094,
+  "packet_counts": {
+    "imu": 2489,
+    "emg": 3228
+  },
+  "emg_format": "auto",
+  "packet_health": {
+    "imu": {
+      "received_packets": 2489,
+      "sequence_gaps": 3,
+      "missing_packets": 5,
+      "decode_errors": 0,
+      "duplicate_packets": 0,
+      "reordered_packets": 0,
+      "sample_time_gaps": 0,
+      "gyro_saturation_samples": 0
+    },
+    "emg": {
+      "received_packets": 3228,
+      "sequence_gaps": 4,
+      "missing_packets": 10,
+      "decode_errors": 0,
+      "duplicate_packets": 0,
+      "reordered_packets": 0,
+      "sample_time_gaps": 4,
+      "gyro_saturation_samples": 0,
+      "sample_count": 99352,
+      "adc_rail_samples": 12181
+    }
+  },
+  "raw_recording": {
+    "packet_counts": {
+      "imu": 2489,
+      "emg": 3228
+    },
+    "packet_health": {
+      "imu": {
+        "received_packets": 2489,
+        "sequence_gaps": 3,
+        "missing_packets": 5,
+        "decode_errors": 0,
+        "duplicate_packets": 0,
+        "reordered_packets": 0,
+        "sample_time_gaps": 0,
+        "gyro_saturation_samples": 0
+      },
+      "emg": {
+        "received_packets": 3228,
+        "sequence_gaps": 4,
+        "missing_packets": 10,
+        "decode_errors": 0,
+        "duplicate_packets": 0,
+        "reordered_packets": 0,
+        "sample_time_gaps": 4,
+        "gyro_saturation_samples": 0,
+        "sample_count": 99352,
+        "adc_rail_samples": 12181
+      }
+    },
+    "imu_units": [
+      "g",
+      "dps"
+    ],
+    "write_error": "",
+    "raw_packet_queue_overruns": 0,
+    "raw_packet_queue_high_water": 3
+  },
+  "capture_complete": false,
+  "trial_id": "",
+  "test_type": "",
+  "session_id": "",
+  "batch_sources": ""
+}

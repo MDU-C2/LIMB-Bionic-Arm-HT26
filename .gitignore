@@ -41,6 +41,11 @@ _autosave-*
 drc.rpt
 erc.rpt
 
+# Ignore all files in the Recordings directory except for README.md and .gitkeep
+Recordings/*
+!Recordings/README.md
+!Recordings/.gitkeep
+
 # Optional generated manufacturing files
 # Uncomment if Gerber files should not be tracked
 # **/Gerber/

@@ -74,6 +74,86 @@ def recorder_args(**values):
 
 
 class CupRecordingTests(unittest.TestCase):
+    def test_trial_end_feedback_precedes_saving_and_distinguishes_an_early_stop(self):
+        for finished in (True, False):
+            with (
+                self.subTest(finished=finished),
+                tempfile.TemporaryDirectory() as temporary,
+                patch("aurora.recording.record_cup_trials.emit") as emitted,
+            ):
+                reader = prepared_reader()
+                live = SimpleNamespace(
+                    reader=reader,
+                    cv2=Mock(),
+                    frame_time_ns=time.monotonic_ns(),
+                    camera_observation={},
+                )
+                recorder = CupRecorder(
+                    recorder_args(
+                        output=Path(temporary), subject="S01", side="left", duration=0, countdown=0
+                    ),
+                    live,
+                )
+                recorder.command("record")
+                recorder.advance_protocol()
+                feed_samples(reader, 2)
+                feed_samples(reader, 5)
+                recorder.trials.add_frame(
+                    SimpleNamespace(
+                        latest_frame=object(),
+                        camera_sample=None,
+                        camera_observation={},
+                        frame_time_ns=time.monotonic_ns(),
+                    )
+                )
+                save = recorder.trials.stop
+
+                def save_after_feedback(*args, finished=finished, save=save, **kwargs):
+                    ends = [call for call in emitted.call_args_list if call.args[0] == "trial_end"]
+                    self.assertEqual(len(ends), 1)
+                    self.assertEqual(ends[0].kwargs["finished"], finished)
+                    return save(*args, **kwargs)
+
+                with patch.object(recorder.trials, "stop", side_effect=save_after_feedback):
+                    recorder.stop_trial("Manual stop", complete=finished)
+                manifest = json.loads((recorder.trials.path / "trial.json").read_text())
+                self.assertFalse(manifest["complete"])
+                recorder.stop_trial()
+                self.assertEqual(
+                    sum(call.args[0] == "trial_end" for call in emitted.call_args_list), 1
+                )
+
+    def test_trial_feedback_chimes_once_and_survives_status_refresh_until_it_expires(self):
+        for finished in (True, False):
+            with self.subTest(finished=finished):
+                gui = SimpleNamespace(
+                    bell=Mock(),
+                    after=Mock(),
+                    _refresh_cup_guidance=Mock(),
+                    cup_guidance=Mock(),
+                    cup_state=SimpleNamespace(protocol={"phase": "rest"}),
+                    cup_cue=Mock(get=lambda: "REST 20 s"),
+                    cup_instruction=Mock(get=lambda: "Reset cup"),
+                    cup_status=Mock(get=lambda: "Saved"),
+                    recording_camera_side=Mock(get=lambda: "left"),
+                    processes={CUP_PROCESS_KEY: SimpleNamespace(process=Mock(poll=lambda: None))},
+                )
+                with patch("aurora.gui.cup_recording.time.monotonic", return_value=100):
+                    CupRecordingMixin._show_cup_trial_end(
+                        gui, {"trial": "T001", "finished": finished}
+                    )
+                    for _ in range(3):
+                        CupRecordingMixin._refresh_cup_guidance(gui)
+                    view = gui.cup_guidance.update.call_args.args[0]
+                    self.assertEqual(view["feedback"], "finished" if finished else "stopped")
+                    self.assertIn("T001", view["cue"])
+                    gui.bell.assert_called_once()
+                    delays = [call.args[0] for call in gui.after.call_args_list]
+                    self.assertEqual(delays, [180, 4000] if finished else [4000])
+                with patch("aurora.gui.cup_recording.time.monotonic", return_value=105):
+                    CupRecordingMixin._refresh_cup_guidance(gui)
+                    self.assertNotIn("feedback", gui.cup_guidance.update.call_args.args[0])
+
     @unittest.skipUnless(os.name == "nt", "Case-insensitive Windows paths")
     def test_a_subject_case_collision_cannot_mix_participant_identities(self):
         with tempfile.TemporaryDirectory() as temporary:

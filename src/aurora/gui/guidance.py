@@ -46,7 +46,7 @@ class GuidancePane(ttk.Frame):
         self.title.pack(anchor="w")
         self.canvas = tk.Canvas(self, width=500, height=260, bg="#f4f7fb", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
-        self.cue = ttk.Label(self, font=("Segoe UI", 28 if large else 17, "bold"))
+        self.cue = ttk.Label(self, wraplength=850, font=("Segoe UI", 28 if large else 17, "bold"))
         self.cue.pack(anchor="w")
         self.instruction = ttk.Label(self, wraplength=800, font=("Segoe UI", 16 if large else 11))
         self.instruction.pack(anchor="w", fill="x", pady=5)
@@ -71,13 +71,23 @@ class GuidancePane(ttk.Frame):
         self.snapshot, self.side = snapshot, side
         key = illustration_key(snapshot)
         self.title.configure(text=f"Your {side} arm · {TITLES[key]}")
-        self.cue.configure(text=snapshot.get("cue", "PREPARE"))
+        feedback = snapshot.get("feedback")
+        self.cue.configure(
+            text=snapshot.get("cue", "PREPARE"),
+            foreground="#166534"
+            if feedback == "finished"
+            else "#9a3412"
+            if feedback == "stopped"
+            else "#111827",
+        )
         self.instruction.configure(
             text=snapshot.get("instruction", "Follow the operator. Begin on GO.")
         )
         self.progress["value"] = snapshot.get("progress", 0)
         self.progress_label.configure(
-            text="Capture window progress; review marker completion afterwards."
+            text="Recording ended. Rest before the next trial."
+            if feedback
+            else "Capture window progress; review marker completion afterwards."
             if key == "CUP"
             else "Step progress"
         )

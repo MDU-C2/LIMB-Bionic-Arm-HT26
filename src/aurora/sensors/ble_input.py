@@ -1,4 +1,4 @@
-# Johan Sandred, Majd
+# Majd
 """Read BLE sensors in the background and share the latest values."""
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ class BleSensorReader:
         # Cancel a pending scan once, without cancelling disconnect cleanup later.
         if (
             not already_stopping
-            and self.status != "Connected"
+            and self.status in ("Scanning", "Reconnecting")
             and loop is not None
             and task is not None
         ):
@@ -664,30 +664,31 @@ class BleSensorReader:
                 async with BleakClient(target) as client:
                     self._start_connection()
                     sync_client = None
-                    missing = []
-                    for sensor in ("imu", "emg"):
-                        try:
-                            await client.start_notify(
-                                SENSOR_UUIDS[sensor],
-                                lambda _sender, data, sensor=sensor: self.notification(
-                                    sensor, data
-                                ),
-                            )
-                        except Exception as error:
-                            missing.append(f"{sensor.upper()}: {error}")
-                    if len(missing) == 2:
-                        raise RuntimeError("; ".join(missing))
-                    self.error = "; ".join(missing)
-                    self.status = "Connected"
                     try:
+                        missing = []
+                        for sensor in ("imu", "emg"):
+                            try:
+                                await client.start_notify(
+                                    SENSOR_UUIDS[sensor],
+                                    lambda _sender, data, sensor=sensor: self.notification(
+                                        sensor, data
+                                    ),
+                                )
+                            except Exception as error:
+                                missing.append(f"{sensor.upper()}: {error}")
+                        if len(missing) == 2:
+                            raise RuntimeError("; ".join(missing))
+                        self.error = "; ".join(missing)
+                        self.status = "Connected"
                         if self.synchronize_clock:
                             sync_client = BleClockSyncClient(client, self.clock_sync)
                             await sync_client.start()
                         while client.is_connected and not self._stop.is_set():
                             await asyncio.sleep(0.1)
                     finally:
+                        self.status = "Disconnecting"
                         if sync_client is not None:
-                            await sync_client.close()
+                            await sync_client.close(unsubscribe=False)
                     if not self._stop.is_set():
                         raise RuntimeError("Disconnected; reconnecting")
             except Exception as error:

@@ -235,6 +235,8 @@ class ProcessManagerMixin:
                             if json.loads(line.removeprefix("[CUP] ")).get("event") in {
                                 "saved",
                                 "error",
+                                "trial_end",
+                                "subject_summary",
                             }:
                                 event = "cup_result"
                         except (ValueError, AttributeError):
@@ -408,7 +410,7 @@ class ProcessManagerMixin:
                 self._append_log(f"[{managed.name}] Could not send a stop signal.\n")
                 continue
             self.after(
-                4000,
+                20_000 if managed.kind == "recording" else 4000,
                 lambda process=managed.process: threading.Thread(
                     target=self._kill_process_tree_if_running, args=(process,), daemon=True
                 ).start(),

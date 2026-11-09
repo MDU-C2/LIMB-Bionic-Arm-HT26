@@ -257,13 +257,14 @@ class BleClockSyncClient:
             # Saved samples remain usable with the last valid affine fit.
             return
 
-    async def close(self) -> None:
+    async def close(self, *, unsubscribe: bool = True) -> None:
         if self._maintenance is not None:
             self._maintenance.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._maintenance
             self._maintenance = None
-        if self._subscribed and callable(getattr(self.client, "stop_notify", None)):
+        # Disconnect releases subscriptions without another remote GATT request.
+        if unsubscribe and self._subscribed and callable(getattr(self.client, "stop_notify", None)):
             with contextlib.suppress(Exception):
                 await self.client.stop_notify(TIME_SYNC_UUID)
         self._subscribed = False

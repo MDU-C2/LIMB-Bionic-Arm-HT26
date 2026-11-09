@@ -138,6 +138,11 @@ left. The illustrated sequence is **1 → 2 → 3 → 4**.
    Give the start signal at GO. Files open at GO and keep actual source times.
 3. Grasp at 2, place and release at 3, move the empty hand to 4, then wait there.
    The progress bar describes the capture window, not verified marker completion.
+   At capture end, the operator and participant views show a green **RECORDING
+   FINISHED** cue with the trial ID for four seconds and play a double chime.
+   The subject can relax and wait for the next start signal. An early stop uses
+   an amber **RECORDING STOPPED** cue and a single chime. These cues mark capture
+   end, not verified task success or signal quality. File saving may finish later.
 4. Timed capture saves automatically. **Stop early** keeps a partial trial as
    incomplete; in manual mode **Stop and save** ends capture. **Restart / repeat**
    retains a started attempt and links the repeat. Cancelling before GO creates
@@ -147,7 +152,13 @@ left. The illustrated sequence is **1 → 2 → 3 → 4**.
    rotated pace order between participants. Record deviations from that plan.
 6. **Review current trial** opens the saved manifest automatically. Collection
    can continue in the same session. **Finish subject** releases the devices and
-   unlocks the subject settings.
+   unlocks the subject settings, then opens a recording-quality report. It lists
+   this session's trials, capture completion, missing IMU/EMG packets, ADC-limit
+   samples, video/depth losses and file or cleanup errors. Select a capture for
+   details. References and their totals are separate from trial totals. Review
+   flagged captures before deciding whether to repeat; a warning is not an
+   automatic rejection of all recorded data. Reports are saved under the subject's
+   `session_summaries/` folder. Earlier recording files stay unchanged.
 
 Requested pace, software/operator cues, capture completeness and actual movement
 labels are different facts. Review video/signals before assigning labels. Raw

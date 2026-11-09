@@ -7,6 +7,7 @@ import asyncio
 import struct
 import sys
 import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -324,6 +325,53 @@ class LiveBleTests(unittest.TestCase):
         reader.stop(timeout=0)
         reader._loop.call_soon_threadsafe.assert_not_called()
         self.assertTrue(reader._stop.is_set())
+
+    def test_stop_during_disconnect_keeps_ownership_until_cleanup_finishes(self):
+        disconnecting = threading.Event()
+        release = threading.Event()
+        reader = BleSensorReader(address="test-device", synchronize_clock=True)
+        sync = SimpleNamespace(start=AsyncMock(return_value=True), close=AsyncMock())
+        attempts = []
+
+        class Client:
+            is_connected = True
+
+            async def __aenter__(self):
+                attempts.append(self)
+                return self
+
+            async def start_notify(self, *_args):
+                pass
+
+            async def __aexit__(self, *_args):
+                disconnecting.set()
+                while not release.is_set():
+                    await asyncio.sleep(0.005)
+
+        with (
+            patch("bleak.BleakClient", return_value=Client()),
+            patch("aurora.sensors.ble_input.BleClockSyncClient", return_value=sync),
+        ):
+            reader.start()
+            try:
+                deadline = time.monotonic() + 2
+                while reader.status != "Connected" and time.monotonic() < deadline:
+                    threading.Event().wait(0.005)
+                self.assertEqual(reader.status, "Connected")
+                self.assertFalse(reader.stop(timeout=0.01))
+                self.assertTrue(disconnecting.wait(2))
+                self.assertEqual(reader.status, "Disconnecting")
+                self.assertTrue(reader.thread.is_alive())
+                self.assertFalse(reader.stop(timeout=0))
+                reader.start()
+                self.assertEqual(len(attempts), 1)
+                release.set()
+                self.assertTrue(reader.stop(timeout=2))
+                sync.close.assert_awaited_once_with(unsubscribe=False)
+                self.assertEqual(reader.status, "Stopped")
+            finally:
+                release.set()
+                reader.stop(timeout=2)
 
     def test_gui_launches_ble_without_any_serial_settings(self):
         def setting(value):

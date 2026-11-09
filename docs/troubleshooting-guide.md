@@ -1,5 +1,11 @@
 # Troubleshooting
 
+Cup recording shutdown waits for camera workers and Bluetooth to release their
+resources. Run Setup to install the pinned Bluetooth library, then restart the
+app. A recording process has up to 20 seconds for saving and cleanup before the
+GUI's forced-stop fallback. If a worker still times out, keep its log; the error
+does not establish that earlier saved trials were lost.
+
 ## Start asks for internet
 
 Use **Start** after the first **Setup**. Start only launches the saved environment;

@@ -1,4 +1,4 @@
-# Johan Sandred, Majd
+# Majd
 """Filter saved EMG and export six time-domain features."""
 
 from __future__ import annotations

@@ -3,14 +3,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import struct
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from aurora.recording.record_ble_sensors import BleRecorder
-from aurora.sensors.clock_sync import SYNC_RESPONSE, ClockSynchronizer
+from aurora.sensors.clock_sync import SYNC_RESPONSE, BleClockSyncClient, ClockSynchronizer
 
 
 class ClockSynchronizerTests(unittest.TestCase):
@@ -89,6 +92,29 @@ class ClockSynchronizerTests(unittest.TestCase):
         recorder.close()
         self.assertEqual(samples[0][0:2], ("imu", 4))
         self.assertEqual(len(samples[0][2]), 1)
+
+
+class ClockClientCleanupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_disconnect_cleanup_cancels_probes_without_a_remote_unsubscribe(self):
+        client = SimpleNamespace(stop_notify=AsyncMock())
+        sync = BleClockSyncClient(client, ClockSynchronizer())
+        sync._subscribed = True
+        sync._maintenance = asyncio.create_task(sync._maintain())
+        maintenance = sync._maintenance
+        await asyncio.sleep(0)
+        await sync.close(unsubscribe=False)
+        self.assertTrue(maintenance.cancelled())
+        self.assertIsNone(sync._maintenance)
+        self.assertFalse(sync._subscribed)
+        client.stop_notify.assert_not_awaited()
+        await sync.close(unsubscribe=False)
+
+    async def test_closing_sync_on_a_live_connection_still_unsubscribes(self):
+        client = SimpleNamespace(stop_notify=AsyncMock())
+        sync = BleClockSyncClient(client, ClockSynchronizer())
+        sync._subscribed = True
+        await sync.close()
+        client.stop_notify.assert_awaited_once()
 
 
 if __name__ == "__main__":

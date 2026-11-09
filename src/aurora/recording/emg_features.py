@@ -1,4 +1,4 @@
-# Johan Sandred, Majd
+# Majd
 """Process saved EMG and export window features with reviewed cue labels."""
 
 from __future__ import annotations

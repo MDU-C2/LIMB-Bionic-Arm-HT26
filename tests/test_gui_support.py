@@ -38,6 +38,24 @@ from aurora.sensors.live_input import installed_pose_model_complexity
 
 
 class RecordingBatchTests(unittest.TestCase):
+    def test_recording_stop_allows_time_to_save_and_release_bluetooth(self):
+        child = Mock()
+        child.poll.return_value = None
+        managed = ManagedProcess(
+            "recording:cup_trials", "Cup recording", "recording", child, stop_input="stop\n"
+        )
+        gui = types.SimpleNamespace(
+            _append_log=Mock(),
+            _send_process_input=Mock(return_value=True),
+            after=Mock(),
+            _set_status=Mock(),
+            _update_controls=Mock(),
+        )
+        ProcessManagerMixin._stop_processes(gui, [managed])
+        self.assertTrue(managed.stopping)
+        self.assertEqual(gui.after.call_args.args[0], 20_000)
+        gui._send_process_input.assert_called_once_with(managed.key, "stop\n")
+
     def test_serial_receipt_precedes_decode_and_each_open_has_a_new_generation(self):
         reader = SerialSensorReader()
         clock = [123]

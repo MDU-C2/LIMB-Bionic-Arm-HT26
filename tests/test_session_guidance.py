@@ -97,6 +97,27 @@ class SessionTests(unittest.TestCase):
         self.assertIsNone(restored.selected_trial)
         self.assertFalse(restored.cup.status["can_record"])
 
+    def test_finished_and_stopped_cues_reach_both_views_and_reset_afterwards(self):
+        views = GuidanceViews(self.root)
+        views.open_participant()
+        self.addCleanup(views.window.destroy)
+        views.window.withdraw()
+        for feedback, color in (("finished", "#166534"), ("stopped", "#9a3412")):
+            view = {
+                "movement": "CUP",
+                "phase": "rest",
+                "feedback": feedback,
+                "cue": "RECORDING " + feedback.upper(),
+                "instruction": "Relax.",
+            }
+            views.update(view, "left")
+            for pane in (views.operator, views.participant):
+                self.assertEqual(pane.cue.cget("text"), view["cue"])
+                self.assertEqual(str(pane.cue.cget("foreground")), color)
+                self.assertEqual(pane.instruction.cget("text"), "Relax.")
+        views.update({"movement": "CUP", "phase": "rest", "cue": "REST 16 s"})
+        self.assertEqual(str(views.participant.cue.cget("foreground")), "#111827")
+
     def test_active_session_rejects_conflicting_identity_and_allows_next_trial_settings(self):
         subject = self.session.variables["recording_subject"]
         self.session.context_locked = True

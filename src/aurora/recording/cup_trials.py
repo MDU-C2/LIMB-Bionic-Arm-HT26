@@ -102,6 +102,7 @@ class CupTrialSession:
         self._stopped_health = None
         self.calibration = {}
         self.camera_metadata = dict(camera_metadata or {})
+        self.capture_paths = []
 
     @property
     def active(self) -> bool:
@@ -141,6 +142,7 @@ class CupTrialSession:
         trial_id = f"{prefix}{number:03d}"
         self.path = parent / f"{trial_id}_{datetime.now():%Y%m%d_%H%M%S_%f}"
         self.path.mkdir(parents=True, exist_ok=False)
+        self.capture_paths.append(self.path)
         (self.path / "ble").mkdir()
         self.started_ns = time.monotonic_ns()
         self.calibration = {

@@ -13,6 +13,7 @@ from tkinter import messagebox, ttk
 
 from aurora.gui.guidance import GuidanceViews
 from aurora.gui.project_support import console_python, project_path
+from aurora.gui.subject_summary import SubjectSummaryWindow
 from aurora.paths import PACKAGE_DIRECTORY
 from aurora.recording.cup_protocol import PACE_PROMPTS, START_POSE
 
@@ -30,6 +31,7 @@ class CupRecordingMixin:
         )
         self.cup_next_trial = tk.StringVar(value="T001")
         self._cup_camera_handoff_pending = False
+        self._cup_feedback = None
         self.cup_condition.trace_add("write", self._cup_pace_changed)
 
     def _cup_pace_changed(self, *_args):
@@ -273,6 +275,10 @@ class CupRecordingMixin:
         )
         if not sent:
             self.cup_status.set("Connect camera + BLE first.")
+        elif action == "close":
+            self.cup_status.set(
+                "Finishing subject: saving data and disconnecting. The quality report follows."
+            )
         elif action in ("record", "practice", "reference", "reference_step"):
             self.cup_state.status["can_start"] = False
             self.cup_state.status["can_prepare"] = self.cup_state.status["can_record"] = False
@@ -347,6 +353,7 @@ class CupRecordingMixin:
             self.cup_next_trial.set(data["next_trial"])
             self.cup_status.set(data["message"])
         elif event in ("recording", "practice", "reference"):
+            self._cup_feedback = None
             self.cup_state.status["recording"] = event != "practice"
             self.cup_status.set(
                 data.get(
@@ -355,6 +362,18 @@ class CupRecordingMixin:
             )
         elif event == "protocol":
             self._set_cup_protocol(data)
+        elif event == "trial_end":
+            self._show_cup_trial_end(data)
+        elif event == "subject_summary":
+            report = data["summary"]
+            self._append_log(
+                f"[Subject report] {report['subject_id']}: {report['trial_count']} trials, "
+                f"{report['complete_trials']} capture complete, {report['trials_with_warnings']} with warnings.\n"
+            )
+            if not getattr(self, "_closing_processes", False):
+                self._cup_report_window = SubjectSummaryWindow(
+                    self.window, report, data.get("path")
+                )
         elif event == "retry":
             self.cup_condition.set(data["condition"])
             self.cup_status.set(data["message"])
@@ -404,6 +423,21 @@ class CupRecordingMixin:
         self._update_cup_controls()
         self._refresh_cup_guidance()
 
+    def _show_cup_trial_end(self, data):
+        finished = data["finished"]
+        self._cup_feedback = {
+            "expires": time.monotonic() + 4.0,
+            "feedback": "finished" if finished else "stopped",
+            "cue": f"RECORDING {'FINISHED' if finished else 'STOPPED'} · {data['trial']}",
+            "instruction": "Relax. Wait for the next start signal."
+            if finished
+            else "Recording stopped early. Relax and wait for the operator.",
+        }
+        self.bell()
+        if finished:
+            self.after(180, self.bell)
+        self.after(4000, self._refresh_cup_guidance)
+
     def _refresh_cup_guidance(self):
         if hasattr(self, "cup_guidance"):
             view = {
@@ -418,6 +452,9 @@ class CupRecordingMixin:
                     "cue": "PREPARE",
                     "instruction": START_POSE + " " + PACE_PROMPTS[self.cup_condition.get()],
                 }
+            feedback = getattr(self, "_cup_feedback", None)
+            if feedback and time.monotonic() < feedback["expires"]:
+                view.update({key: value for key, value in feedback.items() if key != "expires"})
             self.cup_guidance.update(view, self.recording_camera_side.get(), self.cup_status.get())
 
     def _update_cup_controls(self) -> None:

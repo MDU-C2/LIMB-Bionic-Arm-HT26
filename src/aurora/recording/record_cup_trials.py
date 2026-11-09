@@ -28,6 +28,7 @@ from aurora.recording.cup_protocol import (
 )
 from aurora.recording.cup_trials import CupTrialSession, capture_quality_flags, next_trial_number
 from aurora.recording.subject_calibration import digest, fit_subject_reference
+from aurora.recording.subject_summary import summarize_subject
 from aurora.sensors.imu_twist import DEFAULT_TWIST_AXIS, TWIST_AXES
 from aurora.sensors.settings import DEFAULT_BLE_DEVICE_NAME
 
@@ -313,6 +314,14 @@ class CupRecorder:
             for key, value in health.items()
         }
         self.trials.cue("stop", reason=reason)
+        if not reference and getattr(self, "_last_trial_end", None) != self.trials.path:
+            self._last_trial_end = self.trials.path
+            emit(
+                "trial_end",
+                trial=self.trials.metadata["trial_id"],
+                finished=bool(complete),
+                reason=reason,
+            )
         if reference:
             self.trials.metadata["reference_sequence_completed"] = bool(complete)
             data = self.live.reader.graph_data()
@@ -731,6 +740,27 @@ class CupRecorder:
                 self.graph_root.destroy()
             self.live.cv2.destroyAllWindows()
 
+    def publish_subject_summary(self, *, session_errors=()):
+        if getattr(self, "_summary_published", False):
+            return
+        report = summarize_subject(
+            self.trials.directory,
+            self.args.subject,
+            self.trials.capture_paths,
+            session_errors=session_errors,
+        )
+        path = None
+        if self.trials.capture_paths:
+            path = self.trials.directory / "session_summaries" / f"session_{time.time_ns()}.json"
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                write_json(path, report)
+            except OSError as error:
+                report["session_errors"].append(f"Could not save session report: {error}")
+                path = None
+        self._summary_published = True
+        emit("subject_summary", summary=report, path=str(path) if path else None)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -784,6 +814,7 @@ def main() -> int:
         depth=args.depth,
     )
     recorder = None
+    session_error = None
     try:
         emit("cue", message="Connecting camera and BLE")
         live.start()
@@ -795,14 +826,26 @@ def main() -> int:
     except KeyboardInterrupt:
         return 0
     except Exception as error:
+        session_error = str(error)
         emit("error", message=str(error))
         raise
     finally:
+        cleanup_errors = []
         try:
             if recorder is not None:
                 recorder.close()
-        finally:
+        except Exception as error:
+            cleanup_errors.append(f"Recorder: {error}")
+        try:
             live.close()
+        except Exception as error:
+            cleanup_errors.append(f"Camera/Bluetooth: {error}")
+        if recorder is not None:
+            recorder.publish_subject_summary(
+                session_errors=([session_error] if session_error else []) + cleanup_errors
+            )
+        if cleanup_errors:
+            raise RuntimeError("; ".join(cleanup_errors))
     return 0
 
 

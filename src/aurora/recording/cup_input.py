@@ -400,8 +400,10 @@ class CupSensorInput:
             else:
                 self.pipeline = None
         try:
-            if self.reader.stop() is False:
-                raise RuntimeError("worker did not stop; connection remains owned")
+            if self.reader.stop(timeout=10.0) is False:
+                raise RuntimeError(
+                    f"worker did not stop within 10 s ({self.reader.status}); connection remains owned"
+                )
         except Exception as error:
             errors.append(f"Sensor reader: {error}")
         if errors:

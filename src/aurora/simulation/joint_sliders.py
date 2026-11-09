@@ -1,4 +1,5 @@
-# Oscar Ågren, Majd
+# Majd
+# Source: earlier LIMB DMP-arm repository, https://github.com/oscaragren/DMP-arm.
 """Open the arm model with joint sliders."""
 
 from __future__ import annotations

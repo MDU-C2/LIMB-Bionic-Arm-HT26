@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Verify live upper-arm/forearm IMUs and optional EMG from the ESP32 stream."""
 
 from __future__ import annotations

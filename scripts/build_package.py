@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Include runtime resources without copying them into the source package."""
 
 from __future__ import annotations

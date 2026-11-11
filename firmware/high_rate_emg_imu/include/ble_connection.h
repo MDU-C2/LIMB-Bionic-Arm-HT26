@@ -1,4 +1,4 @@
-/* Majd */
+/* Christian och Majd */
 #pragma once
 
 #include <stdint.h>

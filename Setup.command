@@ -1,5 +1,5 @@
 #!/bin/bash
-# Majd
+# Christian och Majd
 set -euo pipefail
 
 repository="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -62,4 +62,5 @@ if [[ -f "$prefix/conda-meta/history" ]]; then operation=install; fi
 "$micromamba" --no-rc "$operation" -y -p "$prefix" -f environment.yml
 arguments=(--install)
 if $launch; then arguments+=(--launch); fi
-"$micromamba" --no-rc run -p "$prefix" python scripts/setup_project.py "${arguments[@]}"
+# Use the environment explicitly: micromamba run cannot activate a versioned executable name.
+"$prefix/bin/python" scripts/setup_project.py "${arguments[@]}"

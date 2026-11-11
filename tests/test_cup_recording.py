@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check trial files, calibration reuse and interrupted recordings."""
 
 from __future__ import annotations

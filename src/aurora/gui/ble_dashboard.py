@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Use the existing live BLE reader and graph window from the launcher."""
 
 from __future__ import annotations

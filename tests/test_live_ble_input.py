@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check BLE live control without an ESP32, camera, or simulator window."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check that training optimizations keep the original preprocessing and ranking."""
 
 from __future__ import annotations

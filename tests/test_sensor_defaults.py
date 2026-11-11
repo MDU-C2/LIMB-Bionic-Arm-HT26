@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check current defaults and connections to earlier sensor firmware."""
 
 from __future__ import annotations

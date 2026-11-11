@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Load Oscar Ågren's four-joint DMP trajectories or fit one from angles."""
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from typing import Literal
 
 import numpy as np
 
+from aurora.json_utils import read_json_object
 from aurora.simulation.dmp.dmp import fit, rollout_simple
 
 
@@ -102,7 +103,7 @@ def load_dmp_trajectory(
     prefer_saved_rollout: bool = True,
     rollout_source: Literal["clean", "raw"] = "clean",
 ) -> tuple[np.ndarray, float]:
-    """Load a saved rollout, or reproduce Oscar's one-second DMP fallback."""
+    """Load a saved rollout or fit angles using explicit timing when available."""
     path = resolve_saved_dmp_rollout_path(trial_dir, rollout_source)
     if prefer_saved_rollout and path is not None:
         with np.load(path, allow_pickle=False) as data:
@@ -116,16 +117,19 @@ def load_dmp_trajectory(
         return _validate(q_gen, dt), dt
 
     q_demo = load_angles_demo(trial_dir, source=rollout_source)
-    dt = 1.0 / (len(q_demo) - 1)
-    # Fit a one-second trajectory.
+    timing = trial_dir / "timing.json"
+    tau = float(read_json_object(timing)["duration_seconds"]) if timing.is_file() else 1.0
+    if not np.isfinite(tau) or tau <= 0:
+        raise ValueError("Trajectory duration must be finite and positive")
+    dt = tau / (len(q_demo) - 1)
     model = fit(
         [q_demo],
-        tau=1.0,
+        tau=tau,
         dt=dt,
         n_basis_functions=15,
         alpha_canonical=4.0,
         alpha_transformation=25.0,
         beta_transformation=6.25,
     )
-    q_gen = rollout_simple(model, q_demo[0], q_demo[-1], tau=1.0, dt=dt)
+    q_gen = rollout_simple(model, q_demo[0], q_demo[-1], tau=tau, dt=dt)
     return _validate(q_gen, dt), dt

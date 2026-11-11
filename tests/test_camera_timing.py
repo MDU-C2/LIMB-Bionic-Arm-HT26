@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check that tracking time does not move saved frame timestamps."""
 
 from __future__ import annotations

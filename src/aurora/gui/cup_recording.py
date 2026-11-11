@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Simple controls for repeated cup transfers."""
 
 from __future__ import annotations

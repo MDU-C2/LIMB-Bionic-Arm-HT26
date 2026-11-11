@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Compile the source and run each test module in a separate process."""
 
 from __future__ import annotations

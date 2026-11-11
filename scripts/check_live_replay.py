@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check a recorded cup trial through the live controller without hardware."""
 
 from __future__ import annotations

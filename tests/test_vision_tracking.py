@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check cup coordinates, occlusion handling and wrist-crop landmarks."""
 
 from __future__ import annotations

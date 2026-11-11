@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check installer recovery and launch behavior without downloads or hardware."""
 
 from __future__ import annotations

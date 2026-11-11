@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Keep the previous metadata readable when saving a replacement fails."""
 
 from __future__ import annotations

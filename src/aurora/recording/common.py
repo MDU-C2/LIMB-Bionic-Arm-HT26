@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Shared paths and metadata for sensor recording programs."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Run a firmware command from a no-space mirror of an ESP-IDF project."""
 
 from __future__ import annotations

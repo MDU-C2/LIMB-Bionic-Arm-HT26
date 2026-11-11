@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Saved-label review, EMG experiments and explicit model selection."""
 
 from __future__ import annotations

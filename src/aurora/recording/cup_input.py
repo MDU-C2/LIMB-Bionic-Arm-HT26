@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Capture camera frames independently of optional pose tracking."""
 
 from __future__ import annotations

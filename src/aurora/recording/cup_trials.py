@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Save repeated cup transfers without reconnecting the sensors."""
 
 from __future__ import annotations

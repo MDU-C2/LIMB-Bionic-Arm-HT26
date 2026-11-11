@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Shared preprocessing for the inherited camera movement GRU."""
 
 from __future__ import annotations

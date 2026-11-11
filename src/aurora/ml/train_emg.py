@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Compare EMG classifiers on held-out participants and save a model bundle."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check raw plotting, clock alignment and spectra without connected sensors."""
 
 from __future__ import annotations

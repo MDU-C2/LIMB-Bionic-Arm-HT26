@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Plot held-out participant scores from a saved EMG training run."""
 
 from __future__ import annotations

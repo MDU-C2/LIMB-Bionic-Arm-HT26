@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check that the app can load and run the saved movement model."""
 
 from __future__ import annotations

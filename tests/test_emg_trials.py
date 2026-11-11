@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check grip cues, labels and signal features without hardware."""
 
 from __future__ import annotations

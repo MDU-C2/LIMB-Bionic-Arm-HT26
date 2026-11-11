@@ -220,6 +220,15 @@ TOOLS = {
             ),
             Setting("refit", "Fit from angles instead of saved rollout", "--refit", False, "bool"),
             Setting("loop", "Loop playback", "--loop", False, "bool"),
+            Setting(
+                "duration_scale",
+                "Duration multiplier (0.5 faster, 2 slower)",
+                "--duration-scale",
+                1,
+                "float",
+                minimum=0.25,
+                maximum=4,
+            ),
             Setting("headless", "Validate once without a window", "--headless", False, "bool"),
         ),
         ("numpy", "scipy", "pybullet"),
@@ -240,6 +249,52 @@ TOOLS = {
         ),
         description="Reuses the existing DMP fitter. Saves unclipped radians in NPZ and CSV, input hashes and a completion manifest in a new folder.",
         prefix=("dmp",),
+    ),
+    "dmp_experiment": Tool(
+        "Learn and compare DMP",
+        "aurora.simulation.dmp.experiment",
+        (
+            Setting("source", "Example folder or cup trial.json", "--source", DEMO, "recording"),
+            OUTPUT,
+            Setting("start", "Start in recording (seconds)", "--start", 0, "float", minimum=0),
+            Setting("end", "End in recording (seconds; 0 = full)", "--end", 0, "float", minimum=0),
+            Setting(
+                "sample_hz",
+                "Resampling frequency (Hz)",
+                "--sample-hz",
+                50,
+                "float",
+                minimum=5,
+                maximum=200,
+            ),
+            Setting(
+                "duration_scale",
+                "Duration multiplier (0.5 faster, 2 slower)",
+                "--duration-scale",
+                1,
+                "float",
+                minimum=0.25,
+                maximum=4,
+            ),
+            Setting("basis", "Basis functions", "--basis", 15, "int", minimum=3, maximum=100),
+        ),
+        ("numpy", "scipy", "matplotlib"),
+        "Start with the bundled example. Later choose a completed cup trial.json and a continuous interval. Saves original/DMP curves, errors, model and a playable trajectory. Cup rotation remains an estimated proxy. Legacy examples assume one second.",
+        prefix=("fit",),
+    ),
+    "dmp_comparison": Tool(
+        "Open DMP comparison",
+        "aurora.simulation.dmp.comparison",
+        (Setting("path", "Completed DMP experiment folder", "--path", kind="directory"),),
+        ("numpy", "matplotlib"),
+        "Inspect original and DMP curves, phase-aligned errors and half/normal/double duration. Tempo changes in this window do not modify saved results.",
+    ),
+    "dmp_synthetic": Tool(
+        "Create synthetic cup trial for DMP",
+        "aurora.simulation.dmp.experiment",
+        (OUTPUT,),
+        description="Creates a four-second, explicitly synthetic trial with saved IMU packets and camera angle observations. No video, hardware or participant data. Use its trial.json in Learn and compare DMP to rehearse import.",
+        prefix=("synthetic",),
     ),
     "joints": Tool(
         "Manual robot joint sliders",
@@ -599,6 +654,12 @@ def arguments_for(key: str, values: dict) -> list[str]:
         raise ValueError("Window overlap must be shorter than the window.")
     if key in {"dmp_play", "pose_play"} and values.get("loop") and values.get("headless"):
         raise ValueError("Choose either looping preview or one headless validation.")
+    if (
+        key == "dmp_experiment"
+        and float(values.get("end", 0))
+        and float(values["end"]) <= float(values.get("start", 0))
+    ):
+        raise ValueError("End must be after start (or 0 for the complete recording).")
     if key == "camera_check" and values.get("headless") and int(values.get("frames", 120)) == 0:
         raise ValueError("Choose a positive frame count for headless validation.")
     if key == "benchmark" and int(values.get("browser", 0)) and not values.get("ui"):

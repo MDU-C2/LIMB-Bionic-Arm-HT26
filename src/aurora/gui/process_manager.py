@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Concurrent child-process supervision for the AURORA desktop GUI."""
 
 from __future__ import annotations

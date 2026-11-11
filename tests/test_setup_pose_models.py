@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check pose model installation without downloads or connected hardware."""
 
 from __future__ import annotations

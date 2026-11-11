@@ -17,6 +17,7 @@ from aurora.recording.common import STOP_COMMAND
 COOPERATIVE_MODULES = frozenset(
     (
         "aurora.gui.tool_jobs",
+        "aurora.simulation.dmp.experiment",
         "aurora.gui.sensor_learning",
         "aurora.recording.emg_processing",
         "aurora.recording.capture_movement",
@@ -224,7 +225,23 @@ class WorkflowTools:
             text="Direct robot previews and fitted trajectories",
             style="PageTitle.TLabel",
         ).grid(row=0, column=0, sticky="w", pady=8)
-        for row, key in enumerate(("joints", "dmp_play", "dmp_export", "pose_play"), 1):
+        ttk.Label(
+            trajectories,
+            text="Start with Learn and compare DMP using the example folder. Then open the saved comparison and play its trajectory. Create a synthetic cup trial to practise importing future recordings.",
+            wraplength=780,
+        ).grid(row=1, column=0, sticky="w", pady=6)
+        for row, key in enumerate(
+            (
+                "dmp_experiment",
+                "dmp_comparison",
+                "dmp_synthetic",
+                "dmp_play",
+                "dmp_export",
+                "joints",
+                "pose_play",
+            ),
+            2,
+        ):
             ttk.Button(
                 trajectories, text=TOOLS[key].title, command=lambda key=key: self.show_tool(key)
             ).grid(row=row, column=0, sticky="w", pady=6)
@@ -293,6 +310,7 @@ class WorkflowTools:
                         "training.json",
                         "calibration.json",
                         "trajectory.json",
+                        "experiment.json",
                         "emg.filtered.csv",
                         "pose.json",
                         "emg.csv",
@@ -385,6 +403,12 @@ class WorkflowTools:
         for index, (label, callback) in enumerate(
             (
                 ("Replay selected cup trial", self.replay_selection),
+                (
+                    "Learn DMP from selected trial",
+                    lambda: self.show_tool(
+                        "dmp_experiment", {"source": str(self.selected_recording() or "")}
+                    ),
+                ),
                 ("Export recording bundle", lambda: self.show_tool("bundle")),
                 ("Trial / calibration summary", self.show_trial_summary),
                 ("Select live EMG model", self.gui._select_emg_model),
@@ -524,7 +548,8 @@ class WorkflowTools:
             "training"
             if key in {"emg_train", "movement_train"}
             else "exports"
-            if key in {"bundle", "dmp_export", "plot", "emg_results", "process_emg"}
+            if key
+            in {"bundle", "dmp_export", "dmp_experiment", "plot", "emg_results", "process_emg"}
             else "diagnostics"
         )
         suffix = {
@@ -581,6 +606,17 @@ class WorkflowTools:
         variables = {}
         defaults = dict(initial or {})
         selected = self.selected_recording()
+        if (
+            key == "dmp_experiment"
+            and "source" not in defaults
+            and selected
+            and selected.name == "trial.json"
+        ):
+            defaults["source"] = str(selected)
+        if key in {"dmp_comparison", "dmp_play"} and "path" not in defaults:
+            candidate = Path(self.last_output.get())
+            if (candidate / "experiment.json").is_file():
+                defaults["path"] = str(candidate)
         shared = {
             "subject": gui.recording_subject,
             "side": gui.recording_camera_side,
@@ -831,7 +867,8 @@ class WorkflowTools:
         )
         if started:
             output = values.get("output") or values.get("save")
-            self.last_output.set(str(output) if output else "")
+            if output or key not in {"dmp_comparison", "dmp_play"}:
+                self.last_output.set(str(output) if output else "")
             self.action_status.set(
                 tool.title
                 + ": started. "

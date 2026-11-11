@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Review raw EMG intervals with the saved trial video."""
 
 from __future__ import annotations

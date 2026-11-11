@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Save the files and settings used for a camera profile training run."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Record newline-delimited sensor data from a serial device."""
 
 from __future__ import annotations

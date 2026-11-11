@@ -1,2 +1,2 @@
-# Majd
+# Christian och Majd
 platformio==6.1.18

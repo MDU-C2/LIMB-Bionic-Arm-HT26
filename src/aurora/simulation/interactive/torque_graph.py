@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Live history graph for simulated joint motor torque."""
 
 from __future__ import annotations

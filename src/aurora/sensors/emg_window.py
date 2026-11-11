@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """The same causal EMG windows for training and live prediction."""
 
 from __future__ import annotations

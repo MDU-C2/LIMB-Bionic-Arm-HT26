@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Replay recorded BLE packets and camera observations without hardware."""
 
 from __future__ import annotations

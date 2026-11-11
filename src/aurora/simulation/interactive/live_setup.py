@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Guide live calibration before enabling arm movement."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 [build-system]
 requires = ["setuptools>=68,<81"]
 build-backend = "setuptools.build_meta"

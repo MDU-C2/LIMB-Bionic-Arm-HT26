@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Scores kept per participant, including absent and missed phases."""
 
 from __future__ import annotations

@@ -229,6 +229,12 @@ typed settings. Training and specialist checks are optional. Review participant
 evaluation before explicit model selection; calibrated EMG amplitude remains
 available. DMP fitting/export and playback retain recorded units/timestep;
 angles-only inherited fits assume one second. Manual sliders command robot joints.
+**Learn and compare DMP** fits the example or a selected completed cup trial and
+saves original/DMP diagrams and per-joint reconstruction errors. **Open DMP
+comparison** shows half/normal/double duration. **Create synthetic cup trial for
+DMP** rehearses import before real data exists. See the [DMP experiment
+workflow](simulation-guide.md#dmp-experiments-before-participant-data) for timing,
+cropping, proxy-angle and playback conventions.
 
 **Cancel** closes an unstarted form. **Stop active program** requests bounded
 shutdown of a running action. Recording stop asks before interrupting collection.

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Drive the live mounting guide with known, arbitrarily mounted IMUs."""
 
 from __future__ import annotations

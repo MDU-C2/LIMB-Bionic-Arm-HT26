@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Keep camera and BLE open while recording a subject's cup transfers."""
 
 from __future__ import annotations

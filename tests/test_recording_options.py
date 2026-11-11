@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check recorder options before a camera or serial device can be opened."""
 
 from __future__ import annotations

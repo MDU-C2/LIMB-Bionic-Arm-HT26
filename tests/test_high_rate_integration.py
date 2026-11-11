@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Verify high-rate serial alignment and BLE packet decoding."""
 
 from __future__ import annotations

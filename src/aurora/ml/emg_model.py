@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Portable EMG classifiers. Live use needs no training framework."""
 
 from __future__ import annotations

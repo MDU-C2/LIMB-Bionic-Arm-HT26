@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Train one neural EMG candidate in its own process."""
 
 from __future__ import annotations

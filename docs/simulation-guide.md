@@ -63,3 +63,55 @@ Motor speed limits can lengthen actual playback beyond the requested duration.
 **Advanced Tools / Movement profiles** retains camera profile playback,
 comparison and optional recognition. Training results need independent evaluation.
 See [live fusion](live-control.md) for sensor timing and observability limits.
+
+## DMP experiments before participant data
+
+Open **Advanced Tools → DMP / manual joints**. Use this sequence:
+
+1. **Learn and compare DMP** starts with the bundled example folder. Leave start
+   and end at zero to use the full example. Choose a new output folder and Run.
+2. **Open DMP comparison** proposes the last experiment folder. Blue is the
+   original; orange is the fitted DMP. Each joint also shows reconstruction error
+   and RMSE in degrees, aligned by movement phase. Select duration 0.5, 1 or 2 to
+   inspect faster or slower motion. This changes the view, not the saved files.
+3. **Play DMP trajectory** proposes the experiment folder. Its duration multiplier
+   applies to the exported trajectory: 0.5 takes half as long, 2 takes twice as long.
+   Actual playback can take longer because of motor speed limits.
+4. **Create synthetic cup trial for DMP** creates a four-second exercise with
+   generated IMU packets and camera angle observations. It contains no video or
+   participant measurements and is explicitly marked synthetic. Choose its
+   `trial.json` in **Learn and compare DMP** to practise the future import flow.
+
+A new experiment saves `experiment.json` (provenance, timing, settings and metrics),
+`comparison.png`, `comparison.csv`, `comparison.npz` (source estimates and DMP),
+`model.npz` (weights, basis functions and endpoints), and compatible playback
+files. `angles.npz` and `dmp_rollout_clean.npz` contain unclipped actuator angles;
+`timing.json` preserves the original duration when refitting. Original source
+files remain unchanged. The bundled legacy angles have no measured duration and
+use an explicitly reported one-second assumption; invalid legacy rows are reported.
+
+## Import a future cup trial
+
+Finish recording and review the capture first. Choose a completed `trial.json`
+through **Learn and compare DMP**, or use **Learn DMP from selected trial** in
+Review. Set start/end in seconds from capture start; end=0 means the recording
+end. A trial's first camera observation may occur after zero; choose a start at
+or after that time. Replay consumes the preceding events before extracting the
+selected interval, retaining the integration history and saved calibration.
+
+The import uses the existing offline replay/fusion code without opening hardware.
+All four source channels must be available throughout the chosen interval;
+missing/unreferenced channels, stale inputs or reconnections stop the import.
+Select another continuous interval or repair the recording/calibration rather
+than filling missing angles with zero. The source and derived files are kept
+separate. Resampling and the selected source-time interval are recorded explicitly.
+
+The fourth cup-trial channel is **shoulder rotation proxy**, not validated
+anatomical axial rotation. Comparison plots retain that label. Playback uses the
+existing left CAD convention: shoulder flexion = 90° − estimated flexion,
+rotation = −proxy, with abduction sign applied by the playback joint mapping.
+The preview uses the left CAD model for either recorded arm; it is not a
+side-specific anatomical validation. Grip/EMG is not fitted by this four-joint DMP.
+Reconstruction errors measure agreement with estimated angles, not independent
+physical tracking accuracy or task success. Synthetic exercises cannot establish
+performance on participant recordings.

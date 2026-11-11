@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Map camera pose recordings to safe AURORA simulation commands."""
 
 from __future__ import annotations

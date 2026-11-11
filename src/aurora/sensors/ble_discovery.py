@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Find the selected sensor board, including the earlier firmware name."""
 
 from aurora.sensors.settings import DEFAULT_BLE_DEVICE_NAME, LEGACY_BLE_DEVICE_NAME

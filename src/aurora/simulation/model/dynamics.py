@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Calculate arm motion and torque. Arrays include all movable joints and fingers."""
 
 from __future__ import annotations

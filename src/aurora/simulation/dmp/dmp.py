@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Fit and replay movement trajectories using dynamic movement primitives."""
 
 from __future__ import annotations

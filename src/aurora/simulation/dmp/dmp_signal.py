@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Trajectory derivatives and the canonical DMP phase."""
 
 from __future__ import annotations

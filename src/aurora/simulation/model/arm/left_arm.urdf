@@ -1,5 +1,5 @@
 <?xml version="1.0" ?>
-<!-- Majd -->
+<!-- Christian och Majd -->
 <robot name="left_arm_final" xmlns:xacro="http://wiki.ros.org/xacro">
   <!-- Exact local-X reflection of right_arm.urdf: positions and meshes reflect
        X; axial vectors and rotations use the corresponding reflection.

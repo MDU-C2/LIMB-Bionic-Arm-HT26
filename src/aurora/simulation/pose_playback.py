@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Play a camera pose recording on the AURORA arm model."""
 
 from __future__ import annotations

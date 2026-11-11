@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Defaults shared by sensor control, recording and the app."""
 
 DEFAULT_BLE_DEVICE_NAME = "AURORA"

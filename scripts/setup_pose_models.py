@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Install and check the MediaPipe pose models used by the app."""
 
 from __future__ import annotations

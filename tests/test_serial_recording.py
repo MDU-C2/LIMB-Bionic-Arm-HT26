@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Retain USB bytes, receipt times and partial captures without live hardware."""
 
 from __future__ import annotations

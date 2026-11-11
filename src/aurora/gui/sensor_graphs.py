@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Plot received BLE samples using the existing preview drawing code."""
 
 from __future__ import annotations

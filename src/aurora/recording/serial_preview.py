@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Small live window for a generic newline-delimited serial stream."""
 
 from __future__ import annotations

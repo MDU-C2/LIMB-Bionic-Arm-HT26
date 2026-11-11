@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Play a four-joint DMP trajectory on Oscar Ågren's LIMB PyBullet model."""
 
 from __future__ import annotations
@@ -64,11 +64,19 @@ def main() -> None:
     )
     parser.add_argument("--loop", action="store_true")
     parser.add_argument(
+        "--duration-scale",
+        type=float,
+        default=1.0,
+        help="Multiply saved trajectory duration: 0.5 faster, 2 slower",
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run once without opening a window or waiting in real time",
     )
     args = parser.parse_args()
+    if not math.isfinite(args.duration_scale) or not 0.25 <= args.duration_scale <= 4:
+        parser.error("--duration-scale must be between 0.25 and 4")
     enable_ctrl_break_as_interrupt(stdin_stop=True)
     if args.loop and args.headless:
         parser.error("--loop and --headless cannot be combined")
@@ -84,13 +92,14 @@ def main() -> None:
     else:
         print(
             f"Fitting a DMP from {args.source}-preferred angles "
-            "(15 basis functions, one-second rollout)"
+            "(15 basis functions; explicit timing if available, otherwise one second)"
         )
     requested, dt = load_dmp_trajectory(
         args.path,
         rollout_source=args.source,
         prefer_saved_rollout=not args.refit,
     )
+    dt *= args.duration_scale
     trajectory = clamp_dmp_vector(requested)
     step_times = speed_limited_step_times(trajectory, dt)
     clipped = int(np.count_nonzero(requested != trajectory))

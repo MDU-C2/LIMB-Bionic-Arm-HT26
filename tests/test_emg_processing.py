@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check the recorded EMG pipeline without connecting any sensors."""
 
 from __future__ import annotations

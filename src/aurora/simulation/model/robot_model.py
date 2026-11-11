@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Load and inspect the arm models inherited from LIMB-HT25."""
 
 from __future__ import annotations

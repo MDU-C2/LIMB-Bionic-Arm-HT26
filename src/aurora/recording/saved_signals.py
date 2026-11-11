@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Load saved signals and their clocks for inspection before processing."""
 
 from __future__ import annotations

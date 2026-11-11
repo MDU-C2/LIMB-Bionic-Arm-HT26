@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Start live control using the interactive simulator."""
 
 from __future__ import annotations

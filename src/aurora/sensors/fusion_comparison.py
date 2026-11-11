@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Offline planar fusion comparisons with an independent reference."""
 
 from __future__ import annotations

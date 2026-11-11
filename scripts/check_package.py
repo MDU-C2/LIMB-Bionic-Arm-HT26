@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Build from a source archive and check an installed copy outside the checkout."""
 
 from __future__ import annotations

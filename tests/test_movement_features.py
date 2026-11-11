@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check coordinate units and compatibility of new and inherited profiles."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Keep installed resources separate from writable session outputs."""
 
 from pathlib import Path

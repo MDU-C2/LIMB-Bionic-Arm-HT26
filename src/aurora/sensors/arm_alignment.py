@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Fit sensor-to-arm rotations from isolated movements and a stereo reference.
 
 Segment X is the positive flexion axis, Y points along the arm towards the hand,

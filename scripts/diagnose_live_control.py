@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Run a bounded live-control check and save the last sensor values and errors."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Participant splits and causal windows from reviewed EMG recordings."""
 
 from __future__ import annotations

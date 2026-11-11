@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Reviewed intervals beside a raw recording. Cue files stay unchanged."""
 
 from __future__ import annotations

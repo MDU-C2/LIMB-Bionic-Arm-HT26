@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check guided calibration and the live controller without hardware."""
 
 from __future__ import annotations

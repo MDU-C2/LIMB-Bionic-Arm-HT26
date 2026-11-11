@@ -1,10 +1,11 @@
-# Majd
+# Christian och Majd
 """Install the app or launch it with the selected project Python."""
 
 from __future__ import annotations
 
 import argparse
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -45,18 +46,24 @@ def verify(*, install_models: bool = False) -> None:
         stderr=subprocess.STDOUT,
         text=True,
     )
-    # DepthAI wheels publish tags after a blank line, which pip treats
-    # as a missing platform tag. Its native import below is the actual check.
+    # DepthAI publishes tags after a blank line; MediaPipe's macOS universal
+    # wheel declares only x86_64 despite including arm64 native code.
+    # Require native imports below instead of trusting those broken tags.
+    metadata_packages = ["depthai"]
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        metadata_packages.append("mediapipe")
+    metadata_warning = rf"(?:{'|'.join(metadata_packages)}) \S+ is not supported on this platform"
     camera_metadata_only = (
         compatibility.returncode == 1
-        and re.fullmatch(
-            r"depthai \S+ is not supported on this platform", compatibility.stdout.strip()
+        and bool(compatibility.stdout.strip())
+        and all(
+            re.fullmatch(metadata_warning, line) is not None
+            for line in compatibility.stdout.strip().splitlines()
         )
-        is not None
     )
     if camera_metadata_only:
         print(
-            "Checking DepthAI through its native module (wheel metadata is incomplete)...",
+            "Checking camera native modules (wheel platform metadata is incorrect)...",
             flush=True,
         )
     else:

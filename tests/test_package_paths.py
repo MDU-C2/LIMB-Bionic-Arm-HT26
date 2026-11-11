@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check package extraction through path aliases and reject unsafe entries."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Keep preparation, movement and rest cues separate from movement labels."""
 
 from __future__ import annotations

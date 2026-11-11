@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 # Source: earlier LIMB DMP-arm repository, https://github.com/oscaragren/DMP-arm.
 """Open the arm model with joint sliders."""
 

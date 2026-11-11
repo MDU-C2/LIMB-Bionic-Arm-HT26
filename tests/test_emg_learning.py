@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check participant isolation, label integrity and live feature parity."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Track a hand in the area around the selected arm's wrist."""
 
 from __future__ import annotations

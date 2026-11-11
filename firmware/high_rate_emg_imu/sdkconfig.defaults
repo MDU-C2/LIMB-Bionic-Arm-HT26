@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 # High-rate firmware requires ESP-IDF 5.x and NimBLE.
 CONFIG_IDF_TARGET="esp32c3"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Normalize AURORA EMG samples and estimate a live muscle activation envelope."""
 
 from __future__ import annotations

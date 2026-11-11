@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check installed entry points from a different working directory."""
 
 from __future__ import annotations

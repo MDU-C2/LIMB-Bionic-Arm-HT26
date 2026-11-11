@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Plot saved training metrics in a process without PyTorch's native libraries."""
 
 from __future__ import annotations

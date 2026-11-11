@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Collect a bounded functional reference on the existing sensor connection."""
 
 from __future__ import annotations

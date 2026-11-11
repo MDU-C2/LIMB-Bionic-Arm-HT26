@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Guide a grip trial and save labels beside the raw recording."""
 
 from __future__ import annotations

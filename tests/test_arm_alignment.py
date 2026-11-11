@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Recover known mounting rotations from generated rigid-arm movements."""
 
 from __future__ import annotations

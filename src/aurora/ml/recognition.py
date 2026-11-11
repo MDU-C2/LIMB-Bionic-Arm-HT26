@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Compare recorded movements using the GRU model."""
 
 from __future__ import annotations

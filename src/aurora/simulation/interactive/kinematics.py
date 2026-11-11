@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Reachability and two-link inverse kinematics for the AURORA task scene."""
 
 from __future__ import annotations

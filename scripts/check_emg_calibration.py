@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Capture bounded BLE-only rest/grip trials with signal and packet diagnostics."""
 
 from __future__ import annotations

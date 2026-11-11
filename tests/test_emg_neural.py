@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Train tiny networks and verify their portable inference bundles."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Signal-level checks of calibrated grip, noise rejection and invalid inputs."""
 
 from __future__ import annotations

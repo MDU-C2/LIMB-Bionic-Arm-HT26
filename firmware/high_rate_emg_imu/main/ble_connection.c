@@ -1,4 +1,4 @@
-/* Majd */
+/* Christian och Majd */
 #include "ble_connection.h"
 
 #include "esp_log.h"

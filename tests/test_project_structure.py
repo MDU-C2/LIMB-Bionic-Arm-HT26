@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Keep local documentation links and source dependencies consistent."""
 
 from __future__ import annotations

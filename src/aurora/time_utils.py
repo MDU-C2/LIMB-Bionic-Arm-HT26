@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Shared UTC timestamps for saved samples and metadata."""
 
 from datetime import datetime, timezone

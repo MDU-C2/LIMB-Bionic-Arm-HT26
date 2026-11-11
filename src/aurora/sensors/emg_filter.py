@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Causal raw-EMG filtering; state survives BLE packet boundaries."""
 
 from __future__ import annotations

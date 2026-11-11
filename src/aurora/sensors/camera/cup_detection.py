@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Detect cups in RGB frames using the bundled COCO model."""
 
 from __future__ import annotations

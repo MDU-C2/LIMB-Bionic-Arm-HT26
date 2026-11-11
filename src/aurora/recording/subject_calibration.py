@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Fit a saved subject reference and export aligned copies of IMU samples."""
 
 from __future__ import annotations

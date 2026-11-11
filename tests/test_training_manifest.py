@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Check that a training run keeps its inputs, split and exported model together."""
 
 from __future__ import annotations

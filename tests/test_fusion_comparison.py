@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Known planar trajectories check filter math, not hardware accuracy."""
 
 from __future__ import annotations

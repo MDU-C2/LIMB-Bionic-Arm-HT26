@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Read BLE sensors in the background and share the latest values."""
 
 from __future__ import annotations

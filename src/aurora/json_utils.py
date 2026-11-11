@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Read metadata objects and replace saved JSON atomically."""
 
 from __future__ import annotations

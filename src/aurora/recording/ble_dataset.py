@@ -1,4 +1,4 @@
-# Majd
+# Christian och Majd
 """Build LIMB-style labeled windows from decoded BLE notifications."""
 
 from __future__ import annotations

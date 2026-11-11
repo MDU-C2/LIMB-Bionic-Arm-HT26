@@ -17,11 +17,12 @@ from aurora.file_utils import file_digest
 from aurora.json_utils import read_json_object, write_json
 from aurora.paths import RESOURCE_DIRECTORY
 from aurora.simulation.dmp.dmp import fit, rollout_simple
+from aurora.simulation.dmp.mimic import MIMIC_JOINTS
 from aurora.simulation.dmp.trajectory_io import load_angles_demo
 from aurora.time_utils import utc_now
 
 JOINTS = ("elbow_flexion", "shoulder_flexion", "shoulder_abduction", "shoulder_internal_rotation")
-LIVE_CHANNELS = (*JOINTS[:3], "shoulder_rotation_proxy")
+LIVE_CHANNELS = MIMIC_JOINTS
 DEFAULT_EXAMPLE = RESOURCE_DIRECTORY / "examples/simulation/demo"
 
 

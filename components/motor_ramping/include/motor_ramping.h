@@ -3,20 +3,20 @@
 #include <stdint.h>
 
 #include "limb_utils.h"
-#include "potentiometer.h"
+#include "encoder.h"
 
 typedef struct {
-  PotentiometerAngle current_angle;
-  PotentiometerAngle target_angle;
+  EncoderAngle current_angle;
+  EncoderAngle target_angle;
   // The deadband extends +-(deadband / 2) degrees from target_angle.
-  PotentiometerAngle deadband;
+  EncoderAngle deadband;
   AngularVelocity current_velocity;
   AngularAcceleration max_acceleration;
   // The max speed that the motor should be allowed to move at in the direction
-  // that decreases the potentiometer angle.
+  // that decreases the encoder angle.
   AngularVelocity max_speed_decreasing_angle;
   // The max speed that the motor should be allowed to move at in the direction
-  // that increases the potentiometer angle.
+  // that increases the encoder angle.
   AngularVelocity max_speed_increasing_angle;
   // The amount of time between updates to the motor state.
   uint32_t timestep_ms;

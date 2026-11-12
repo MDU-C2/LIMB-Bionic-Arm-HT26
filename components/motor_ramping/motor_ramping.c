@@ -4,12 +4,11 @@
 #include <stdbool.h>
 
 #include "limb_utils.h"
-#include "potentiometer.h"
 
 AngularVelocity motor_ramping_trapezoidal(const MotorRampingArgs* args) {
-  const PotentiometerAngle distance_to_target = {args->target_angle.degree -
-                                                 args->current_angle.degree};
-  const PotentiometerAngle abs_distance_to_target = {
+  const EncoderAngle distance_to_target = {args->target_angle.degree -
+                                          args->current_angle.degree};
+  const EncoderAngle abs_distance_to_target = {
       fabsf(distance_to_target.degree)};
   // Prevent the velocities/acceleration from being negative.
   const AngularAcceleration max_acceleration = {

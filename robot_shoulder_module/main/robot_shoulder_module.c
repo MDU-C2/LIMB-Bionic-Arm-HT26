@@ -21,6 +21,8 @@
       //All motor configuration structs use potentiometer functions and need a encoder.h file to update
       //GPIO enums for all GPIOs should correspond to GPIO on new PCB layout
       //Change configurations to have all motors on seperate .timers
+      //INFO:
+      //Stepper.c assumes the current velocity is the last commanded velocity
 
 static const char* const TAG = "Shoulder module";
 

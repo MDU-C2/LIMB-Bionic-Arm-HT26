@@ -5,7 +5,7 @@
 #include "hal/adc_types.h"
 #include "hal/ledc_types.h"
 #include "limb_utils.h"
-#include "potentiometer.h"
+#include "encoder.h"
 
 typedef enum {
   STEPPER_DIR_NORMAL,
@@ -63,8 +63,8 @@ typedef struct {
 
   // Position feedback
 
-  // The potentiometer configuration/calibration used with the stepper.
-  Potentiometer potentiometer;
+  // The encoder configuration/calibration used with the stepper.
+  Encoder encoder; //change to encoder struct
 
   // The caller has to provide the PWM channel and timer to use (since other
   // components might also want to use PWM).
@@ -76,7 +76,7 @@ typedef ledc_channel_t stepper_control_handle_t;
 
 // Initialize stepper motor controller
 esp_err_t stepper_init(const stepper_control_config_t* cfg,
-                       uint16_t latest_potentiometer_adc_value,
+                       EncoderAngle latest_encoder_angle,
                        stepper_control_handle_t* out_handle);
 
 // Deinitialize stepper motor controller
@@ -89,7 +89,7 @@ const stepper_control_config_t* stepper_get_cfg(
 // Update stepper control loop (call periodically, e.g., every 10ms)
 // dt_ms: time delta between calls to the function.
 void stepper_update(stepper_control_handle_t handle, uint16_t dt_ms,
-                    uint16_t latest_potentiometer_adc_value);
+                    EncoderAngle latest_encoder_value);
 
 // Set target angular velocity (degrees per second)
 void stepper_set_target_velocity(stepper_control_handle_t handle,
@@ -103,10 +103,10 @@ void stepper_set_target_angle(stepper_control_handle_t handle,
 void stepper_set_estop(stepper_control_handle_t handle, bool active);
 
 // Get current angle from feedback (degrees)
-PotentiometerAngle stepper_get_current_angle(stepper_control_handle_t handle);
+EncoderAngle stepper_get_current_angle(stepper_control_handle_t handle);
 
 // Get target angle (degrees)
-PotentiometerAngle stepper_get_target_angle(stepper_control_handle_t handle);
+EncoderAngle stepper_get_target_angle(stepper_control_handle_t handle);
 
 // Get current velocity (degrees per second)
 AngularVelocity stepper_get_current_velocity(stepper_control_handle_t handle);

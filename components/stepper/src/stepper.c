@@ -14,7 +14,7 @@
 #include "limb_utils.h"
 #include "motor_ramping.h"
 #include "portmacro.h"
-#include "potentiometer.h"
+#include "encoder.h"
 #include "soc/gpio_num.h"
 #include "soc/soc_caps.h"
 #include "sys/param.h"
@@ -23,6 +23,40 @@ static const char* TAG = "stepper";
 
 // NOTE: Without microstepping, our step size is 1.8 degrees, so the deadband
 // should probably be at least as large.
+/*
+ * TODO: Accept absolute encoder angles directly (no potentiometer/ADC).
+ * - Define a sensor-independent angle type in a shared header, with degrees,
+ *   zero reference, positive direction, and wraparound behavior documented.
+ *   Replace PotentiometerAngle and move/replace JointAngle so neither requires
+ *   potentiometer.h; use the same coordinate system for feedback and targets. DONE
+
+ * - Change stepper_init() and stepper_update() in stepper.c and stepper.h to
+ *   receive an angle instead of latest_potentiometer_adc_value. Store that
+ *   angle directly and remove both potentiometer_adc_to_angle() calls. DONE
+
+ * - Replace the potentiometer-specific 10-degree safety check with encoder
+ *   feedback validation (finite angle, valid/fresh reading, joint limits),
+ *   stopping the motor on invalid feedback. Define how callers report failures.
+
+ * - Update MotorRampingArgs and motor_ramping to use the shared angle type for
+ *   current_angle, target_angle, and deadband. DONE
+
+ * - Update angle getters, declarations, comments, and logs to use the new type
+ *   and encoder terminology; remove potentiometer.h and unused ADC includes.
+
+ * - Update callers/configurations to pass encoder angles at initialization and
+ *   each update; apply any encoder zero/direction/gear mapping before passing
+ *   feedback to the driver. Remove unused potentiometer/ADC build dependencies
+ *   from stepper and motor_ramping after checking their remaining requirements. DONE
+
+ * - Build affected components and verify initial/target clamping, direction,
+ *   deadband stopping, ramping, invalid feedback, and emergency stop. DONE
+ * 
+ * - How will we use deadband if it is still needed? The deadband is severly lower with new encoders
+ *  and may not be necessary and instead stopping or slowing down when arm closes on its limits may be more appropriate. We will need to test this with the new encoders and see if we still need a deadband or if we can remove it entirely.
+ * 
+ * - Update documentation to reflect the new angle type and encoder-based feedback.
+ */
 // If we're within +- 2 degrees, we stop.
 #define DEADBAND_DEG 4.F
 
@@ -40,8 +74,8 @@ typedef struct {
   bool is_moving;
   AngularVelocity target_velocity;
   AngularVelocity current_velocity;
-  PotentiometerAngle target_angle;
-  PotentiometerAngle current_angle;
+  EncoderAngle target_angle;
+  EncoderAngle current_angle;
   bool use_position_feedback;
 
   // Calculated parameters
@@ -54,6 +88,7 @@ typedef struct {
 // they require exclusive access anyway.
 static motion_control_context_t s_contexts[SOC_LEDC_CHANNEL_NUM] = {0};
 
+//ok
 static void stop_motor(stepper_control_handle_t handle) {
   motion_control_context_t* ctx = &s_contexts[handle];
 
@@ -67,7 +102,7 @@ static void stop_motor(stepper_control_handle_t handle) {
   ctx->current_velocity = (AngularVelocity){0.0F};
   portEXIT_CRITICAL(&ctx->spinlock);
 }
-
+//ok
 static void apply_motor_velocity(stepper_control_handle_t handle,
                                  AngularVelocity velocity) {
   motion_control_context_t* ctx = &s_contexts[handle];
@@ -106,7 +141,7 @@ static void apply_motor_velocity(stepper_control_handle_t handle,
 // Initialization
 
 esp_err_t stepper_init(const stepper_control_config_t* cfg,
-                       uint16_t latest_potentiometer_adc_value,
+                       EncoderAngle latest_encoder_angle,
                        stepper_control_handle_t* out_handle) {
   // Validate config
   if (!cfg) return ESP_ERR_INVALID_ARG;
@@ -312,18 +347,17 @@ esp_err_t stepper_init(const stepper_control_config_t* cfg,
   };
   ESP_RETURN_ON_ERROR(ledc_channel_config(&channel_cfg), TAG,
                       "Failed to configure LEDC channel");
-
-  PotentiometerAngle initial_angle = potentiometer_adc_to_angle(
-      &ctx.cfg.potentiometer, latest_potentiometer_adc_value);
+  // change to just angle with no ADC conversion step
+  EncoderAngle initial_angle = latest_encoder_angle;
   ctx.current_angle = initial_angle;
   // Our target angle should be within the range of allowed angles, even if
   // the current angle isn't.
   ctx.target_angle =
-      clamp_potentiometer_angle(&ctx.cfg.potentiometer, ctx.current_angle);
+      clamp_encoder_angle(&ctx.cfg.encoder, ctx.current_angle);
   ctx.use_position_feedback = true;
 
-  ESP_LOGI(TAG, "Potentiometer initialized: raw=%u, angle=%.2f deg",
-           latest_potentiometer_adc_value, initial_angle);
+  ESP_LOGI(TAG, "encoder initialized: angle=%.2f deg",
+           latest_encoder_angle.degree, initial_angle.degree);
 
   // Initialize motion state
   ctx.estop_active = false;
@@ -349,6 +383,7 @@ esp_err_t stepper_init(const stepper_control_config_t* cfg,
   return ESP_OK;
 }
 
+//ok
 esp_err_t stepper_deinit(stepper_control_handle_t handle) {
   motion_control_context_t* ctx = &s_contexts[handle];
 
@@ -361,16 +396,15 @@ esp_err_t stepper_deinit(stepper_control_handle_t handle) {
 }
 
 void stepper_update(stepper_control_handle_t handle, uint16_t dt_ms,
-                    uint16_t latest_potentiometer_adc_value) {
+                    EncoderAngle latest_encoder_value) {
   motion_control_context_t* ctx = &s_contexts[handle];
-  PotentiometerAngle angle_deg = potentiometer_adc_to_angle(
-      &ctx->cfg.potentiometer, latest_potentiometer_adc_value);
-
+  EncoderAngle angle_deg = latest_encoder_value; 
+    //This if statement might become redundant with new encoders, but we will keep it for now to be safe. We can remove it later if we find that it is not needed.
   if (angle_deg.degree < 10 ||
-      angle_deg.degree > (ctx->cfg.potentiometer.range_of_motion.degree - 10)) {
-    // If the potentiometer is close to its min or max limits, we might be in a
+      angle_deg.degree > (ctx->cfg.encoder.range_of_motion.degree - 10)) {
+    // If the encoder is close to its min or max limits, we might be in a
     // situation where the ADC values are off (maybe a loose wire or the
-    // potentiometer is configured incorrectly, for example). In that situation,
+    // encoder is configured incorrectly, for example). In that situation,
     // we want to err on the side of caution and not move the motor.
     stop_motor(handle);
     static int i = 0;
@@ -379,9 +413,9 @@ void stepper_update(stepper_control_handle_t handle, uint16_t dt_ms,
       i = 50;
 
       ESP_LOGW(TAG,
-               "Potentiometer angle %f is close to its limits of [0, %f]. "
+               "Encoder angle %f is close to its limits of [0, %f]. "
                "Turning off motor as a safety precaution",
-               angle_deg.degree, ctx->cfg.potentiometer.range_of_motion.degree);
+               angle_deg.degree, ctx->cfg.encoder.range_of_motion.degree);
     }
     return;
   }
@@ -389,7 +423,7 @@ void stepper_update(stepper_control_handle_t handle, uint16_t dt_ms,
   // Take snapshot of shared state and update current angle from feedback
   portENTER_CRITICAL(&ctx->spinlock);
   bool estop = ctx->estop_active;
-  PotentiometerAngle target_angle = ctx->target_angle;
+  EncoderAngle target_angle = ctx->target_angle;
   float current_velocity_sps =
       ctx->current_velocity.dps * ctx->steps_per_degree;
   // Aim for the target velocity, but constrain it to the max velocity.
@@ -406,10 +440,11 @@ void stepper_update(stepper_control_handle_t handle, uint16_t dt_ms,
     return;
   }
 
+  //Need to check if we still have a deadband with new encoders
   MotorRampingArgs args = {
       .current_angle = ctx->current_angle,
       .target_angle = ctx->target_angle,
-      .deadband = (PotentiometerAngle){DEADBAND_DEG},
+      .deadband = (EncoderAngle){DEADBAND_DEG}, //Change to was PotentiometerAngle check if this is still valid with new encoders
       .current_velocity = ctx->current_velocity,
       .max_acceleration = ctx->cfg.max_accel,
       .max_speed_decreasing_angle = constrained_target_speed_decreasing_angle,
@@ -449,18 +484,18 @@ void stepper_update(stepper_control_handle_t handle, uint16_t dt_ms,
 }
 
 // ------ Setters ------
-
+//Sets the target angle but does some form of conversion that might not be necessary with new encoders. We will keep it for now to be safe, but we can remove it later if we find that it is not needed.
 void stepper_set_target_angle(stepper_control_handle_t handle,
                               JointAngle target_angle) {
   motion_control_context_t* ctx = &s_contexts[handle];
 
-  PotentiometerAngle target_potentiometer_angle =
-      to_potentiometer_angle(&ctx->cfg.potentiometer, target_angle);
+  EncoderAngle target_encoder_angle =
+      to_encoder_angle(&ctx->cfg.encoder, target_angle);
 
-  target_potentiometer_angle = clamp_potentiometer_angle(
-      &ctx->cfg.potentiometer, target_potentiometer_angle);
+  target_encoder_angle = clamp_encoder_angle(
+      &ctx->cfg.encoder, target_encoder_angle);
   portENTER_CRITICAL(&ctx->spinlock);
-  ctx->target_angle = target_potentiometer_angle;
+  ctx->target_angle = target_encoder_angle;
   portEXIT_CRITICAL(&ctx->spinlock);
 }
 
@@ -485,20 +520,20 @@ void stepper_set_estop(stepper_control_handle_t handle, bool active) {
 
 // ------ Getters ------
 
-PotentiometerAngle stepper_get_current_angle(stepper_control_handle_t handle) {
+EncoderAngle stepper_get_current_angle(stepper_control_handle_t handle) {
   const motion_control_context_t* ctx = &s_contexts[handle];
 
   portENTER_CRITICAL(&ctx->spinlock);
-  PotentiometerAngle angle = ctx->current_angle;
+  EncoderAngle angle = ctx->current_angle;
   portEXIT_CRITICAL(&ctx->spinlock);
   return angle;
 }
 
-PotentiometerAngle stepper_get_target_angle(stepper_control_handle_t handle) {
+EncoderAngle stepper_get_target_angle(stepper_control_handle_t handle) {
   const motion_control_context_t* ctx = &s_contexts[handle];
 
   portENTER_CRITICAL(&ctx->spinlock);
-  PotentiometerAngle angle = ctx->target_angle;
+  EncoderAngle angle = ctx->target_angle;
   portEXIT_CRITICAL(&ctx->spinlock);
   return angle;
 }

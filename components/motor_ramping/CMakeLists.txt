@@ -5,4 +5,4 @@ idf_component_register(
   "include"
   REQUIRES
   limb_utils
-  potentiometer)
+  encoder)

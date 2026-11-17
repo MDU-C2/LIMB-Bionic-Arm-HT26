@@ -79,66 +79,57 @@ enum {
 
 // Motors are Joyit NEMA17-06
 
-static const ContinuousServoConfig kUpDownServoConfig = {
-    .gpio_pin = SERVO_UP_DOWN_GPIO,
-    .pwm_timer = LEDC_TIMER_0,
-    .pwm_channel = LEDC_CHANNEL_0,
-    .name = "Shoulder up/down servo",
-    .direction = CONTINUOUS_SERVO_DIR_REVERSE,
-    .motionless_pw = 1500,
-    .max_capable_angular_velocity = {400},
-    .max_capable_angular_velocity_pw_offset = 150,
+static const stepper_control_config_t kUpDownRotationStepperConfig = {
+    .enable_gpio = STEPPER_UP_DOWN_ROTATION_ENABLE_GPIO,
+    .dir_gpio = STEPPER_UP_DOWN_ROTATION_DIR_GPIO,
+    .step_gpio = STEPPER_UP_DOWN_ROTATION_STEP_GPIO,
+    .microstepping_mode = MICROSTEP_1_32,
+    .microstepping_type = MICROSTEP_HARDWARE,
+    .microstep_m0_gpio = STEPPER_UP_DOWN_ROTATION_M0_GPIO,
+    .microstep_m1_gpio = STEPPER_UP_DOWN_ROTATION_M1_GPIO,
+    .microstep_m2_gpio = STEPPER_UP_DOWN_ROTATION_M2_GPIO,
+    .direction = STEPPER_DIR_NORMAL,
     .gear_ratio = 15.F,
-    // The servo has to fight against gravity when the potentiometer angle
-    // decreases, so the speed ends up being reduced. That's why the max
-    // speeds are different.
-    .max_speed_increasing_angle = {10.F},
-    .max_speed_decreasing_angle = {20.F},
-    .max_accel = {15.F},
-    .potentiometer =
-        (Potentiometer){
+    .max_speed_decreasing_angle = {40.F},
+    .max_speed_increasing_angle = {40.F},
+    .max_accel = {20.F},
+    .pwm_channel = LEDC_CHANNEL_2,
+    .pwm_timer = LEDC_TIMER_1,
+    .steps_per_rev = 200,
+    .encoder =
+        {
             .range_of_motion = {285.F},
-            // We step down voltage we feed to the potentiometer from 3300 mV to
-            // 2200 mV.
-            .min_adc_value = 0,
-            .max_adc_value = 2200,
-            // should be [0,90], but is actually like [0,75]
-            .min_potentiometer_angle = {145},
-            .max_potentiometer_angle = {235},
-            .min_potentiometer_angle_as_joint_angle = {0.F},
-            .joint_angle_to_potentiometer_angle_ratio = 1.F,
-            .is_reversed = true,
+            .min_encoder_angle = {40},
+            .max_encoder_angle = {160},
+            .min_encoder_angle_as_joint_angle = {-60.F},
+            .joint_angle_to_encoder_angle_ratio = 1.F,
         },
 };
 
-static const ContinuousServoConfig kLeftRightServoConfig = {
-    .gpio_pin = SERVO_LEFT_RIGHT_GPIO,
-    .pwm_timer = LEDC_TIMER_0,
-    .pwm_channel = LEDC_CHANNEL_1,
-    .name = "Shoulder left/right servo",
-    .direction = CONTINUOUS_SERVO_DIR_NORMAL,
-    .motionless_pw = 1500,
-    .max_capable_angular_velocity = {400},
-    .max_capable_angular_velocity_pw_offset = 150,
+static const stepper_control_config_t kLeftRightRotationStepperConfig = {
+    .enable_gpio = STEPPER_LEFT_RIGHT_ARM_ROTATION_ENABLE_GPIO,
+    .dir_gpio = STEPPER_LEFT_RIGHT_ROTATION_DIR_GPIO,
+    .step_gpio = STEPPER_LEFT_RIGHT_ROTATION_STEP_GPIO,
+    .microstepping_mode = MICROSTEP_1_32,
+    .microstepping_type = MICROSTEP_HARDWARE,
+    .microstep_m0_gpio = STEPPER_LEFT_RIGHT_ROTATION_M0_GPIO,
+    .microstep_m1_gpio = STEPPER_LEFT_RIGHT_ROTATION_M1_GPIO,
+    .microstep_m2_gpio = STEPPER_LEFT_RIGHT_ROTATION_M2_GPIO,
+    .direction = STEPPER_DIR_NORMAL,
     .gear_ratio = 15.F,
-    // The servo has to fight against gravity when the potentiometer angle
-    // increases, so the speed ends up being reduced. That's why the max
-    // speeds are different.
-    .max_speed_increasing_angle = {20.F},
-    .max_speed_decreasing_angle = {10.F},
-    .max_accel = {15.F},
-    .potentiometer =
-        (Potentiometer){
+    .max_speed_decreasing_angle = {40.F},
+    .max_speed_increasing_angle = {40.F},
+    .max_accel = {20.F},
+    .pwm_channel = LEDC_CHANNEL_2,
+    .pwm_timer = LEDC_TIMER_1,
+    .steps_per_rev = 200,
+    .encoder =
+        {
             .range_of_motion = {285.F},
-            // We step down voltage we feed to the potentiometer from 3300 mV to
-            // 2200 mV.
-            .min_adc_value = 0,
-            .max_adc_value = 2200,
-            // Corresponds to between 5 and 40 joint degrees.
-            .min_potentiometer_angle = {86},
-            .max_potentiometer_angle = {128},
-            .min_potentiometer_angle_as_joint_angle = {5.F},
-            .joint_angle_to_potentiometer_angle_ratio = 18.F / 15.F,
+            .min_encoder_angle = {40},
+            .max_encoder_angle = {160},
+            .min_encoder_angle_as_joint_angle = {-60.F},
+            .joint_angle_to_encoder_angle_ratio = 1.F,
         },
 };
 
@@ -159,21 +150,16 @@ static const stepper_control_config_t kUpperArmRotationStepperConfig = {
     .pwm_channel = LEDC_CHANNEL_2,
     .pwm_timer = LEDC_TIMER_1,
     .steps_per_rev = 200,
-    .potentiometer =
+    .encoder =
         {
             .range_of_motion = {285.F},
-            // We step down voltage we feed to the potentiometer from 3300 mV to
-            // 2200 mV.
-            .min_adc_value = 0,
-            .max_adc_value = 2200,
-            // Red is Vin and black is ground.
-            .min_potentiometer_angle = {40},
-            .max_potentiometer_angle = {160},
-            .min_potentiometer_angle_as_joint_angle = {-60.F},
-            .joint_angle_to_potentiometer_angle_ratio = 1.F,
+            .min_encoder_angle = {40},
+            .max_encoder_angle = {160},
+            .min_encoder_angle_as_joint_angle = {-60.F},
+            .joint_angle_to_encoder_angle_ratio = 1.F,
         },
 };
-
+//Can be removed as encoders are used instead check if used for anything else
 static const AdcMgrChannelConfig kAdcMgrChannelConfigs[] = {
     (AdcMgrChannelConfig){
         .channel = POTENTIOMETER_UP_DOWN_CHANNEL,
@@ -188,15 +174,15 @@ static const AdcMgrChannelConfig kAdcMgrChannelConfigs[] = {
         .sample_rate = 1000,
     },
 };
-
+//Can be removed as encoders are used instead check if used for anything else
 static const AdcMgrConfig kAdcMgrConfig = {
     .channel_configs = kAdcMgrChannelConfigs,
     .channel_configs_len = LIMB_ARR_LEN(kAdcMgrChannelConfigs),
     .ms_worth_of_buffer_size = 100,
 };
-
+// -------------------------- This section is potentiometer buffers-----------------------------
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-static uint16_t s_potentiometer_up_down_underlying_buffer[1024] = {0};
+static uint16_t s_potentiometer_up_down_underlying_buffer[1024] = {0}; //Where are these used?
 static uint16_t s_potentiometer_left_right_underlying_buffer[1024] = {0};
 static uint16_t s_potentiometer_rotation_underlying_buffer[1024] = {0};
 
@@ -231,13 +217,13 @@ static AdcMgrChannelBuffer* s_potentiometer_left_right_buffer =
     &s_adc_read_results.channel_buffers[POTENTIOMETER_LEFT_RIGHT_CHANNEL];
 static AdcMgrChannelBuffer* s_potentiometer_rotation_buffer =
     &s_adc_read_results.channel_buffers[POTENTIOMETER_ROTATION_CHANNEL];
-
+//----------------------------------------------------------potentiometer buffer section ends here-----------------------------
 static uint16_t s_latest_potentiometer_up_down_value = 0;
 static uint16_t s_latest_potentiometer_left_right_value = 0;
 static uint16_t s_latest_potentiometer_rotation_value = 0;
 
-static ContinuousServoHandle s_left_right_servo_handle;
-static ContinuousServoHandle s_up_down_servo_handle;
+static ContinuousServoHandle s_left_right_servo_handle; //Change to stepper_control_handle_t s_left_right_stepper_handle;
+static ContinuousServoHandle s_up_down_servo_handle; //Change to stepper_control_handle_t s_up_down_stepper_handle;
 static stepper_control_handle_t s_upper_arm_rotation_stepper_handle;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -252,7 +238,7 @@ static void can_rx_task([[maybe_unused]] void* arg) {
       ESP_LOGW(TAG, "Error calling can_receive: %s", esp_err_to_name(err));
       continue;
     }
-
+    //edit cases to use stepper functions instead of continuous_servo functions
     switch (can_id) {
       case CAN_ID_ROBOT_SHOULDER_UP_DOWN_STOP: {
         continuous_servo_set_estop(s_up_down_servo_handle, true);
@@ -345,7 +331,7 @@ static void can_rx_task([[maybe_unused]] void* arg) {
 
   vTaskDelete(NULL);
 }
-
+ //update task will need to be revised to use encoder functions instead of potentiometer functions
 static void motors_update_task([[maybe_unused]] void* args) {
   enum { PERIOD_MS = 10 };
 
@@ -537,6 +523,7 @@ void app_main(void) {
   }
 
   // ADC initialization.
+  //Remove this section as encoders are used instead of potentiometers, ensure no other code uses adc
   {
     esp_err_t err = adc_mgr_init(kAdcMgrConfig);
     if (err != ESP_OK) {
@@ -546,6 +533,7 @@ void app_main(void) {
   }
 
   // Servo and stepper initialization.
+  //Change to stepper_init for all motors and remove continuous_servo_init
   {
     vTaskDelay(pdMS_TO_TICKS(10));
     esp_err_t err = adc_mgr_read(&s_adc_read_results, 0);

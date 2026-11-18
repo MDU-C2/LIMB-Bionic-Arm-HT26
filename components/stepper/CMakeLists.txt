@@ -2,9 +2,10 @@ idf_component_register(
   SRCS
   "src/stepper.c"
   REQUIRES
-  adc_manager
+  # The stepper receives encoder angles, so its old ADC dependencies are disabled.
+  # adc_manager
+  # esp_adc
   encoder
-  esp_adc
   freertos
   esp_driver_gpio
   esp_driver_ledc

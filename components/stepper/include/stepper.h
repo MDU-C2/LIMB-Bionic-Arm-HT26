@@ -2,7 +2,8 @@
 
 #include "driver/gpio.h"
 #include "esp_err.h"
-#include "hal/adc_types.h"
+// Legacy ADC input is disabled. Feedback now arrives as an EncoderAngle.
+// #include "hal/adc_types.h"
 #include "hal/ledc_types.h"
 #include "limb_utils.h"
 #include "encoder.h"

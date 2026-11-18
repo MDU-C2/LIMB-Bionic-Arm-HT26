@@ -1,16 +1,22 @@
-#include "adc_manager.h"
+#include <inttypes.h>
+#include <math.h>
+
 #include "can_driver.h"
+#include "encoder.h"
+
+// Legacy potentiometer ADC headers. The elbow now expects an EncoderAngle.
+// #include "adc_manager.h"
+// #include "hal/adc_types.h"
+// #include "potentiometer.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/projdefs.h"
 #include "freertos/task.h"
-#include "hal/adc_types.h"
 #include "hal/ledc_types.h"
 #include "imu.h"
 #include "limb_utils.h"
 #include "portmacro.h"
-#include "potentiometer.h"
 #include "soc/gpio_num.h"
 #include "stepper.h"
 
@@ -32,8 +38,9 @@ enum {
   STEPPER_ELBOW_DIR_PIN = GPIO_NUM_6,
   STEPPER_ELBOW_STEP_PIN = GPIO_NUM_7,
 
-  // ADC channels
-  ADC_ELBOW_CHANNEL = ADC_CHANNEL_2,  // GPIO 2
+  // Legacy potentiometer ADC channel.
+  // // ADC channels
+  // ADC_ELBOW_CHANNEL = ADC_CHANNEL_2,  // GPIO 2
 
   // PWM timers and channels
   PWM_ELBOW_CHANNEL = LEDC_CHANNEL_0,
@@ -63,61 +70,69 @@ static const stepper_control_config_t s_elbow_stepper_cfg = {
     .max_accel = {20.0F},
     .pwm_channel = PWM_ELBOW_CHANNEL,
     .pwm_timer = PWM_ELBOW_TIMER,
-    .potentiometer =
-        (Potentiometer){
-            .range_of_motion = {285.F},
-            // We step down voltage we feed to the potentiometer from 3300 mV to
-            // 2200 mV.
-            .min_adc_value = 0,
-            .max_adc_value = 2200,
-            .min_potentiometer_angle_as_joint_angle = {0.F},
-            // Angle increases as the elbow is pulled in.
-            .min_potentiometer_angle = {123.F},
-            // Using the ratio between the joint angles and potentiomter angles,
-            // 72 degrees of potentiometer angle becomes 60 degrees
-            // of joint angle.
-            .max_potentiometer_angle = {195.F},
-            .joint_angle_to_potentiometer_angle_ratio = 18.F / 15.F,
-            .is_reversed = true,
-        },
-};
+    // Legacy calibration belongs to the potentiometer.
+    // .potentiometer =
+    //     (Potentiometer){
+    //         .range_of_motion = {285.F},
+    //         // We step down voltage we feed to the potentiometer from 3300 mV to
+    //         // 2200 mV.
+    //         .min_adc_value = 0,
+    //         .max_adc_value = 2200,
+    //         .min_potentiometer_angle_as_joint_angle = {0.F},
+    //         // Angle increases as the elbow is pulled in.
+    //         .min_potentiometer_angle = {123.F},
+    //         // Using the ratio between the joint angles and potentiomter angles,
+    //         // 72 degrees of potentiometer angle becomes 60 degrees
+    //         // of joint angle.
+    //         .max_potentiometer_angle = {195.F},
+    //         .joint_angle_to_potentiometer_angle_ratio = 18.F / 15.F,
+    //         .is_reversed = true,
+    //     },
 
-// ADC manager configuration.
-static const AdcMgrChannelConfig s_adc_mgr_channel_configs[] = {
-    {
-        .channel = ADC_ELBOW_CHANNEL,
-        .sample_rate = 1000,
+    .encoder = {
+        // Set the measured range, endpoints, ratio and direction for this encoder.
+        // A zero ratio marks the calibration as missing and blocks motor startup.
+        .joint_angle_to_encoder_angle_ratio = 0.0F,
     },
 };
 
-static const AdcMgrConfig s_adc_mgr_config = {
-    .channel_configs = s_adc_mgr_channel_configs,
-    .channel_configs_len = LIMB_ARR_LEN(s_adc_mgr_channel_configs),
-    .ms_worth_of_buffer_size = 100,
-};
+// Legacy ADC buffers retained for reference.
+// // ADC manager configuration.
+// static const AdcMgrChannelConfig s_adc_mgr_channel_configs[] = {
+//     {
+//         .channel = ADC_ELBOW_CHANNEL,
+//         .sample_rate = 1000,
+//     },
+// };
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-// Assuming a sample rate of 1 kHz, we can comfortably keep a buffer of 1
-// seconds worth of data.
-enum {
-  ADC_STEPPERS_UNDERLYING_BUF_SIZE = 1000,
-};
+// static const AdcMgrConfig s_adc_mgr_config = {
+//     .channel_configs = s_adc_mgr_channel_configs,
+//     .channel_configs_len = LIMB_ARR_LEN(s_adc_mgr_channel_configs),
+//     .ms_worth_of_buffer_size = 100,
+// };
 
-static uint16_t
-    s_adc_elbow_channel_underlying_buffer[ADC_STEPPERS_UNDERLYING_BUF_SIZE] = {
-        0};
+// // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+// // Assuming a sample rate of 1 kHz, we can comfortably keep a buffer of 1
+// // seconds worth of data.
+// enum {
+//   ADC_STEPPERS_UNDERLYING_BUF_SIZE = 1000,
+// };
 
-static AdcMgrReadResults s_adc_mgr_read_results = {
-    .channel_buffers = {
-        [ADC_ELBOW_CHANNEL] = {.data = s_adc_elbow_channel_underlying_buffer,
-                               .capacity = LIMB_ARR_LEN(
-                                   s_adc_elbow_channel_underlying_buffer)},
-    }};
+// static uint16_t
+//     s_adc_elbow_channel_underlying_buffer[ADC_STEPPERS_UNDERLYING_BUF_SIZE] = {
+//         0};
 
-static AdcMgrChannelBuffer* s_adc_mgr_elbow_buffer =
-    &s_adc_mgr_read_results.channel_buffers[ADC_ELBOW_CHANNEL];
+// static AdcMgrReadResults s_adc_mgr_read_results = {
+//     .channel_buffers = {
+//         [ADC_ELBOW_CHANNEL] = {.data = s_adc_elbow_channel_underlying_buffer,
+//                                .capacity = LIMB_ARR_LEN(
+//                                    s_adc_elbow_channel_underlying_buffer)},
+//     }};
 
-static uint16_t s_latest_potentiometer_adc_value;
+// static AdcMgrChannelBuffer* s_adc_mgr_elbow_buffer =
+//     &s_adc_mgr_read_results.channel_buffers[ADC_ELBOW_CHANNEL];
+
+// static uint16_t s_latest_potentiometer_adc_value;
 
 static stepper_control_handle_t s_elbow_stepper_handle = {0};
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
@@ -160,11 +175,11 @@ static void can_rx_task([[maybe_unused]] void* pvParameter) {
       }
       case CAN_ID_ROBOT_ELBOW_UP_DOWN_STOP: {
         stepper_set_estop(s_elbow_stepper_handle, true);
-        ESP_LOGI(TAG, "Received stop command: 0x%x", rx_id);
+        ESP_LOGI(TAG, "Received stop command: 0x%" PRIx32, rx_id);
         break;
       }
       default: {
-        ESP_LOGW(TAG, "Received unknown CAN message: 0x%x", rx_id);
+        ESP_LOGW(TAG, "Received unknown CAN message: 0x%" PRIx32, rx_id);
       }
     }
   }
@@ -245,7 +260,7 @@ static void imu_task([[maybe_unused]] void* pvParameter) {
     if (can_error_count_since_last_log > kMinCanErrorCountPerLogging) {
       can_error_count += can_error_count_since_last_log;
       can_error_count_since_last_log = 0;
-      ESP_LOGW(TAG, "CAN errors: %d, last_error: %s", can_error_count,
+      ESP_LOGW(TAG, "CAN errors: %" PRIu32 ", last_error: %s", can_error_count,
                esp_err_to_name(err));
     }
   }
@@ -259,6 +274,13 @@ static void reenable_can_task([[maybe_unused]] void* pvParameter) {
   }
 }
 
+// The receiver must provide a fresh, valid angle in encoder degrees.
+static bool read_elbow_encoder_angle(EncoderAngle* angle) {
+  // TODO: Read from the shoulder-to-elbow receiver once its format is confirmed.
+  (void)angle;
+  return false;
+}
+
 static void stepper_task([[maybe_unused]] void* pvParameter) {
   TickType_t last_wake_time = xTaskGetTickCount();
 
@@ -266,23 +288,38 @@ static void stepper_task([[maybe_unused]] void* pvParameter) {
     const uint16_t dt_ms = 10;
     xTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(dt_ms));
 
-    adc_mgr_read(&s_adc_mgr_read_results, 0);
-    s_latest_potentiometer_adc_value = moving_average16(
-        s_latest_potentiometer_adc_value, s_adc_mgr_elbow_buffer->data,
-        s_adc_mgr_elbow_buffer->length);
-    s_adc_mgr_elbow_buffer->length = 0;
-    stepper_update(s_elbow_stepper_handle, dt_ms,
-                   s_latest_potentiometer_adc_value);
+    // Legacy ADC update retained for reference.
+    // adc_mgr_read(&s_adc_mgr_read_results, 0);
+    // s_latest_potentiometer_adc_value = moving_average16(
+    //     s_latest_potentiometer_adc_value, s_adc_mgr_elbow_buffer->data,
+    //     s_adc_mgr_elbow_buffer->length);
+    // s_adc_mgr_elbow_buffer->length = 0;
+    // stepper_update(s_elbow_stepper_handle, dt_ms,
+    //                s_latest_potentiometer_adc_value);
 
-    // Send current angle over CAN.
-    PotentiometerAngle current_pot_angle =
-        stepper_get_current_angle(s_elbow_stepper_handle);
-    JointAngle current_angle =
-        to_joint_angle(&s_elbow_stepper_cfg.potentiometer, current_pot_angle);
+    // Legacy potentiometer-to-joint conversion.
+    // // Send current angle over CAN.
+    // PotentiometerAngle current_pot_angle =
+    //     stepper_get_current_angle(s_elbow_stepper_handle);
+    // JointAngle current_angle =
+    //     to_joint_angle(&s_elbow_stepper_cfg.potentiometer, current_pot_angle);
+
+    EncoderAngle current_encoder_angle;
+    if (!read_elbow_encoder_angle(&current_encoder_angle) ||
+        !isfinite(current_encoder_angle.degree)) {
+      stepper_set_estop(s_elbow_stepper_handle, true);
+      ESP_LOGE(TAG, "Elbow motor stopped: encoder feedback unavailable");
+      break;
+    }
+    stepper_update(s_elbow_stepper_handle, dt_ms, current_encoder_angle);
+
+    // Keep the existing CAN message ID and publish the current joint angle.
+    const JointAngle current_joint_angle =
+        to_joint_angle(&s_elbow_stepper_cfg.encoder, current_encoder_angle);
+    float can_angle = htolef(current_joint_angle.degree);
     esp_err_t err = can_send(CAN_ID_ROBOT_ELBOW_UP_DOWN_POTENTIOMETER,
-                             (uint8_t*)&current_angle.degree,
-                             sizeof(current_angle.degree), 0);
-    static int can_errors_count = 0;
+                             (uint8_t*)&can_angle, sizeof(can_angle), 0);
+    static unsigned int can_errors_count = 0;
     if (err != ESP_OK) {
       if (can_errors_count++ % 100 == 0) {
         ESP_LOGW(
@@ -298,28 +335,56 @@ static void stepper_task([[maybe_unused]] void* pvParameter) {
     };
     if (++status_counter >= ITERATIONS_PER_LOGGING) {  // Every 100ms
       status_counter = 0;
-      PotentiometerAngle target_pot_angle =
+      // Legacy target conversion used the potentiometer calibration.
+      // PotentiometerAngle target_pot_angle =
+      //     stepper_get_target_angle(s_elbow_stepper_handle);
+      // JointAngle target_angle =
+      //     to_joint_angle(&s_elbow_stepper_cfg.potentiometer, target_pot_angle);
+
+      const EncoderAngle target_encoder_angle =
           stepper_get_target_angle(s_elbow_stepper_handle);
-      JointAngle target_angle =
-          to_joint_angle(&s_elbow_stepper_cfg.potentiometer, target_pot_angle);
+      const JointAngle target_joint_angle =
+          to_joint_angle(&s_elbow_stepper_cfg.encoder, target_encoder_angle);
       AngularVelocity velocity =
           stepper_get_current_velocity(s_elbow_stepper_handle);
       bool moving = stepper_is_moving(s_elbow_stepper_handle);
 
-      // Also log locally
+      // Legacy log reported the ADC sample and potentiometer angle.
+      // ESP_LOGI(TAG,
+      //          "adc: %u, Stepper elbow - Current(pot): %.2f°, Target(pot): "
+      //          "%.2f°, Current(Joint): %.2f, Target(Joint): %.2f, Velocity: "
+      //          "%.2f°/s, Moving: %s",
+      //          s_latest_potentiometer_adc_value, current_pot_angle.degree,
+      //          target_pot_angle.degree, current_angle.degree,
+      //          target_angle.degree, velocity.dps, moving ? "Yes" : "No");
+
       ESP_LOGI(TAG,
-               "adc: %u, Stepper elbow - Current(pot): %.2f°, Target(pot): "
-               "%.2f°, Current(Joint): %.2f, Target(Joint): %.2f, Velocity: "
-               "%.2f°/s, Moving: %s",
-               s_latest_potentiometer_adc_value, current_pot_angle.degree,
-               target_pot_angle.degree, current_angle.degree,
-               target_angle.degree, velocity.dps, moving ? "Yes" : "No");
+               "Elbow current: %.2f encoder deg, %.2f joint deg. "
+               "Target: %.2f encoder deg, %.2f joint deg. Speed: %.2f deg/s. Moving: %s",
+               current_encoder_angle.degree, current_joint_angle.degree,
+               target_encoder_angle.degree, target_joint_angle.degree,
+               velocity.dps, moving ? "Yes" : "No");
     }
   }
+  // Lost feedback latches the stop. This task does not rearm the motor.
+  vTaskDelete(NULL);
 }
 
 void app_main(void) {
   ESP_LOGI(TAG, "Robot elbow module starting...");
+
+  const float encoder_ratio = s_elbow_stepper_cfg.encoder.joint_angle_to_encoder_angle_ratio;
+  if (!isfinite(encoder_ratio) || encoder_ratio <= 0.0F) {
+    ESP_LOGW(TAG, "Elbow motor startup blocked: encoder calibration is missing");
+    return;
+  }
+
+  EncoderAngle initial_encoder_angle;
+  if (!read_elbow_encoder_angle(&initial_encoder_angle) ||
+      !isfinite(initial_encoder_angle.degree)) {
+    ESP_LOGW(TAG, "Elbow motor startup blocked: encoder feedback unavailable");
+    return;
+  }
 
   // Initialize CAN.
   {
@@ -358,35 +423,44 @@ void app_main(void) {
   }
 #endif
 
-  // Initialize ADC.
-  {
-    esp_err_t err = adc_mgr_init(s_adc_mgr_config);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Failed to initialize ADC manager: %s",
-               esp_err_to_name(err));
-      abort();
-    }
-    ESP_LOGI(TAG, "ADC manager initialized");
+  // Legacy ADC startup and initial potentiometer reading.
+  // // Initialize ADC.
+  // {
+  //   esp_err_t err = adc_mgr_init(s_adc_mgr_config);
+  //   if (err != ESP_OK) {
+  //     ESP_LOGE(TAG, "Failed to initialize ADC manager: %s",
+  //              esp_err_to_name(err));
+  //     abort();
+  //   }
+  //   ESP_LOGI(TAG, "ADC manager initialized");
+  // }
+
+  // // Wait for a bit to get initial results.
+  // vTaskDelay(pdMS_TO_TICKS(10));
+  // adc_mgr_read(&s_adc_mgr_read_results, 0);
+
+  // s_latest_potentiometer_adc_value = limb_average16(
+  //     s_adc_mgr_elbow_buffer->data, s_adc_mgr_elbow_buffer->length);
+
+  // // Initialize stepper motor.
+  // {
+  //   esp_err_t err =
+  //       stepper_init(&s_elbow_stepper_cfg, s_latest_potentiometer_adc_value,
+  //                    &s_elbow_stepper_handle);
+  //   if (err != ESP_OK) {
+  //     ESP_LOGE(TAG, "Failed to initialize elbow stepper");
+  //     abort();
+  //   }
+  // }
+  // s_adc_mgr_elbow_buffer->length = 0;
+
+  esp_err_t stepper_error = stepper_init(
+      &s_elbow_stepper_cfg, initial_encoder_angle, &s_elbow_stepper_handle);
+  if (stepper_error != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize elbow stepper: %s",
+             esp_err_to_name(stepper_error));
+    abort();
   }
-
-  // Wait for a bit to get initial results.
-  vTaskDelay(pdMS_TO_TICKS(10));
-  adc_mgr_read(&s_adc_mgr_read_results, 0);
-
-  s_latest_potentiometer_adc_value = limb_average16(
-      s_adc_mgr_elbow_buffer->data, s_adc_mgr_elbow_buffer->length);
-
-  // Initialize stepper motor.
-  {
-    esp_err_t err =
-        stepper_init(&s_elbow_stepper_cfg, s_latest_potentiometer_adc_value,
-                     &s_elbow_stepper_handle);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Failed to initialize elbow stepper");
-      abort();
-    }
-  }
-  s_adc_mgr_elbow_buffer->length = 0;
 
   // Create FreeRTOS tasks
   enum {
@@ -401,7 +475,7 @@ void app_main(void) {
     BaseType_t err = xTaskCreate(can_rx_task, "can_rx", TASK_STACK_DEPTH, NULL,
                                  TASK_CAN_RX_PRIORITY, NULL);
     if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create can_rx task, err code: %d");
+      ESP_LOGE(TAG, "Failed to create can_rx task, err code: %ld", (long)err);
       abort();
     }
   }
@@ -412,7 +486,7 @@ void app_main(void) {
         xTaskCreate(reenable_can_task, "reenable_can_task", TASK_STACK_DEPTH,
                     NULL, TASK_CAN_RX_PRIORITY + 1, NULL);
     if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
+      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %ld", (long)err);
       abort();
     }
   }
@@ -423,7 +497,7 @@ void app_main(void) {
     BaseType_t err = xTaskCreate(imu_task, "imu_task", TASK_STACK_DEPTH, NULL,
                                  TASK_IMU_PRIORITY, NULL);
     if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create imu task, err code: %d");
+      ESP_LOGE(TAG, "Failed to create imu task, err code: %ld", (long)err);
       abort();
     }
   }
@@ -433,7 +507,7 @@ void app_main(void) {
     BaseType_t err = xTaskCreate(stepper_task, "stepper_task", TASK_STACK_DEPTH,
                                  NULL, TASK_STEPPER_UPDATE_PRIORITY, NULL);
     if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create stepper task, err code: %d");
+      ESP_LOGE(TAG, "Failed to create stepper task, err code: %ld", (long)err);
       abort();
     }
   }

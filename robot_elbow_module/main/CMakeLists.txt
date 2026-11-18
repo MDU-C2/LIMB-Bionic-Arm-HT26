@@ -5,6 +5,7 @@ idf_component_register(
   "."
   REQUIRES
   can_driver
+  encoder
   imu
   stepper
   driver

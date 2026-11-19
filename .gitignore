@@ -1,3 +1,31 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.aurora/
+venv/
+artifacts/.matplotlib/
+artifacts/models/*
+!artifacts/models/movement_gru.onnx
+!artifacts/models/movement_gru.json
+!artifacts/models/cup_yolo11n.onnx
+!artifacts/models/README.md
+!artifacts/models/ULTRALYTICS_LICENSE.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+.DS_Store
+Thumbs.db
+firmware/**/build/
+firmware/**/.pio/
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old
+firmware/**/sdkconfig.*-*
+#Generate output files
+outputs/
 
 # =====================================
 # ESP-IDF generated files
@@ -46,6 +74,3 @@ Recordings/*
 !Recordings/README.md
 !Recordings/.gitkeep
 
-# Optional generated manufacturing files
-# Uncomment if Gerber files should not be tracked
-# **/Gerber/

@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "AURORA ESP32-C3 (ESP-IDF)",
+            "compileCommands": "${workspaceFolder}/firmware/high_rate_emg_imu/build/compile_commands.json",
+            "includePath": [
+                "${workspaceFolder}/firmware/high_rate_emg_imu/main",
+                "${workspaceFolder}/firmware/high_rate_emg_imu/include",
+                "${env:IDF_PATH}/components/**"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/firmware/high_rate_emg_imu/main",
+                    "${workspaceFolder}/firmware/high_rate_emg_imu/include",
+                    "${env:IDF_PATH}/components"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "defines": [
+                "ESP_PLATFORM"
+            ],
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++17"
+        }
+    ],
+    "version": 4
+}

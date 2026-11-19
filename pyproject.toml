@@ -1,0 +1,84 @@
+# Majd
+[build-system]
+requires = ["setuptools>=68,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aurora-arm"
+version = "0.1.0"
+description = "AURORA sensor recording and arm simulation"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "numpy==1.26.4",
+    "scipy==1.15.2",
+]
+
+[project.optional-dependencies]
+simulation = ["pybullet>=3.2.5,<4", "pygame==2.6.1"]
+sensors = ["bleak==3.1.0", "pyserial==3.5"]
+camera = [
+    "depthai==3.12.0", "opencv-contrib-python==4.10.0.84",
+    "mediapipe==0.10.14", "protobuf>=4.25.3,<5", "onnxruntime==1.23.2",
+]
+inference = ["onnxruntime==1.23.2"]
+plots = ["matplotlib>=3.8,<4"]
+training = [
+    "torch>=2.2,<2.6", "onnx>=1.16,<1.18",
+    "onnxruntime==1.23.2", "matplotlib>=3.8,<4",
+]
+firmware = ["platformio==6.1.18"]
+dev = ["ruff==0.17.1"]
+
+[project.scripts]
+aurora = "aurora.gui.app:main"
+
+# An explicit package mapping keeps editable imports usable in Unicode paths
+# on Python 3.10, even when the process uses the Windows system encoding.
+[tool.setuptools.package-dir]
+aurora = "src/aurora"
+scripts = "scripts"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["aurora*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+aurora = ["**/README.md"]
+"aurora.simulation.model" = ["arm/*.urdf", "arm/*.stl", "arm/fullhand2/*.stl"]
+
+[tool.setuptools.cmdclass]
+build_py = "scripts.build_package.ResourceBuild"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+# Launchers, native library paths and test display settings run before imports.
+[tool.ruff.lint.per-file-ignores]
+"scripts/check_*.py" = ["E402"]
+"src/aurora/gui/app.py" = ["E402"]
+"src/aurora/simulation/interactive/__main__.py" = ["E402"]
+"tests/test_gui_support.py" = ["E402"]
+"tests/test_cup_recording.py" = ["E402"]
+"tests/test_vision_tracking.py" = ["E402"]
+"tests/test_live_setup.py" = ["E402"]
+"tests/test_recorded_control.py" = ["E402"]
+"tests/test_emg_trials.py" = ["E402"]
+"tests/test_movement_model.py" = ["E402"]
+"tests/test_live_ble_input.py" = ["E402"]
+"tests/test_live_emg_calibration.py" = ["E402"]
+"tests/test_interactive_runtime.py" = ["E402"]
+"tests/test_sensor_fusion.py" = ["E402"]
+"tests/test_imu_twist.py" = ["E402"]
+"tests/test_setup_project.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

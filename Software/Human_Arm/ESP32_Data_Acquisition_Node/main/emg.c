@@ -166,7 +166,8 @@ esp_err_t emg_read_samples(uint16_t *samples, size_t capacity, size_t *sample_co
         adc_decimation_counter = 0;
         // Stop if caller's output buffer is full
         if (*sample_count >= capacity) {
-            break;
+            ESP_LOGE(TAG, "EMG output buffer overflow");
+            return ESP_ERR_INVALID_SIZE;
         }
         samples[*sample_count] = results[i].type2.data;
 

@@ -1,0 +1,28 @@
+{
+  "format_version": 1,
+  "task": "camera_movement_profile_identification",
+  "source_project": "LIMB1",
+  "status": "inherited",
+  "artifacts": {
+    "movement_gru.onnx": "086b04f5f88b13c810c04fb04f4db8536ca0beaab09be44b50f1ce1eb15bb6b9"
+  },
+  "input_shape": [
+    null,
+    60,
+    69
+  ],
+  "output_shape": [
+    null,
+    128
+  ],
+  "preprocessing": {
+    "coordinate_system": "rgb_pixels_stereo_depth",
+    "frames": 60,
+    "features": 69,
+    "resampling": "linear_by_frame_index",
+    "centering": "subtract_shoulder",
+    "missing_hand_points": "zero_padding"
+  },
+  "original_training_split": null,
+  "original_evaluation_results": null
+}

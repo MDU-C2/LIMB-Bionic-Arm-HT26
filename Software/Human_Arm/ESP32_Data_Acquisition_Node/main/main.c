@@ -158,10 +158,10 @@ void app_main(void)
 
     uint16_t samples[EMG_BLOCK_SIZE];
     uint64_t sample_index = 0;
-    int64_t next_emg_us = 0;
     uint32_t emg_sequence = 0;
     uint32_t imu_sequence = 0;
     int64_t next_imu_us = esp_timer_get_time();
+    int64_t next_emg_sample_us = -1;
     while (true) {
         if (use_emg) {
             size_t count = 0;
@@ -169,11 +169,22 @@ void app_main(void)
                 emg_read_samples(samples, EMG_BLOCK_SIZE, &count, EMG_IMU_READ_TIMEOUT_MS);
             if (result == ESP_OK && count > 0) {
                 const uint32_t period_us = 1000000U / EMG_SAMPLE_RATE_HZ;
-                if (next_emg_us == 0) {
-                    next_emg_us = esp_timer_get_time() - (int64_t)(count - 1) * period_us;
+                /*
+                * Anchor every EMG block to the ESP32 device clock.
+                * esp_timer_get_time() is approximately the time of the newest
+                * sample returned from the ADC buffer.
+                */
+                
+                /* Previous implementation: anchor the first sample of each block to the newest sample time.
+                const int64_t newest_sample_us = esp_timer_get_time();
+                const int64_t first_us = newest_sample_us - (int64_t)(count - 1) * period_us;
+                */
+                if (next_emg_sample_us < 0) {
+                    next_emg_sample_us = esp_timer_get_time() - (int64_t)(count - 1) * period_us;
                 }
-                const int64_t first_us = next_emg_us;
-                next_emg_us += (int64_t)count * period_us;
+                const int64_t first_us = next_emg_sample_us;
+                next_emg_sample_us += (int64_t)count * period_us;
+                
                 emg_block_t block = {
                     .sequence = emg_sequence++,
                     .first_sample_time_us = (uint64_t)first_us,

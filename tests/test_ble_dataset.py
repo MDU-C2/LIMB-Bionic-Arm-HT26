@@ -1,0 +1,353 @@
+# Majd, Christian
+"""Check labeled BLE CSVs against the old LIMB capture layout."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import csv
+import io
+import json
+import os
+import struct
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+
+from aurora.recording.ble_dataset import LabeledBleCapture
+from aurora.recording.record_ble_sensors import (
+    CURRENT_EMG_PACKET,
+    SENSOR_UUIDS,
+    BleRecorder,
+    record,
+)
+
+
+class LabeledBleCaptureTests(unittest.TestCase):
+    def test_legacy_windows_cross_sequence_wrap_without_losing_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            root = Path(temporary)
+            capture = LabeledBleCapture(root, "1", "S01")
+            capture.start()
+            recorder = BleRecorder(root, capture.add_packet, legacy_emg_fixed=True)
+            try:
+                for sequence in range(0xFFFFFFFA, 0xFFFFFFFA + 10):
+                    wire = sequence & 0xFFFFFFFF
+                    recorder.handle("emg", struct.pack("<40HI", *([2048] * 40), wire))
+                    recorder.handle("imu", struct.pack("<9fI", *([0] * 9), wire))
+            finally:
+                recorder.close()
+            for sensor, count in (("emg", 400), ("imu", 10)):
+                self.assertEqual(capture.sequence_gaps[sensor], 0)
+                self.assertEqual(len(capture.windows[sensor][0]), 1)
+                self.assertEqual(len(capture.windows[sensor][0][0][1]), count)
+            with (root / "emg.csv").open() as source:
+                self.assertEqual(sum(1 for _ in csv.DictReader(source)), 400)
+            self.assertFalse(capture.summary()["movement_label_verified"])
+
+    def test_legacy_duplicate_and_reordered_packets_stay_raw_without_rewinding_windows(self):
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            root = Path(temporary)
+            capture = LabeledBleCapture(root, "1", "S01")
+            capture.start()
+            recorder = BleRecorder(root, capture.add_packet, legacy_emg_fixed=True)
+            sequences = (*range(5), 4, 3, *range(5, 20))
+            try:
+                for sequence in sequences:
+                    recorder.handle("emg", struct.pack("<40HI", *([sequence] * 40), sequence))
+            finally:
+                recorder.close()
+            self.assertEqual(capture.sequence_gaps["emg"], 2)
+            self.assertEqual(capture.last_sequences["emg"], 19)
+            windows = capture.windows["emg"][0]
+            self.assertEqual(len(windows), 1)
+            self.assertEqual(
+                windows[0][1], [sequence for sequence in range(5, 15) for _ in range(40)]
+            )
+            with (root / "emg.csv").open() as source:
+                self.assertEqual(sum(1 for _ in csv.DictReader(source)), len(sequences) * 40)
+            self.assertFalse(capture.complete)
+
+    def test_packet_health_tracks_loss_wraparound_and_decode_failure(self) -> None:
+        recorder = BleRecorder(None, sensors=("emg", "imu"))
+        for sequence in (0xFFFFFFFF, 0, 3, 3, 2):
+            recorder.handle("emg", bytearray(CURRENT_EMG_PACKET.pack(0x0101, sequence, 1000, 7)))
+        with redirect_stdout(io.StringIO()):
+            recorder.handle("imu", bytearray(b"invalid"))
+        health = recorder.packet_health()
+        self.assertEqual(health["emg"]["received_packets"], 5)
+        self.assertEqual(health["emg"]["missing_packets"], 2)
+        self.assertEqual(health["emg"]["sequence_gaps"], 3)
+        self.assertEqual(health["emg"]["decode_errors"], 0)
+        self.assertEqual(health["imu"]["decode_errors"], 1)
+
+    def test_reordered_packet_does_not_rewind_loss_tracking(self) -> None:
+        recorder = BleRecorder(None, sensors=("emg",))
+        for sequence in (10, 11, 11, 9, 12):
+            recorder.handle("emg", bytearray(CURRENT_EMG_PACKET.pack(0x0101, sequence, 1000, 7)))
+        self.assertEqual(recorder.packet_health()["emg"]["missing_packets"], 0)
+        self.assertEqual(recorder.packet_health()["emg"]["sequence_gaps"], 2)
+        recorder.reset_sequence_tracking()
+        for sequence in (5000, 5001, 5004):
+            recorder.handle("emg", bytearray(CURRENT_EMG_PACKET.pack(0x0101, sequence, 1000, 7)))
+        self.assertEqual(recorder.packet_health()["emg"]["missing_packets"], 2)
+
+    def test_sensor_selection_only_creates_requested_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            session = Path(temporary)
+            recorder = BleRecorder(session, sensors=("imu",))
+            recorder.close()
+            self.assertTrue((session / "imu.csv").is_file())
+            self.assertFalse((session / "emg.csv").exists())
+            self.assertFalse((session / "piezo.csv").exists())
+            self.assertEqual(recorder.counts, {"imu": 0})
+
+    def test_live_preview_decoder_needs_no_session_files(self) -> None:
+        samples = []
+        recorder = BleRecorder(
+            None, lambda sensor, sequence, channels: samples.append((sensor, sequence, channels))
+        )
+        recorder.handle("emg", bytearray(struct.pack("<HIQ80H", 1, 7, 123, *range(80))))
+        recorder.handle("imu", bytearray(struct.pack("<HIQ12h", 1, 8, 124, *range(12))))
+        recorder.close()
+        self.assertEqual([sensor for sensor, _, _ in samples], ["emg", "imu"])
+        self.assertEqual(len(samples[0][2]), 2)
+        self.assertEqual(samples[1][2][1][0][0], 0.006)
+        self.assertEqual(recorder.imu_units, ("g", "dps"))
+
+    def test_current_single_channel_emg_packet_keeps_device_time(self) -> None:
+        samples = []
+        recorder = BleRecorder(
+            None,
+            lambda sensor, sequence, channels: samples.append((sensor, sequence, channels)),
+            sensors=("emg",),
+        )
+        recorder.handle(
+            "emg",
+            bytearray(CURRENT_EMG_PACKET.pack(0x0101, 12, 345_000, 2024)),
+        )
+        recorder.close()
+        self.assertEqual(samples, [("emg", 12, [[2024]])])
+
+    def test_current_emg_rate_builds_ten_sample_labeled_windows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            session = Path(temporary)
+            capture = LabeledBleCapture(session, "1", "S01")
+            capture.start()
+            for sequence in range(10):
+                capture.add_packet("emg", sequence, [[2000 + sequence]])
+            self.assertEqual(len(capture.windows["emg"][0]), 1)
+            self.assertEqual(capture.samples_per_window[("emg", 0)], 10)
+
+        current = BleRecorder(None)
+        current.handle("imu", bytearray(struct.pack("<I6f", 9, 1000, 0, 0, 500, 0, 0)))
+        self.assertEqual(current.imu_units, ("mg", "mdps"))
+        current.close()
+
+    def test_old_single_sensor_packets_make_complete_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            session = Path(temporary)
+            capture = LabeledBleCapture(session, "1", "S01")
+            recorder = BleRecorder(session, capture.add_packet, legacy_emg_fixed=True)
+            capture.start()
+            for sequence in range(800):
+                recorder.handle(
+                    "emg",
+                    bytearray(struct.pack("<40HI", *range(40), sequence)),
+                )
+                recorder.handle(
+                    "imu",
+                    bytearray(struct.pack("<9fI", *range(9), sequence)),
+                )
+            recorder.close()
+            capture.save()
+
+            self.assertTrue(capture.complete)
+            raw_root = session / "raw_data" / "S01"
+            emg = next((raw_root / "EMG").glob("*.csv"))
+            imu = next((raw_root / "IMU").glob("*.csv"))
+            with emg.open(newline="", encoding="utf-8") as source:
+                emg_rows = list(csv.reader(source))
+            with imu.open(newline="", encoding="utf-8") as source:
+                imu_rows = list(csv.reader(source))
+            self.assertEqual(emg_rows[0][:3], ["Raw_Label", "Timestamp", "v0"])
+            self.assertEqual(len(emg_rows), 81)
+            self.assertTrue(all(len(row) == 402 for row in emg_rows))
+            self.assertEqual(imu_rows[0][:3], ["Raw_Label", "Timestamp", "accel_x"])
+            self.assertEqual(len(imu_rows), 801)
+
+            segments = session / "labeled_data" / "S01" / "segmented_emg"
+            sizes = {}
+            for path in segments.glob("*.csv"):
+                with path.open(newline="", encoding="utf-8") as source:
+                    rows = list(csv.reader(source))
+                self.assertEqual(rows[0][:3], ["Label", "Timestamp", "v0"])
+                sizes[path.stem.split("_")[-1]] = len(rows) - 1
+            self.assertEqual(sorted(sizes.values()), [20, 20, 40])
+            self.assertEqual(len(list(segments.glob("*.csv"))), 3)
+
+    def test_dropped_packet_keeps_capture_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            capture = LabeledBleCapture(Path(temporary), "1", "S01")
+            capture.start()
+            for sequence in range(10):
+                if sequence == 5:
+                    continue
+                capture.add_packet("emg", sequence, [list(range(40))])
+            capture.save()
+            self.assertFalse(capture.complete)
+            self.assertEqual(capture.windows["emg"].get(0), [])
+            self.assertGreater(capture.sequence_gaps["emg"], 0)
+            self.assertFalse((Path(temporary) / "labeled_data").exists())
+
+    def test_dual_sensor_packets_keep_both_channels(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            session = Path(temporary)
+            capture = LabeledBleCapture(session, "1", "S01")
+            recorder = BleRecorder(session, capture.add_packet)
+            capture.start()
+            for sequence in range(10):
+                recorder.handle(
+                    "emg",
+                    bytearray(struct.pack("<HIQ80H", 1, sequence, 0, *range(80))),
+                )
+                recorder.handle(
+                    "imu",
+                    bytearray(struct.pack("<HIQ12h", 1, sequence, 0, *range(12))),
+                )
+            recorder.close()
+            capture.save()
+            self.assertEqual(len(capture.windows["emg"][0]), 1)
+            self.assertEqual(len(capture.windows["emg"][1]), 1)
+            self.assertEqual(len(capture.windows["imu"][0]), 1)
+            self.assertEqual(len(capture.windows["imu"][1]), 1)
+            self.assertEqual(len(list((session / "raw_data" / "S01" / "EMG").glob("*.csv"))), 2)
+
+
+class LabeledBleConnectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_missing_requested_sensor_does_not_stop_available_stream(self) -> None:
+        class FakeClient:
+            is_connected = True
+
+            def __init__(self, _device):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def start_notify(self, uuid, _callback):
+                if uuid == SENSOR_UUIDS["emg"]:
+                    raise RuntimeError("EMG characteristic missing")
+
+        class FakeScanner:
+            @staticmethod
+            async def find_device_by_filter(_filter, timeout):
+                return "mock-aurora-server"
+
+        async def no_wait(_seconds):
+            return None
+
+        args = argparse.Namespace(
+            device="AURORA",
+            address="",
+            scan_timeout=1.0,
+            subject="S01",
+            duration=0.001,
+            dataset_label="",
+            sensors=("imu", "emg"),
+            preview=False,
+        )
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            with (
+                patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}),
+                patch("bleak.BleakClient", FakeClient),
+                patch("bleak.BleakScanner", FakeScanner),
+                patch("aurora.recording.record_ble_sensors.asyncio.sleep", no_wait),
+            ):
+                result = await record(args)
+            self.assertEqual(result, 0)
+            session = next(Path(temporary).iterdir())
+            meta = json.loads((session / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["requested_sensors"], ["imu", "emg"])
+            self.assertEqual(meta["subscribed_sensors"], ["imu"])
+            self.assertIn("EMG characteristic missing", meta["unavailable_sensors"]["emg"])
+
+    async def test_mock_ble_session_stops_and_writes_metadata(self) -> None:
+        class FakeClient:
+            callbacks = {}
+            is_connected = True
+
+            def __init__(self, _device):
+                self.callbacks = {}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def start_notify(self, uuid, callback):
+                self.callbacks[uuid] = callback
+
+        class FakeScanner:
+            @staticmethod
+            async def find_device_by_filter(_filter, timeout):
+                return "mock-aurora-server"
+
+        client = None
+        sleep_calls = 0
+        real_sleep = asyncio.sleep
+
+        async def fake_sleep(_seconds):
+            nonlocal sleep_calls, client
+            sleep_calls += 1
+            if 4 <= sleep_calls <= 11:
+                first_sequence = (sleep_calls - 4) * 100
+                for sequence in range(first_sequence, first_sequence + 100):
+                    client.callbacks[SENSOR_UUIDS["emg"]](
+                        None, bytearray(struct.pack("<40HI", *range(40), sequence))
+                    )
+                    client.callbacks[SENSOR_UUIDS["imu"]](
+                        None, bytearray(struct.pack("<9fI", *range(9), sequence))
+                    )
+            await real_sleep(0)
+
+        def create_client(device):
+            nonlocal client
+            client = FakeClient(device)
+            return client
+
+        args = argparse.Namespace(
+            device="AURORA",
+            address="",
+            scan_timeout=1.0,
+            subject="S01",
+            duration=0.0,
+            dataset_label="1",
+            emg_format="legacy-fixed",
+        )
+        with tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+            with (
+                patch.dict(os.environ, {"AURORA_OUTPUT_DIR": temporary}),
+                patch("bleak.BleakClient", create_client),
+                patch("bleak.BleakScanner", FakeScanner),
+                patch("aurora.recording.record_ble_sensors.asyncio.sleep", fake_sleep),
+            ):
+                result = await record(args)
+            self.assertEqual(result, 0)
+            session = next(Path(temporary).iterdir())
+            meta = json.loads((session / "meta.json").read_text(encoding="utf-8"))
+            self.assertTrue(meta["labeled_capture"]["complete"])
+            self.assertEqual(meta["labeled_capture"]["windows_by_sensor"]["emg"]["0"], 80)
+            self.assertEqual(
+                len(list((session / "labeled_data" / "S01" / "segmented_emg").glob("*.csv"))), 3
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

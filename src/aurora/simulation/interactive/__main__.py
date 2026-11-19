@@ -1,0 +1,34 @@
+# Majd, Christian
+"""Run the interactive arm simulator."""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+# Conda's dynamically loaded BLAS DLLs need PATH as well as Python's DLL directory.
+if os.name == "nt":
+    native_bin = Path(sys.prefix) / "Library" / "bin"
+    if native_bin.is_dir():
+        os.environ["PATH"] = str(native_bin) + os.pathsep + os.environ.get("PATH", "")
+
+from aurora.recording.common import enable_ctrl_break_as_interrupt
+from aurora.simulation.interactive.settings import parse_args
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    enable_ctrl_break_as_interrupt(stdin_stop=True)
+    from aurora.simulation.interactive.runtime import InteractiveSimulator
+
+    try:
+        InteractiveSimulator(args).run()
+    except KeyboardInterrupt:
+        return 130
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -109,8 +109,7 @@ static esp_err_t lsm6dso32_configure(void)
     }
 
     // Configure gyroscope (section 9.13 in the LSM6DSO32 datasheet).
-    ret = imu_register_write_byte(LSM6DSO32_CTRL2_G,
-                                  (s_imu_config.gyro_odr << 4) | s_imu_config.gyro_range);
+    ret = imu_register_write_byte(LSM6DSO32_CTRL2_G,(s_imu_config.gyro_odr << 4) | s_imu_config.gyro_range);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to configure gyroscope");
         return ret;
@@ -141,7 +140,6 @@ static esp_err_t lsm6dso32_configure(void)
 
     // Wait for sensor to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
-
     return ESP_OK;
 }
 
@@ -256,8 +254,7 @@ esp_err_t imu_init(const ImuConfig *config)
     }
 
     if (who_am_i != LSM6DSO32_WHO_AM_I_VALUE) {
-        ESP_LOGE(TAG, "Invalid WHO_AM_I value: 0x%02X (expected: 0x%02X)", who_am_i,
-                 LSM6DSO32_WHO_AM_I_VALUE);
+        ESP_LOGE(TAG, "Invalid WHO_AM_I value: 0x%02X (expected: 0x%02X)", who_am_i, LSM6DSO32_WHO_AM_I_VALUE);
         i2c_driver_delete(s_imu_config.i2c_port);
         return ESP_ERR_NOT_FOUND;
     }
@@ -273,7 +270,6 @@ esp_err_t imu_init(const ImuConfig *config)
     // Cache the LSB values for the accelerometer and gyroscope.
     s_accel_lsb_value = imu_accel_range_to_lsb(s_imu_config.accel_range);
     s_gyro_lsb_value = imu_gyro_range_to_lsb(s_imu_config.gyro_range);
-
     s_imu_initialized = true;
     ESP_LOGI(TAG, "IMU initialized successfully");
     return ESP_OK;
@@ -284,7 +280,7 @@ esp_err_t imu_deinit(void)
     if (!s_imu_initialized) {
         return ESP_OK;
     }
-
+    
     esp_err_t ret = i2c_driver_delete(s_imu_config.i2c_port);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to delete I2C driver: %s", esp_err_to_name(ret));

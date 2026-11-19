@@ -1,0 +1,690 @@
+# Majd, Christian
+"""Test GUI ownership, discovery and optional native-window shutdown."""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import os
+import queue
+import sys
+import tempfile
+import types
+import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+ROOT = Path(__file__).resolve().parents[1]
+
+import aurora.gui.app as gui_app
+from aurora.gui.ble_dashboard import BleDashboardMixin
+from aurora.gui.process_manager import ManagedProcess, ProcessManagerMixin
+from aurora.gui.project_support import (
+    FIRMWARE_WORKSPACE_SCRIPT,
+    FirmwareProject,
+    discover_firmware_projects,
+    discover_recording_programs,
+    firmware_command,
+    resolve_firmware_tool,
+)
+from aurora.gui.project_tabs import ProjectTabsMixin
+from aurora.gui.recording_tab import DEFAULT_BATCH_SOURCES, DEFAULT_BLE_SENSORS, batch_arguments
+from aurora.gui.serial_dashboard import SerialDashboardMixin
+from aurora.gui.serial_sensor import SerialLine, SerialSensorReader
+from aurora.recording.common import create_session_directory, experiment_metadata
+from aurora.sensors.imu_protocol import ImuStreamDecoder, i2c_wiring_hint
+from aurora.sensors.live_input import installed_pose_model_complexity
+
+
+class RecordingBatchTests(unittest.TestCase):
+    def test_recording_stop_allows_time_to_save_and_release_bluetooth(self):
+        child = Mock()
+        child.poll.return_value = None
+        managed = ManagedProcess(
+            "recording:cup_trials", "Cup recording", "recording", child, stop_input="stop\n"
+        )
+        gui = types.SimpleNamespace(
+            _append_log=Mock(),
+            _send_process_input=Mock(return_value=True),
+            after=Mock(),
+            _set_status=Mock(),
+            _update_controls=Mock(),
+        )
+        ProcessManagerMixin._stop_processes(gui, [managed])
+        self.assertTrue(managed.stopping)
+        self.assertEqual(gui.after.call_args.args[0], 20_000)
+        gui._send_process_input.assert_called_once_with(managed.key, "stop\n")
+
+    def test_serial_receipt_precedes_decode_and_each_open_has_a_new_generation(self):
+        reader = SerialSensorReader()
+        clock = [123]
+
+        class Raw(bytes):
+            def decode(self, *args, **kwargs):
+                clock[0] = 999
+                return super().decode(*args, **kwargs)
+
+        class Device:
+            def readline(self):
+                reader._stop.set()
+                return Raw(b"IMU1,1000,0,0,1000,0,0,0\n")
+
+        serial = types.SimpleNamespace(
+            Serial=lambda *args, **kwargs: contextlib.nullcontext(Device()), SerialException=OSError
+        )
+        with (
+            patch.dict(sys.modules, {"serial": serial}),
+            patch("aurora.gui.serial_sensor.time.monotonic_ns", side_effect=lambda: clock[0]),
+        ):
+            for generation, stamp in ((1, 123), (2, 456)):
+                reader._stop.clear()
+                clock[0] = stamp
+                reader._read_loop()
+                connected = reader.events.get_nowait()
+                event, line = reader.events.get_nowait()
+                self.assertEqual(connected[1][2], generation)
+                self.assertEqual(event, "line")
+                self.assertEqual(line.host_monotonic_ns, stamp)
+                self.assertEqual(line.connection_generation, generation)
+                self.assertEqual(reader.events.get_nowait()[0], "stopped")
+
+    def test_serial_line_generation_recovers_even_if_connection_event_was_dropped(self):
+        decoder = ImuStreamDecoder()
+        decoder.feed("IMU1,1000,0,0,1000,0,0,0")
+        events = queue.Queue()
+        events.put(("line", SerialLine("EMG,2000,2048", 1_000_000_000_000, 2)))
+        host = types.SimpleNamespace(
+            serial_imu_decoder=decoder,
+            serial_sensor_reader=types.SimpleNamespace(events=events),
+            imu_monitor=None,
+            latest_serial_sensor_packet=None,
+            _serial_reader_generation=1,
+            _show_serial_sensor_packet=Mock(),
+            after=Mock(),
+            _drain_serial_sensor_events=Mock(),
+        )
+        host._serial_connection_changed = lambda generation: (
+            SerialDashboardMixin._serial_connection_changed(host, generation)
+        )
+        SerialDashboardMixin._drain_serial_sensor_events(host)
+        packet = host._show_serial_sensor_packet.call_args.args[0]
+        self.assertEqual(packet["imus"], {})
+        self.assertEqual(packet["host_monotonic_ns"], 1_000_000_000_000)
+        self.assertTrue(packet["emg"]["connected"])
+
+    def test_close_cancels_child_widget_timers_without_deleting_commands_twice(self):
+        try:
+            window = gui_app.tk.Tk()
+        except gui_app.tk.TclError as error:
+            self.skipTest(f"Native Tk unavailable: {error}")
+        try:
+            window.withdraw()
+            child = gui_app.ttk.Frame(window)
+            child.after(1000, lambda: self.fail("Timer ran after shutdown"))
+            host = types.SimpleNamespace(
+                window=window,
+                _close_processes=lambda: True,
+                _stop_ble_dashboard=lambda: True,
+                _stop_serial_dashboard=lambda: True,
+                background_tasks=Mock(),
+                session=Mock(),
+                imu_monitor=None,
+            )
+            gui_app.ProjectGui.close(host)
+        finally:
+            with contextlib.suppress(gui_app.tk.TclError):
+                window.destroy()
+
+    def test_label_review_seeks_the_recorded_frame_instead_of_fixed_fps_time(self):
+        import numpy as np
+
+        from aurora.gui.emg_review import EmgReview
+        from aurora.recording.saved_signals import video_frame_times
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            frames = [
+                {"host_monotonic_ns": 2_000_000_000, "video_frame_index": 0},
+                {"host_monotonic_ns": 2_400_000_000, "video_frame_index": 10},
+                {"host_monotonic_ns": 2_440_000_000, "video_frame_index": 11},
+            ]
+            (directory / "frame_times.jsonl").write_text(
+                "\n".join(json.dumps(row) for row in frames), encoding="utf-8"
+            )
+            review = EmgReview.__new__(EmgReview)
+            review.frame_times = video_frame_times(directory)
+            review.capture = Mock()
+            review.capture.read.return_value = False, None
+            review.host = np.asarray([2_420_000_000])
+            review.seconds = np.asarray([0.0])
+            review.camera_start = 1_900_000_000
+            review.video_label, review.video_status, review.cv2 = Mock(), Mock(), Mock()
+            review._seek(0)
+            review.capture.set.assert_called_once_with(review.cv2.CAP_PROP_POS_FRAMES, 10)
+            frames.reverse()
+            (directory / "frame_times.jsonl").write_text(
+                "\n".join(json.dumps(row) for row in frames), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "increase"):
+                video_frame_times(directory)
+
+    def test_label_review_clears_video_outside_the_saved_time_range(self):
+        import numpy as np
+
+        from aurora.gui.emg_review import EmgReview
+
+        review = EmgReview.__new__(EmgReview)
+        review.capture = Mock()
+        review.capture.read.return_value = False, None
+        review.host = np.asarray([2_000_000_000, 3_000_000_000])
+        review.seconds = np.asarray([0.0, 1.0])
+        review.frame_times = None
+        review.video_label, review.video_status, review.cv2 = Mock(), Mock(), Mock()
+        for start in (1_000_000_000, 4_000_000_000):
+            with self.subTest(camera_start=start):
+                review.camera_start = start
+                review.video_label.reset_mock()
+                review._seek(0)
+                review.video_label.configure.assert_called_once_with(
+                    image="", text="No saved frame at this time."
+                )
+
+    def test_bad_cues_cannot_leave_partially_imported_review_labels(self):
+        import numpy as np
+
+        from aurora.gui.emg_review import EmgReview
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)
+            (path / "emg_trial.json").write_text(
+                json.dumps(
+                    {
+                        "start_host_monotonic_ns": 1000,
+                        "segments": [
+                            {"start_s": 0, "end_s": 0.5, "phase": "rest"},
+                            {"start_s": 0.5, "end_s": "invalid", "phase": "grip"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            review = EmgReview.__new__(EmgReview)
+            review.source = path / "emg.csv"
+            review.host = np.asarray([1000, 1_000_001_000])
+            review.seconds = np.asarray([0, 1])
+            review.segments = []
+            review.messagebox, review.window, review.status, review._redraw = (
+                Mock(),
+                Mock(),
+                Mock(),
+                Mock(),
+            )
+            review._load_cues()
+            self.assertEqual(review.segments, [])
+            review.messagebox.showerror.assert_called_once()
+            review._redraw.assert_not_called()
+
+    def test_review_and_training_failures_are_reported_to_the_operator(self):
+        for kind in ("training", "review", "motion_ai"):
+            with self.subTest(kind=kind):
+                child = Mock()
+                managed = ManagedProcess("test:worker", "Saved data tool", kind, child)
+                events = queue.Queue()
+                events.put(("exit", (managed.key, child, managed.name, 1)))
+                manager = types.SimpleNamespace(
+                    log_queue=events,
+                    process_exits=queue.Queue(),
+                    processes={managed.key: managed},
+                    _append_log=Mock(),
+                    _show_process_failure=Mock(),
+                    _active_processes=lambda: [],
+                    _set_status=Mock(),
+                    _update_controls=Mock(),
+                    _refresh_recordings=Mock(),
+                    _refresh_info=Mock(),
+                    after=Mock(),
+                    _drain_log_queue=Mock(),
+                )
+                ProcessManagerMixin._drain_log_queue(manager)
+                manager._show_process_failure.assert_called_once_with(managed, 1)
+
+    def test_grip_options_only_reach_the_ble_recorder(self):
+        self.assertEqual(
+            batch_arguments("record_ble_sensors.py", [], "", ("emg",), True, 3),
+            ["--sensors", "emg", "--grip-trial", "--grip-repeats", "3"],
+        )
+        self.assertEqual(
+            batch_arguments("record_oak_pose.py", ["--depth"], "", (), True, 3),
+            ["--auto-start", "--depth"],
+        )
+        with self.assertRaises(ValueError):
+            batch_arguments("record_ble_sensors.py", [], "1", ("emg",), True, 3)
+
+    def test_recorder_releases_ble_preview_before_opening_the_connection(self):
+        order = []
+        manager = types.SimpleNamespace(
+            processes={},
+            _active_processes=lambda: [],
+            _stop_ble_dashboard=Mock(side_effect=lambda: order.append("disconnect") or True),
+            _append_log=Mock(),
+            _set_status=Mock(),
+            _display_command=Mock(return_value="python recorder.py"),
+            _update_controls=Mock(),
+            _refresh_info=Mock(),
+            _watch_process=Mock(),
+        )
+        with (
+            patch("aurora.gui.process_manager.threading.Thread"),
+            patch(
+                "aurora.gui.process_manager.subprocess.Popen",
+                side_effect=lambda *_args, **_kwargs: order.append("launch") or Mock(),
+            ),
+        ):
+            self.assertTrue(
+                ProcessManagerMixin._start_program(
+                    manager, "BLE recording", "recording", ["python", "recorder.py"]
+                )
+            )
+        self.assertEqual(order, ["disconnect", "launch"])
+
+    def test_recorder_waits_when_ble_disconnect_has_not_finished(self):
+        manager = types.SimpleNamespace(
+            processes={},
+            _active_processes=lambda: [],
+            _stop_ble_dashboard=Mock(return_value=False),
+            _append_log=Mock(),
+        )
+        with patch("aurora.gui.process_manager.subprocess.Popen") as launch:
+            self.assertFalse(
+                ProcessManagerMixin._start_program(
+                    manager, "BLE recording", "recording", ["python", "recorder.py"]
+                )
+            )
+        launch.assert_not_called()
+
+    def test_launch_waits_for_serial_port_release(self):
+        manager = types.SimpleNamespace(
+            processes={},
+            _active_processes=lambda: [],
+            _stop_serial_dashboard=Mock(return_value=False),
+            _append_log=Mock(),
+        )
+        with patch("aurora.gui.process_manager.subprocess.Popen") as launch:
+            self.assertFalse(
+                ProcessManagerMixin._start_program(
+                    manager, "Serial recording", "recording", ["python", "recorder.py"]
+                )
+            )
+        launch.assert_not_called()
+
+    def test_deferred_launch_keeps_settings_after_either_device_handoff(self):
+        for transport in ("serial", "ble"):
+            pending = []
+            manager = types.SimpleNamespace(
+                processes={},
+                _append_log=Mock(),
+                _set_status=Mock(),
+                _display_command=Mock(return_value="python recorder.py"),
+                _update_controls=Mock(),
+                _refresh_info=Mock(),
+                _watch_process=Mock(),
+                _stop_serial_dashboard=Mock(return_value=transport != "serial"),
+                _stop_ble_dashboard=Mock(return_value=transport != "ble"),
+            )
+            manager._active_processes = types.MethodType(
+                ProcessManagerMixin._active_processes, manager
+            )
+            manager._start_program = types.MethodType(ProcessManagerMixin._start_program, manager)
+            setattr(
+                manager,
+                f"_release_{transport}_for",
+                lambda action, pending=pending: pending.append(action) or True,
+            )
+            process = Mock()
+            process.poll.return_value = None
+            output = Path("trial output Å")
+            with (
+                self.subTest(transport=transport),
+                patch("aurora.gui.process_manager.threading.Thread"),
+                patch(
+                    "aurora.gui.process_manager.subprocess.Popen", return_value=process
+                ) as launch,
+            ):
+                self.assertTrue(
+                    manager._start_program(
+                        "Capture",
+                        "recording",
+                        ["python", "recorder.py"],
+                        working_directory=output.parent,
+                        environment={"AURORA_SUBJECT": "S22"},
+                        parallel=True,
+                        process_key="recording:chosen",
+                        stop_input="stop\n",
+                        output_path=output,
+                    )
+                )
+                launch.assert_not_called()
+                getattr(manager, f"_stop_{transport}_dashboard").return_value = True
+                self.assertEqual(len(pending), 1)
+                pending.pop()()
+                launch.assert_called_once()
+                self.assertEqual(launch.call_args.kwargs["cwd"], output.parent)
+                environment = launch.call_args.kwargs["env"]
+                self.assertEqual(environment["AURORA_SUBJECT"], "S22")
+                self.assertEqual(environment["AURORA_GUI_CONTROL"], "1")
+                managed = manager.processes["recording:chosen"]
+                self.assertEqual((managed.output_path, managed.stop_input), (output, "stop\n"))
+
+    def test_log_flood_cannot_discard_process_completion(self):
+        manager = types.SimpleNamespace()
+        ProcessManagerMixin._initialize_process_manager(manager)
+        child = Mock()
+        ProcessManagerMixin._queue_process_event(manager, ("exit", ("job", child, "job", 0)))
+        for index in range(2000):
+            ProcessManagerMixin._queue_process_event(manager, ("line", ("job", "job", str(index))))
+        self.assertEqual(manager.process_exits.get_nowait(), ("exit", ("job", child, "job", 0)))
+        self.assertEqual(manager.log_queue.qsize(), 512)
+        self.assertEqual(manager.log_overruns, 1488)
+
+    def test_offline_tools_leave_ble_monitoring_connected(self):
+        for kind in ("plot", "processing", "motion_ai"):
+            with self.subTest(kind=kind):
+                manager = types.SimpleNamespace(
+                    processes={},
+                    _active_processes=lambda: [],
+                    _stop_ble_dashboard=Mock(),
+                    _append_log=Mock(),
+                    _set_status=Mock(),
+                    _display_command=Mock(return_value="python tool.py"),
+                    _update_controls=Mock(),
+                    _refresh_info=Mock(),
+                    _watch_process=Mock(),
+                    ble_sensor_connection=Mock(),
+                )
+                with (
+                    patch("aurora.gui.process_manager.threading.Thread"),
+                    patch("aurora.gui.process_manager.subprocess.Popen") as launch,
+                ):
+                    self.assertTrue(
+                        ProcessManagerMixin._start_program(
+                            manager, kind, kind, ["python", "tool.py"], parallel=True
+                        )
+                    )
+                manager._stop_ble_dashboard.assert_not_called()
+                manager.ble_sensor_connection.set.assert_not_called()
+                launch.assert_called_once()
+
+    def test_ble_monitor_keeps_the_reader_until_its_thread_has_stopped(self):
+        reader = Mock()
+        reader.thread.is_alive.return_value = True
+        dashboard = types.SimpleNamespace(
+            ble_reader=reader,
+            ble_graphs=Mock(),
+            ble_sensor_connection=Mock(),
+        )
+        self.assertFalse(BleDashboardMixin._stop_ble_dashboard(dashboard))
+        self.assertIs(dashboard.ble_reader, reader)
+        dashboard.ble_graphs.window.withdraw.assert_not_called()
+        reader.thread.is_alive.return_value = False
+        self.assertTrue(BleDashboardMixin._stop_ble_dashboard(dashboard))
+        self.assertIsNone(dashboard.ble_reader)
+        dashboard.ble_graphs.window.withdraw.assert_called_once()
+
+    def test_ble_handoff_runs_the_action_only_after_disconnect(self):
+        action = Mock()
+        dashboard = types.SimpleNamespace(
+            _ble_handoff_pending=False,
+            _stop_ble_dashboard=Mock(side_effect=[False, False, True]),
+            _update_controls=Mock(),
+            after=Mock(),
+            ble_sensor_connection=Mock(),
+        )
+        self.assertTrue(BleDashboardMixin._release_ble_for(dashboard, action))
+        action.assert_not_called()
+        finish = dashboard.after.call_args.args[1]
+        finish()
+        action.assert_not_called()
+        finish()
+        action.assert_called_once()
+        self.assertFalse(dashboard._ble_handoff_pending)
+
+    def test_live_pose_model_never_requires_a_startup_download(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary) / "mediapipe"
+            package.mkdir()
+            fake_mp = types.SimpleNamespace(__file__=str(package / "__init__.py"))
+            self.assertEqual(installed_pose_model_complexity(fake_mp), 1)
+            heavy = package / "modules" / "pose_landmark" / "pose_landmark_heavy.tflite"
+            heavy.parent.mkdir(parents=True)
+            heavy.touch()
+            self.assertEqual(installed_pose_model_complexity(fake_mp), 2)
+
+    def test_gui_opens_when_optional_sensor_packages_are_missing(self) -> None:
+        with (
+            patch("aurora.gui.app.importlib.util.find_spec", return_value=None),
+            patch.object(gui_app.sys, "argv", ["aurora"]),
+            patch("aurora.gui.app.subprocess.call") as relaunch,
+            patch("aurora.gui.app.tk.Tk") as create_window,
+            patch("aurora.gui.app.ProjectGui") as create_app,
+        ):
+            gui_app.main()
+        relaunch.assert_not_called()
+        create_app.assert_called_once_with(create_window.return_value)
+        create_window.return_value.mainloop.assert_called_once()
+
+    def test_default_capture_uses_camera_and_ble_sensors(self) -> None:
+        self.assertEqual(
+            DEFAULT_BATCH_SOURCES,
+            {"record_oak_pose.py", "record_ble_sensors.py"},
+        )
+        self.assertEqual(DEFAULT_BLE_SENSORS, ("imu", "emg"))
+
+    def test_firmware_project_uses_native_esp_idf_commands(self) -> None:
+        discovered = discover_firmware_projects()[str(Path("firmware") / "high_rate_emg_imu")]
+        project = FirmwareProject(
+            Path(ROOT.anchor) / "firmware" / "high_rate_emg_imu",
+            discovered.system,
+            discovered.executable,
+        )
+        self.assertEqual(project.system, "ESP-IDF")
+        self.assertEqual(project.executable, "idf.py")
+        with patch(
+            "aurora.gui.project_support.resolve_firmware_tool",
+            return_value=("idf.py",),
+        ):
+            self.assertEqual(
+                firmware_command(project, "build"),
+                ["idf.py", "build"],
+            )
+            self.assertEqual(
+                firmware_command(project, "flash", "COM4"),
+                ["idf.py", "-p", "COM4", "flash"],
+            )
+            self.assertEqual(
+                firmware_command(project, "monitor", "COM4"),
+                ["idf.py", "-p", "COM4", "monitor"],
+            )
+
+    def test_firmware_can_fall_back_to_platformio_with_esp_idf_only(self) -> None:
+        discovered = discover_firmware_projects()[str(Path("firmware") / "high_rate_emg_imu")]
+        project = FirmwareProject(
+            Path(ROOT.anchor) / "firmware" / "high_rate_emg_imu",
+            discovered.system,
+            discovered.executable,
+        )
+        platformio = str(Path(ROOT.anchor) / "tools" / "platformio")
+        with patch(
+            "aurora.gui.project_support.resolve_firmware_tool",
+            return_value=(platformio,),
+        ):
+            self.assertEqual(
+                firmware_command(project, "build"),
+                [platformio, "run"],
+            )
+            self.assertEqual(
+                firmware_command(project, "flash", "COM5"),
+                [
+                    platformio,
+                    "run",
+                    "-t",
+                    "upload",
+                    "--upload-port",
+                    "COM5",
+                ],
+            )
+            self.assertEqual(
+                firmware_command(project, "monitor", "COM5"),
+                [platformio, "device", "monitor", "--port", "COM5"],
+            )
+
+    def test_firmware_finds_platformio_installed_in_the_python_environment(self) -> None:
+        project = discover_firmware_projects()[str(Path("firmware") / "high_rate_emg_imu")]
+        python = Path(r"C:\env with spaces\python.exe")
+        with (
+            patch("aurora.gui.project_support.shutil.which", return_value=None),
+            patch("aurora.gui.project_support.importlib.util.find_spec", return_value=object()),
+            patch.object(sys, "executable", str(python)),
+        ):
+            self.assertEqual(
+                resolve_firmware_tool(project),
+                (str(python), "-m", "platformio"),
+            )
+
+    def test_firmware_refresh_detects_tools_installed_after_a_missing_result(self) -> None:
+        projects = discover_firmware_projects()
+        key = str(Path("firmware") / "high_rate_emg_imu")
+        project = projects[key]
+        tools = []
+        host = types.SimpleNamespace(
+            firmware_project=Mock(get=lambda: key),
+            firmware_project_box=Mock(),
+            _firmware_selection_changed=lambda: tools.append(resolve_firmware_tool(project)),
+        )
+        resolve_firmware_tool.cache_clear()
+        self.addCleanup(resolve_firmware_tool.cache_clear)
+        with (
+            patch("aurora.gui.project_support.shutil.which", return_value=None),
+            patch("aurora.gui.project_support.Path.is_file", return_value=False),
+            patch(
+                "aurora.gui.project_support.importlib.util.find_spec", return_value=None
+            ) as module,
+            patch("aurora.gui.project_tabs.discover_firmware_projects", return_value=projects),
+        ):
+            self.assertIsNone(resolve_firmware_tool(project))
+            module.return_value = object()
+            self.assertIsNone(resolve_firmware_tool(project))
+            ProjectTabsMixin._refresh_firmware(host)
+        self.assertEqual(tools, [(sys.executable, "-m", "platformio")])
+
+    def test_firmware_build_is_staged_when_repository_path_contains_spaces(self) -> None:
+        project = FirmwareProject(ROOT / "firmware with spaces", "ESP-IDF", "idf.py")
+        platformio = (sys.executable, "-m", "platformio")
+        with patch("aurora.gui.project_support.resolve_firmware_tool", return_value=platformio):
+            self.assertEqual(
+                firmware_command(project, "flash", "COM5"),
+                [
+                    sys.executable,
+                    str(FIRMWARE_WORKSPACE_SCRIPT),
+                    "--project",
+                    str(project.directory),
+                    "--",
+                    *platformio,
+                    "run",
+                    "-t",
+                    "upload",
+                    "--upload-port",
+                    "COM5",
+                ],
+            )
+
+    def test_firmware_wiring_and_role_addresses_match_the_current_arm(self) -> None:
+        project = ROOT / "firmware" / "high_rate_emg_imu"
+        source = (project / "main" / "main.c").read_text()
+        config = (project / "include" / "config.h").read_text()
+        self.assertIn('{IMU_SDA_PIN, IMU_SCL_PIN, "current harness"}', source)
+        self.assertIn('{4, 5, "LIMB-HT25"}', source)
+        self.assertIn('{8, 5, "AURORA prototype"}', source)
+        for name, value in {
+            "IMU_SDA_PIN": "GPIO_NUM_2",
+            "IMU_SCL_PIN": "GPIO_NUM_1",
+            "IMU_PRIMARY_ADDR": "0x6B",
+            "IMU_SECONDARY_ADDR": "0x6A",
+            "EMG_ADC_CHANNEL": "ADC_CHANNEL_0",
+            "EMG_SAMPLE_RATE_HZ": "4000",
+            "TRANSPORT_MODE": "TRANSPORT_BLE",
+        }.items():
+            with self.subTest(setting=name):
+                self.assertRegex(config, rf"(?m)^#define\s+{name}\s+{value}\b")
+        emg = (project / "main" / "emg.c").read_text()
+        self.assertIn("adc_continuous", emg)
+
+    def test_dual_imu_check_identifies_an_open_scl_conductor(self) -> None:
+        self.assertEqual(
+            i2c_wiring_hint(
+                {
+                    "sda_pin": 2,
+                    "scl_pin": 1,
+                    "external_sda_pullup": True,
+                    "external_scl_pullup": False,
+                }
+            ),
+            "SDA reaches GPIO2, but SCL does not reach GPIO1. "
+            "Check the SCL conductor and sensor power/ground.",
+        )
+
+    def test_running_preview_can_receive_another_window_request(self) -> None:
+        child_input = io.StringIO()
+        child = types.SimpleNamespace(poll=lambda: None, stdin=child_input)
+        managed = ManagedProcess("preview:ble", "BLE preview", "preview", child)
+        manager = types.SimpleNamespace(processes={"preview:ble": managed})
+        sent = ProcessManagerMixin._send_process_input(manager, "preview:ble", "show imu\n")
+        self.assertTrue(sent)
+        self.assertEqual(child_input.getvalue(), "show imu\n")
+
+    def test_source_specific_arguments_do_not_leak_between_recorders(self) -> None:
+        camera_options = ["--depth", "--pose-model", "2"]
+        self.assertEqual(
+            batch_arguments("record_oak_pose.py", camera_options, "1"),
+            ["--auto-start", *camera_options],
+        )
+        self.assertEqual(
+            batch_arguments("record_ble_sensors.py", camera_options, "1", ("imu", "emg")),
+            ["--sensors", "imu", "emg", "--dataset-label", "1"],
+        )
+        self.assertEqual(batch_arguments("record_serial_sensors.py", camera_options), [])
+        self.assertEqual(batch_arguments("record_high_rate_serial.py", camera_options), [])
+
+    def test_batch_sources_share_a_session_prefix_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            environment = {
+                "AURORA_OUTPUT_DIR": temporary,
+                "AURORA_SESSION_ID": "20260923_120000_batch",
+                "AURORA_BATCH_SOURCES": "record_ble_sensors.py,record_oak_pose.py",
+                "AURORA_TRIAL_ID": "T07",
+                "AURORA_TEST_TYPE": "combined",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                ble = create_session_directory("ble", "S01")
+                camera = create_session_directory("oak_pose", "S01")
+                metadata = experiment_metadata()
+            self.assertEqual(ble.name, "20260923_120000_batch_S01_ble")
+            self.assertEqual(camera.name, "20260923_120000_batch_S01_oak_pose")
+            self.assertEqual(metadata["session_id"], "20260923_120000_batch")
+            self.assertEqual(metadata["trial_id"], "T07")
+
+    def test_discovery_finds_maintained_and_training_capture_tools(self) -> None:
+        programs = discover_recording_programs()
+        names = {path.name for path in programs.values()}
+        self.assertTrue(
+            {
+                "record_ble_sensors.py",
+                "record_oak_pose.py",
+                "record_serial_sensors.py",
+                "capture_movement.py",
+            }.issubset(names)
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

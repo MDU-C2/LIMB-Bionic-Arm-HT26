@@ -4,10 +4,8 @@ idf_component_register(
   INCLUDE_DIRS
   "."
   REQUIRES
-  adc_manager
   can_driver
+  encoder
   imu
-  potentiometer
-  continuous_servo
   stepper
   limb_utils)

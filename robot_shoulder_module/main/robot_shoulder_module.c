@@ -1,49 +1,25 @@
-#include "adc_manager.h"
+#include <math.h>
+#include <stdlib.h>
+
 #include "can_driver.h"
-#include "continuous_servo.h"
+#include "encoder.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
-#include "hal/adc_types.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 #include "hal/ledc_types.h"
 #include "limb_utils.h"
-#include "portmacro.h"
-#include "potentiometer.h"
 #include "soc/gpio_num.h"
 #include "stepper.h"
-
-      //TODO: Change to stepper motor control functions for cases
-      //CAN_ID_ROBOT_SHOULDER_UP_DOWN_STOP, CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_STOP, CAN_ID_ROBOT_SHOULDER_UP_DOWN_ACTUATION, CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_ACTUATION
-      //
-      //motors_update_task uses potentiometer functions and need a encoder.h file to update this function
-      //All motor configuration structs use potentiometer functions and need a encoder.h file to update
-      //GPIO enums for all GPIOs should correspond to GPIO on new PCB layout
-      //Change configurations to have all motors on seperate .timers
-      //INFO:
-      //Stepper.c assumes the current velocity is the last commanded velocity
 
 static const char* const TAG = "Shoulder module";
 
 enum {
-  // NOTE: All of these should be measured at the maximum and minimum extents of
-  // the motor actuations you want to support. These values aren't accurate.
-  HV2060_MIN_PULSEWIDTH_US = 850,
-  HV2060_MAX_PULSEWIDTH_US = 2150,
-};
-
-enum {
-  SERVO_UP_DOWN_GPIO = GPIO_NUM_3,
-  // The channel number corresponds to the GPIO number.
-  POTENTIOMETER_UP_DOWN_CHANNEL = ADC_CHANNEL_2,
-
-  SERVO_LEFT_RIGHT_GPIO = GPIO_NUM_4,
-  // The channel number corresponds to the GPIO number.
-  POTENTIOMETER_LEFT_RIGHT_CHANNEL = ADC_CHANNEL_1,
-
-  // The channel number corresponds to the GPIO number.
-  POTENTIOMETER_ROTATION_CHANNEL = ADC_CHANNEL_0,
+  MOTOR_UPDATE_PERIOD_MS = 10,
+  MOTOR_STATUS_LOG_PERIOD = 100,
   STEPPER_UPPER_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
   STEPPER_UPPER_ARM_ROTATION_DIR_GPIO = GPIO_NUM_10,
   STEPPER_UPPER_ARM_ROTATION_STEP_GPIO = GPIO_NUM_7,
@@ -80,7 +56,7 @@ enum {
 // Motors are Joyit NEMA17-06
 
 static const stepper_control_config_t kUpDownRotationStepperConfig = {
-    .enable_gpio = STEPPER_UP_DOWN_ROTATION_ENABLE_GPIO,
+    .enable_gpio = STEPPER_UP_DOWN_ARM_ROTATION_ENABLE_GPIO,
     .dir_gpio = STEPPER_UP_DOWN_ROTATION_DIR_GPIO,
     .step_gpio = STEPPER_UP_DOWN_ROTATION_STEP_GPIO,
     .microstepping_mode = MICROSTEP_1_32,
@@ -93,8 +69,8 @@ static const stepper_control_config_t kUpDownRotationStepperConfig = {
     .max_speed_decreasing_angle = {40.F},
     .max_speed_increasing_angle = {40.F},
     .max_accel = {20.F},
-    .pwm_channel = LEDC_CHANNEL_2,
-    .pwm_timer = LEDC_TIMER_1,
+    .pwm_channel = LEDC_CHANNEL_0,
+    .pwm_timer = LEDC_TIMER_0,
     .steps_per_rev = 200,
     .encoder =
         {
@@ -120,8 +96,8 @@ static const stepper_control_config_t kLeftRightRotationStepperConfig = {
     .max_speed_decreasing_angle = {40.F},
     .max_speed_increasing_angle = {40.F},
     .max_accel = {20.F},
-    .pwm_channel = LEDC_CHANNEL_2,
-    .pwm_timer = LEDC_TIMER_1,
+    .pwm_channel = LEDC_CHANNEL_1,
+    .pwm_timer = LEDC_TIMER_2,
     .steps_per_rev = 200,
     .encoder =
         {
@@ -159,73 +135,41 @@ static const stepper_control_config_t kUpperArmRotationStepperConfig = {
             .joint_angle_to_encoder_angle_ratio = 1.F,
         },
 };
-//Can be removed as encoders are used instead check if used for anything else
-static const AdcMgrChannelConfig kAdcMgrChannelConfigs[] = {
-    (AdcMgrChannelConfig){
-        .channel = POTENTIOMETER_UP_DOWN_CHANNEL,
-        .sample_rate = 1000,
-    },
-    (AdcMgrChannelConfig){
-        .channel = POTENTIOMETER_LEFT_RIGHT_CHANNEL,
-        .sample_rate = 1000,
-    },
-    (AdcMgrChannelConfig){
-        .channel = POTENTIOMETER_ROTATION_CHANNEL,
-        .sample_rate = 1000,
-    },
-};
-//Can be removed as encoders are used instead check if used for anything else
-static const AdcMgrConfig kAdcMgrConfig = {
-    .channel_configs = kAdcMgrChannelConfigs,
-    .channel_configs_len = LIMB_ARR_LEN(kAdcMgrChannelConfigs),
-    .ms_worth_of_buffer_size = 100,
-};
-// -------------------------- This section is potentiometer buffers-----------------------------
+
+typedef struct {
+  EncoderAngle up_down;
+  EncoderAngle left_right;
+  EncoderAngle upper_arm_rotation;
+} ShoulderEncoderAngles;
+
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-static uint16_t s_potentiometer_up_down_underlying_buffer[1024] = {0}; //Where are these used?
-static uint16_t s_potentiometer_left_right_underlying_buffer[1024] = {0};
-static uint16_t s_potentiometer_rotation_underlying_buffer[1024] = {0};
-
-//The function below Will need revision or removal
-static AdcMgrReadResults s_adc_read_results = {
-    .channel_buffers =
-        {
-            [POTENTIOMETER_UP_DOWN_CHANNEL] =
-                {
-                    .data = s_potentiometer_up_down_underlying_buffer,
-                    .capacity =
-                        LIMB_ARR_LEN(s_potentiometer_up_down_underlying_buffer),
-                },
-            [POTENTIOMETER_LEFT_RIGHT_CHANNEL] =
-                {
-                    .data = s_potentiometer_left_right_underlying_buffer,
-                    .capacity = LIMB_ARR_LEN(
-                        s_potentiometer_left_right_underlying_buffer),
-                },
-            [POTENTIOMETER_ROTATION_CHANNEL] =
-                {
-                    .data = s_potentiometer_rotation_underlying_buffer,
-                    .capacity = LIMB_ARR_LEN(
-                        s_potentiometer_rotation_underlying_buffer),
-                },
-        },
-};
-
-static AdcMgrChannelBuffer* s_potentiometer_up_down_buffer =
-    &s_adc_read_results.channel_buffers[POTENTIOMETER_UP_DOWN_CHANNEL];
-static AdcMgrChannelBuffer* s_potentiometer_left_right_buffer =
-    &s_adc_read_results.channel_buffers[POTENTIOMETER_LEFT_RIGHT_CHANNEL];
-static AdcMgrChannelBuffer* s_potentiometer_rotation_buffer =
-    &s_adc_read_results.channel_buffers[POTENTIOMETER_ROTATION_CHANNEL];
-//----------------------------------------------------------potentiometer buffer section ends here-----------------------------
-static uint16_t s_latest_potentiometer_up_down_value = 0;
-static uint16_t s_latest_potentiometer_left_right_value = 0;
-static uint16_t s_latest_potentiometer_rotation_value = 0;
-
-static ContinuousServoHandle s_left_right_servo_handle; //Change to stepper_control_handle_t s_left_right_stepper_handle;
-static ContinuousServoHandle s_up_down_servo_handle; //Change to stepper_control_handle_t s_up_down_stepper_handle;
+static QueueHandle_t s_encoder_angles_queue;
+static stepper_control_handle_t s_left_right_stepper_handle;
+static stepper_control_handle_t s_up_down_stepper_handle;
 static stepper_control_handle_t s_upper_arm_rotation_stepper_handle;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+// Call this from the future encoder reader task after all three reads succeed.
+// Convert each sensor reading to degrees in its encoder's frame, for example
+// (EncoderAngle){.degree = up_down_degrees}. The stepper applies the joint
+// calibration separately.
+// Publish the first sample before motor initialization and refresh the angles
+// at least once per motor update period. Each call replaces all three together.
+[[maybe_unused]]
+static void update_encoder_angles(EncoderAngle up_down, EncoderAngle left_right,
+                                  EncoderAngle upper_arm_rotation) {
+  if (!isfinite(up_down.degree) || !isfinite(left_right.degree) ||
+      !isfinite(upper_arm_rotation.degree)) {
+    return;
+  }
+
+  const ShoulderEncoderAngles angles = {
+      .up_down = up_down,
+      .left_right = left_right,
+      .upper_arm_rotation = upper_arm_rotation,
+  };
+  xQueueOverwrite(s_encoder_angles_queue, &angles);
+}
 
 static void can_rx_task([[maybe_unused]] void* arg) {
   uint32_t can_id = 0;
@@ -238,14 +182,13 @@ static void can_rx_task([[maybe_unused]] void* arg) {
       ESP_LOGW(TAG, "Error calling can_receive: %s", esp_err_to_name(err));
       continue;
     }
-    //edit cases to use stepper functions instead of continuous_servo functions
     switch (can_id) {
       case CAN_ID_ROBOT_SHOULDER_UP_DOWN_STOP: {
-        continuous_servo_set_estop(s_up_down_servo_handle, true);
+        stepper_set_estop(s_up_down_stepper_handle, true);
         break;
       }
       case CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_STOP: {
-        continuous_servo_set_estop(s_left_right_servo_handle, true);
+        stepper_set_estop(s_left_right_stepper_handle, true);
         break;
       }
       case CAN_ID_ROBOT_UPPER_ARM_ROTATION_STOP: {
@@ -268,9 +211,8 @@ static void can_rx_task([[maybe_unused]] void* arg) {
             deserialize_float(can_buf + sizeof(float), kFromLittleEndian)};
         ESP_LOGI(TAG, "Received up/down actuation: angle=%f, velocity=%f dps",
                  joint_angle.degree, target_velocity.dps);
-        continuous_servo_set_target_angle(s_up_down_servo_handle, joint_angle);
-        continuous_servo_set_target_velocity(s_up_down_servo_handle,
-                                             target_velocity);
+        stepper_set_target_angle(s_up_down_stepper_handle, joint_angle);
+        stepper_set_target_velocity(s_up_down_stepper_handle, target_velocity);
         break;
       }
       case CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_ACTUATION: {
@@ -291,10 +233,9 @@ static void can_rx_task([[maybe_unused]] void* arg) {
         ESP_LOGI(TAG,
                  "Received left/right actuation: angle=%f, velocity=%f dps",
                  joint_angle.degree, target_velocity.dps);
-        continuous_servo_set_target_angle(s_left_right_servo_handle,
-                                          joint_angle);
-        continuous_servo_set_target_velocity(s_left_right_servo_handle,
-                                             target_velocity);
+        stepper_set_target_angle(s_left_right_stepper_handle, joint_angle);
+        stepper_set_target_velocity(s_left_right_stepper_handle,
+                                    target_velocity);
         break;
       }
       case CAN_ID_ROBOT_UPPER_ARM_ROTATION_ACTUATION: {
@@ -331,170 +272,71 @@ static void can_rx_task([[maybe_unused]] void* arg) {
 
   vTaskDelete(NULL);
 }
- //update task will need to be revised to use encoder functions instead of potentiometer functions
-static void motors_update_task([[maybe_unused]] void* args) {
-  enum { PERIOD_MS = 10 };
 
-  TickType_t current_tick = xTaskGetTickCount();
+// Existing CAN angle IDs retain their names and joint-angle payloads.
+static void send_joint_angle_status(stepper_control_handle_t handle,
+                                    EncoderAngle encoder_angle, uint32_t can_id,
+                                    const char* axis, bool log_status,
+                                    uint32_t* can_errors_count) {
+  const Encoder* encoder = &stepper_get_cfg(handle)->encoder;
+  const JointAngle joint_angle = to_joint_angle(encoder, encoder_angle);
 
-  while (true) {
-    xTaskDelayUntil(&current_tick, pdMS_TO_TICKS(PERIOD_MS));
-
-    // Read ADC.
-    esp_err_t err = adc_mgr_read(&s_adc_read_results, 0);
-    if (err != ESP_OK) {
-      ESP_LOGW(TAG, "Error calling adc_mgr_read: %s", esp_err_to_name(err));
-    }
-
-    s_latest_potentiometer_up_down_value =
-        moving_average16(s_latest_potentiometer_up_down_value,
-                         s_potentiometer_up_down_buffer->data,
-                         s_potentiometer_up_down_buffer->length);
-    s_potentiometer_up_down_buffer->length = 0;
-
-    s_latest_potentiometer_left_right_value =
-        moving_average16(s_latest_potentiometer_left_right_value,
-                         s_potentiometer_left_right_buffer->data,
-                         s_potentiometer_left_right_buffer->length);
-    s_potentiometer_left_right_buffer->length = 0;
-
-    s_latest_potentiometer_rotation_value =
-        moving_average16(s_latest_potentiometer_rotation_value,
-                         s_potentiometer_rotation_buffer->data,
-                         s_potentiometer_rotation_buffer->length);
-    s_potentiometer_rotation_buffer->length = 0;
-
-    // Update servos.
-    continuous_servo_update(s_up_down_servo_handle, PERIOD_MS,
-                            s_latest_potentiometer_up_down_value);
-    continuous_servo_update(s_left_right_servo_handle, PERIOD_MS,
-                            s_latest_potentiometer_left_right_value);
-    stepper_update(s_upper_arm_rotation_stepper_handle, PERIOD_MS,
-                   s_latest_potentiometer_rotation_value);
-
-    // Send up/down potentiometer status update.
-    {
-      PotentiometerAngle potentiometer_angle =
-          potentiometer_adc_to_angle(&kUpDownServoConfig.potentiometer,
-                                     s_latest_potentiometer_up_down_value);
-      JointAngle joint_angle = to_joint_angle(&kUpDownServoConfig.potentiometer,
-                                              potentiometer_angle);
-      static int i = 0;
-      if (++i == 100) {
-        i = 0;
-        PotentiometerAngle target_pot_angle =
-            continuous_servo_get_target_angle(s_up_down_servo_handle);
-        JointAngle target_joint_angle =
-            to_joint_angle(&kUpDownServoConfig.potentiometer, target_pot_angle);
-        AngularVelocity velocity =
-            continuous_servo_get_current_velocity(s_up_down_servo_handle);
-        ESP_LOGI(TAG,
-                 "up/down: adc=%u, curr pot=%.2f, target pot=%.2f, curr "
-                 "joint=%.2f, target joint=%.2f, velocity: %.2f",
-                 s_latest_potentiometer_up_down_value,
-                 potentiometer_angle.degree, target_pot_angle.degree,
-                 joint_angle.degree, target_joint_angle.degree, velocity.dps);
-      }
-
-      esp_err_t err = can_send(CAN_ID_ROBOT_SHOULDER_UP_DOWN_POTENTIOMETER,
-                               (uint8_t*)&joint_angle.degree,
-                               sizeof(joint_angle.degree), 0);
-      static uint32_t can_errors_count = 0;
-      if (err != ESP_OK) {
-        if (can_errors_count++ % 100 == 0) {
-          ESP_LOGW(TAG,
-                   "Error sending shoulder up/down angle over CAN: %s, total "
-                   "error count: %u",
-                   esp_err_to_name(err), can_errors_count);
-        }
-      }
-    }
-
-    // Send left/right potentiometer status update.
-    {
-      PotentiometerAngle potentiometer_angle =
-          potentiometer_adc_to_angle(&kLeftRightServoConfig.potentiometer,
-                                     s_latest_potentiometer_left_right_value);
-      JointAngle joint_angle = to_joint_angle(
-          &kLeftRightServoConfig.potentiometer, potentiometer_angle);
-
-      static int i = 33;
-      if (++i == 100) {
-        i = 0;
-        PotentiometerAngle target_pot_angle =
-            continuous_servo_get_target_angle(s_left_right_servo_handle);
-        JointAngle target_joint_angle = to_joint_angle(
-            &kLeftRightServoConfig.potentiometer, target_pot_angle);
-        AngularVelocity velocity =
-            continuous_servo_get_current_velocity(s_left_right_servo_handle);
-        ESP_LOGI(TAG,
-                 "left/right: adc=%u, curr pot=%.2f, target pot=%.2f, curr "
-                 "joint=%.2f, target joint=%.2f, velocity: %.2f",
-                 s_latest_potentiometer_left_right_value,
-                 potentiometer_angle.degree, target_pot_angle.degree,
-                 joint_angle.degree, target_joint_angle.degree, velocity.dps);
-      }
-
-      esp_err_t err = can_send(CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_POTENTIOMETER,
-                               (uint8_t*)&joint_angle.degree,
-                               sizeof(joint_angle.degree), 0);
-      static uint32_t can_errors_count = 0;
-      if (err != ESP_OK) {
-        if (can_errors_count++ % 100 == 0) {
-          ESP_LOGW(TAG,
-                   "Error sending shoulder left/right angle over CAN: %s, "
-                   "total error count: %u",
-                   esp_err_to_name(err), can_errors_count);
-        }
-      }
-    }
-
-    // Send upper arm rotation potentiometer status update.
-    {
-      PotentiometerAngle potentiometer_angle = potentiometer_adc_to_angle(
-          &kUpperArmRotationStepperConfig.potentiometer,
-          s_latest_potentiometer_rotation_value);
-      JointAngle joint_angle = to_joint_angle(
-          &kUpperArmRotationStepperConfig.potentiometer, potentiometer_angle);
-
-      static uint32_t i = 66;
-      if (++i >= 100) {  // Every 100ms
-        i = 0;
-        PotentiometerAngle target_pot_angle =
-            stepper_get_target_angle(s_upper_arm_rotation_stepper_handle);
-        JointAngle target_angle = to_joint_angle(
-            &kUpperArmRotationStepperConfig.potentiometer, target_pot_angle);
-        AngularVelocity velocity =
-            stepper_get_current_velocity(s_upper_arm_rotation_stepper_handle);
-        bool moving = stepper_is_moving(s_upper_arm_rotation_stepper_handle);
-
-        ESP_LOGI(TAG,
-                 "adc: %u, Stepper upper arm rotation - Current(pot): %.2f°, "
-                 "Target(pot): "
-                 "%.2f°, Current(Joint): %.2f, Target(Joint): %.2f, Velocity: "
-                 "%.2f°/s, Moving: %s",
-                 s_latest_potentiometer_rotation_value,
-                 potentiometer_angle.degree, target_pot_angle.degree,
-                 joint_angle.degree, target_angle.degree, velocity.dps,
-                 moving ? "Yes" : "No");
-      }
-
-      esp_err_t err = can_send(CAN_ID_ROBOT_UPPER_ARM_ROTATION_POTENTIOMETER,
-                               (uint8_t*)&joint_angle.degree,
-                               sizeof(joint_angle.degree), 0);
-      static uint32_t can_errors_count = 0;
-      if (err != ESP_OK) {
-        if (can_errors_count++ % 100 == 0) {
-          ESP_LOGW(TAG,
-                   "Error sending upper arm rotation angle over CAN: %s, total "
-                   " error count : %u",
-                   esp_err_to_name(err), can_errors_count);
-        }
-      }
-    }
+  if (log_status) {
+    EncoderAngle target_encoder_angle = stepper_get_target_angle(handle);
+    JointAngle target_joint_angle = to_joint_angle(encoder, target_encoder_angle);
+    AngularVelocity velocity = stepper_get_current_velocity(handle);
+    ESP_LOGI(TAG,
+             "%s: encoder=%.2f, target encoder=%.2f, joint=%.2f, "
+             "target joint=%.2f, velocity=%.2f dps, moving=%d",
+             axis, encoder_angle.degree, target_encoder_angle.degree,
+             joint_angle.degree, target_joint_angle.degree, velocity.dps,
+             stepper_is_moving(handle));
   }
 
-  vTaskDelete(NULL);
+  esp_err_t err = can_send(can_id, (const uint8_t*)&joint_angle.degree,
+                           sizeof(joint_angle.degree), 0);
+  if (err != ESP_OK && (*can_errors_count)++ % 100 == 0) {
+    ESP_LOGW(TAG, "Error sending %s angle over CAN: %s, total error count: %u",
+             axis, esp_err_to_name(err), *can_errors_count);
+  }
+}
+
+static void motors_update_task([[maybe_unused]] void* args) {
+  TickType_t current_tick = xTaskGetTickCount();
+  unsigned int log_tick = 0;
+  uint32_t up_down_can_errors = 0;
+  uint32_t left_right_can_errors = 0;
+  uint32_t upper_arm_rotation_can_errors = 0;
+
+  while (true) {
+    xTaskDelayUntil(&current_tick, pdMS_TO_TICKS(MOTOR_UPDATE_PERIOD_MS));
+
+    ShoulderEncoderAngles angles;
+    if (xQueuePeek(s_encoder_angles_queue, &angles, 0) != pdTRUE) {
+      continue;
+    }
+
+    stepper_update(s_up_down_stepper_handle, MOTOR_UPDATE_PERIOD_MS,
+                   angles.up_down);
+    stepper_update(s_left_right_stepper_handle, MOTOR_UPDATE_PERIOD_MS,
+                   angles.left_right);
+    stepper_update(s_upper_arm_rotation_stepper_handle, MOTOR_UPDATE_PERIOD_MS,
+                   angles.upper_arm_rotation);
+
+    log_tick = (log_tick + 1) % MOTOR_STATUS_LOG_PERIOD;
+    send_joint_angle_status(
+        s_up_down_stepper_handle, angles.up_down,
+        CAN_ID_ROBOT_SHOULDER_UP_DOWN_POTENTIOMETER, "up/down", log_tick == 0,
+        &up_down_can_errors);
+    send_joint_angle_status(
+        s_left_right_stepper_handle, angles.left_right,
+        CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_POTENTIOMETER, "left/right",
+        log_tick == 67, &left_right_can_errors);
+    send_joint_angle_status(
+        s_upper_arm_rotation_stepper_handle, angles.upper_arm_rotation,
+        CAN_ID_ROBOT_UPPER_ARM_ROTATION_POTENTIOMETER, "upper arm rotation",
+        log_tick == 34, &upper_arm_rotation_can_errors);
+  }
 }
 
 [[maybe_unused]]
@@ -522,69 +364,50 @@ void app_main(void) {
     }
   }
 
-  // ADC initialization.
-  //Remove this section as encoders are used instead of potentiometers, ensure no other code uses adc
-  {
-    esp_err_t err = adc_mgr_init(kAdcMgrConfig);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling adc_mgr_init: %s", esp_err_to_name(err));
-      abort();
-    }
+  s_encoder_angles_queue = xQueueCreate(1, sizeof(ShoulderEncoderAngles));
+  if (s_encoder_angles_queue == NULL) {
+    ESP_LOGE(TAG, "Failed to create encoder angle queue");
+    abort();
   }
 
-  // Servo and stepper initialization.
-  //Change to stepper_init for all motors and remove continuous_servo_init
-  {
-    vTaskDelay(pdMS_TO_TICKS(10));
-    esp_err_t err = adc_mgr_read(&s_adc_read_results, 0);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling adc_mgr_read: %s", esp_err_to_name(err));
-      abort();
-    }
+  // Start the future encoder reader here, after the queue exists. It must call
+  // update_encoder_angles() with the first valid sample to unblock startup.
+  ESP_LOGI(TAG, "Waiting for initial absolute encoder angles");
+  ShoulderEncoderAngles initial_angles;
+  if (xQueuePeek(s_encoder_angles_queue, &initial_angles, portMAX_DELAY) !=
+      pdTRUE) {
+    ESP_LOGE(TAG, "Failed to read initial encoder angles");
+    abort();
+  }
 
-    s_latest_potentiometer_up_down_value =
-        limb_average16(s_potentiometer_up_down_buffer->data,
-                       s_potentiometer_up_down_buffer->length);
-    s_potentiometer_up_down_buffer->length = 0;
-    s_latest_potentiometer_left_right_value =
-        limb_average16(s_potentiometer_left_right_buffer->data,
-                       s_potentiometer_left_right_buffer->length);
-    s_potentiometer_left_right_buffer->length = 0;
-    s_latest_potentiometer_rotation_value =
-        limb_average16(s_potentiometer_rotation_buffer->data,
-                       s_potentiometer_rotation_buffer->length);
-    s_potentiometer_rotation_buffer->length = 0;
+  if (kUpDownRotationStepperConfig.step_gpio == GPIO_NUM_NC ||
+      kLeftRightRotationStepperConfig.step_gpio == GPIO_NUM_NC) {
+    ESP_LOGE(TAG, "Set up/down and left/right STEP GPIOs for the shoulder PCB");
+    abort();
+  }
 
-    err = continuous_servo_init(&kUpDownServoConfig,
-                                s_latest_potentiometer_up_down_value,
-                                &s_up_down_servo_handle);
-    s_potentiometer_up_down_buffer->length = 0;
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling servos_init for up/down servo: %s",
-               esp_err_to_name(err));
-      abort();
-    }
+  esp_err_t err = stepper_init(&kUpDownRotationStepperConfig,
+                               initial_angles.up_down, &s_up_down_stepper_handle);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Error initializing up/down stepper: %s", esp_err_to_name(err));
+    abort();
+  }
 
-    err = continuous_servo_init(&kLeftRightServoConfig,
-                                s_latest_potentiometer_left_right_value,
-                                &s_left_right_servo_handle);
-    s_potentiometer_left_right_buffer->length = 0;
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling servos_init for left/right servo: %s",
-               esp_err_to_name(err));
-      abort();
-    }
+  err = stepper_init(&kLeftRightRotationStepperConfig, initial_angles.left_right,
+                     &s_left_right_stepper_handle);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Error initializing left/right stepper: %s",
+             esp_err_to_name(err));
+    abort();
+  }
 
-    err = stepper_init(&kUpperArmRotationStepperConfig,
-                       s_latest_potentiometer_rotation_value,
-                       &s_upper_arm_rotation_stepper_handle);
-    s_potentiometer_rotation_buffer->length = 0;
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG,
-               "Error calling stepper_init for upper arm rotation stepper: %s",
-               esp_err_to_name(err));
-      abort();
-    }
+  err = stepper_init(&kUpperArmRotationStepperConfig,
+                     initial_angles.upper_arm_rotation,
+                     &s_upper_arm_rotation_stepper_handle);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Error initializing upper arm rotation stepper: %s",
+             esp_err_to_name(err));
+    abort();
   }
 
 #if CONFIG_FORCE_REENABLE_CAN_ON_BUS_OFF

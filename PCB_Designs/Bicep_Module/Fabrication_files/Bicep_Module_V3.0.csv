@@ -1,0 +1,12 @@
+"Id";"Designator";"Footprint";"Quantity";"Designation";"Supplier and ref";
+1;"A1";"Pololu_Breakout-16_15.2x20.3mm";1;"Pololu_Breakout_DRV8825";;;
+2;"C1, C2";"CP_Wurth_WCAP-ASLI-D6.3L7.7";2;"100 uF";;;
+3;"C4";"C_Wurth_WCAP-CSGP-0603_R";1;"100nF";;;
+4;"D1";"D_SMA";1;"D_Schottky";;;
+5;"J1";"J_Wurth_WR-NPC2_626003110201";1;"Power In";;;
+6;"J2";"J_Wurth_WR-WTB_61900311121";1;"Extra GPIO";;;
+7;"J4";"J_Wurth_WR-WTB_68800411722";1;"Stepper Motor";;;
+8;"J5";"J_Wurth_WR-WTB_68800411722";1;"CAN";;;
+9;"J6";"J_Wurth_WR-WTB_68800411722";1;"SPI";;;
+10;"R1, R2, R3, R4, R5";"R_0805_2012Metric";5;"10K";;;
+11;"U1";"ESP32-C3-Zero_THT";1;"ESP32-C3-Zero";;;

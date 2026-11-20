@@ -1,0 +1,6 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "fp-lib-table") (type "Table") (uri "${KIPRJMOD}/fp-lib-table") (options "") (descr ""))
+	(lib (name "Connector_THT_Wurth") (type "KiCad") (uri "${WE_FOOTPRINT_DIR}/Connector_THT_Wurth.pretty") (options "") (descr ""))
+	(lib (name "Capacitor_SMD_Wurth") (type "KiCad") (uri "${WE_FOOTPRINT_DIR}/Capacitor_SMD_Wurth.pretty") (options "") (descr ""))
+)

@@ -1,0 +1,9 @@
+Reference;Qty;Value;Footprint;Datasheet;Description;Comments
+C2;1;100 uF;Capacitor_SMD_Wurth:CP_Wurth_WCAP-ASLL-D6.3L5.5;https://www.we-online.com/catalog/datasheet/875075561005.pdf?ki;Aluminum Polymer Capacitors Large Capacitance;
+D1;1;D_Schottky;Diode_SMD:D_SMA;https://docs.rs-online.com/28a6/0900766b80de2cd0.pdf;Schottky diode;
+J1;1;Power In;User_lib:J_Wurth_WR-NPC2_626002110201;https://www.we-online.com/catalog/datasheet/626002110201.pdf?ki;Male Header Single Row  NEW;
+J2;1;IMU;User_lib:J_Wurth_WR-WTB_68800411622;https://www.we-online.com/en/components/products/datasheet/68800411622?ki;2.50 mm “J” Type Vertical Male Shrouded Header;
+J12;1;68800611722;User_lib:J_Wurth_WR-WTB_68800611722;https://www.we-online.com/en/components/products/datasheet/68800611722?ki;2.50 mm “J” Type Male Horizontal Shrouded Header;
+J14;1;613004143121: CAN-BUS;Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical;https://www.we-online.com/components/products/datasheet/613004143121.pdf;2.50 mm “J” Type Vertical Male Shrouded Header;
+U1;1;ESP32-C3-Zero;User_lib:ESP32-C3-Zero_THT;https://www.waveshare.com/wiki/ESP32-C3-Zero#Resource;;
+U1;2;ESP32 Connector;9-pin Connectors for ESP32-C3 ;https://www.we-online.com/en/components/products/BTB_WR_PHD_2_54_MM_SOCKET_HEADER_SINGLE#/articles/BTB_WR_PHD_2_54_MM_SOCKET_HEADER_SINGLE_THT_STRAIGHT;;

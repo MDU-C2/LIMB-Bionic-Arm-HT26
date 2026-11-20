@@ -1,0 +1,67 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="ZPEb3NkDyiHAjDb1h1zW">
+    <mxGraphModel dx="1848" dy="1027" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="37T8lbg4sekj4OioNjcg-1" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-2" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;startArrow=classic;startFill=1;" target="37T8lbg4sekj4OioNjcg-4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Jetson AGX Orin" vertex="1">
+          <mxGeometry height="60" width="120" x="10" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-3" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-4" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;startArrow=classic;startFill=1;" target="37T8lbg4sekj4OioNjcg-7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="CAN Transceiver" vertex="1">
+          <mxGeometry height="60" width="120" x="170" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-5" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-7" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;startArrow=classic;startFill=1;" target="37T8lbg4sekj4OioNjcg-10" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-6" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-7" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="37T8lbg4sekj4OioNjcg-16" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="CAN Transceiver&lt;div&gt;(Shoulder)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="120" x="170" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-8" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-10" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;startArrow=classic;startFill=1;" target="37T8lbg4sekj4OioNjcg-13" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-9" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-10" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="37T8lbg4sekj4OioNjcg-17" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-10" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="CAN Transceiver&lt;div&gt;(Bicep)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="120" x="170" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-11" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-13" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;startArrow=classic;startFill=1;" target="37T8lbg4sekj4OioNjcg-15" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-12" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-13" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="37T8lbg4sekj4OioNjcg-18" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="CAN Transceiver&lt;div&gt;(Hand Motor)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="120" x="170" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-14" edge="1" parent="1" source="37T8lbg4sekj4OioNjcg-15" style="edgeStyle=none;curved=1;rounded=0;curveGeometry=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=12;defaultLabelBackgroundColor=page;startSize=8;endSize=8;" target="37T8lbg4sekj4OioNjcg-19" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="CAN Transceiver&lt;div&gt;(Hand Pressure)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="120" x="170" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="ESP32" vertex="1">
+          <mxGeometry height="60" width="80" x="330" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="ESP32" vertex="1">
+          <mxGeometry height="60" width="80" x="330" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="ESP32" vertex="1">
+          <mxGeometry height="60" width="80" x="330" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="37T8lbg4sekj4OioNjcg-19" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="ESP32" vertex="1">
+          <mxGeometry height="60" width="80" x="330" y="490" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

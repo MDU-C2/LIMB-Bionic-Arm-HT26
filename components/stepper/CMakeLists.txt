@@ -5,7 +5,7 @@ idf_component_register(
   # The stepper receives encoder angles, so its old ADC dependencies are disabled.
   # adc_manager
   # esp_adc
-  encoder
+  absolute_encoder
   freertos
   esp_driver_gpio
   esp_driver_ledc

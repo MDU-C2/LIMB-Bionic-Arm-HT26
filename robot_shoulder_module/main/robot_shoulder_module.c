@@ -171,6 +171,36 @@ static void update_encoder_angles(EncoderAngle up_down, EncoderAngle left_right,
   xQueueOverwrite(s_encoder_angles_queue, &angles);
 }
 
+// Define the three ENCODER_*_CS_GPIO constants from the PCB layout.
+static bool read_encoder_angle(gpio_num_t chip_select, EncoderAngle* angle) {
+  uint16_t counts;
+  if (amt22ReadEncoder(chip_select, &counts) != ESP_OK) {
+    return false;
+  }
+
+  *angle = (EncoderAngle){.degree = counts * (360.0f / 4096.0f)};
+  return true;
+}
+
+static void encoder_reader_task(void* arg) {
+  (void)arg;
+  TickType_t last_wake = xTaskGetTickCount();
+
+  for (;;) {
+    EncoderAngle up_down;
+    EncoderAngle left_right;
+    EncoderAngle upper_arm_rotation;
+
+    if (read_encoder_angle(ENCODER_UP_DOWN_CS_GPIO, &up_down) &&
+        read_encoder_angle(ENCODER_LEFT_RIGHT_CS_GPIO, &left_right) &&
+        read_encoder_angle(ENCODER_UPPER_ARM_CS_GPIO, &upper_arm_rotation)) {
+      update_encoder_angles(up_down, left_right, upper_arm_rotation);
+    }
+
+    xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(MOTOR_UPDATE_PERIOD_MS));
+  }
+}
+
 static void can_rx_task([[maybe_unused]] void* arg) {
   uint32_t can_id = 0;
   uint8_t can_buf[CAN_MAX_MESSAGE_SIZE] = {0};

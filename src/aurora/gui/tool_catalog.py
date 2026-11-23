@@ -234,6 +234,25 @@ TOOLS = {
         ("numpy", "scipy", "pybullet"),
         "Robot trajectory preview with position/speed limits. The inherited angles-only fit uses a one-second movement. This is separate from motor physics.",
     ),
+    "mimic_sim": Tool(
+        "Run synthetic Human Mimic",
+        "aurora.simulation.mimic_simulation",
+        (
+            MODE,
+            Setting(
+                "duration",
+                "Synthetic movement duration (seconds)",
+                "--duration",
+                4,
+                "float",
+                minimum=0.5,
+                maximum=30,
+            ),
+            Setting("headless", "Validate once without a window", "--headless", False, "bool"),
+        ),
+        ("numpy", "scipy", "pybullet"),
+        "Runs HumanMotionSample through progress tracking, phase-driven DMP, robot mapping and the left-arm PyBullet model. Uses explicit synthetic data, not participant measurements.",
+    ),
     "dmp_export": Tool(
         "Fit and export DMP",
         "aurora.gui.tool_jobs",

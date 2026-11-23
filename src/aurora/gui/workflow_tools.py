@@ -235,6 +235,7 @@ class WorkflowTools:
                 "dmp_experiment",
                 "dmp_comparison",
                 "dmp_synthetic",
+                "mimic_sim",
                 "dmp_play",
                 "dmp_export",
                 "joints",
@@ -849,7 +850,7 @@ class WorkflowTools:
             "recording"
             if key == "movement_capture"
             else "simulation"
-            if tool.hardware or key in {"joints", "dmp_play", "pose_play"}
+            if tool.hardware or key in {"joints", "dmp_play", "mimic_sim", "pose_play"}
             else "training"
             if key in {"emg_train", "movement_train"}
             else "analysis"

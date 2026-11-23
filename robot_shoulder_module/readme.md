@@ -7,19 +7,19 @@ This program is responsible for controlling three motors in the arm:
 - Upper arm rotation stepper motor
 
 > [!CAUTION]
-> Make sure the system is not powered when you run `idf.py flash` or `idf.py monitor` on
-> the shoulder node!
-> When you flash or monitor, the ESP-C3-Zero ends up sending signals on the pins connected to the
-> PWM data for the servos. This means the servos end up moving, and since they are modified to be
-> continuous, they don't stop moving until the flashing is finished or the monitor is connected!
+> Disconnect motor power before flashing or connecting the serial monitor.
+> The current `CAN_TX_GPIO` assignment uses GPIO6, which the ESP32-WROVER-IE uses for SPI flash.
+> Set `CAN_TX_GPIO` to the pin wired to the CAN transceiver before running the firmware.
 
 ## Steps for building and flashing the program
 
-The steps for building and flashing the ESP32-C3-Zero with the program are as follows:
+The shoulder node uses an ESP32-DevKitC V4 with an ESP32-WROVER-IE module.
+Use the `esp32` target in ESP-IDF.
+
 ```sh
-idf.py set-target esp32c3
+idf.py set-target esp32
 idf.py menuconfig # In case you need to configure some settings.
-idf.py build flash # Build and then flash the ESP32-C3-Zero connected to the computer.
+idf.py build flash
 ```
 
 Once you've set the target and set your configuration in menuconfig, you can just run the last command
@@ -27,9 +27,7 @@ from then on.
 
 ## Monitoring the program
 
-If you are connected to the ESP-C3-Zero from a computer via its USB-C
-port, you can monitor its output to see if things are working as they
-should by running:
+Connect the ESP32-DevKitC V4 to your computer over USB, then run:
 
 ```sh
 idf.py monitor

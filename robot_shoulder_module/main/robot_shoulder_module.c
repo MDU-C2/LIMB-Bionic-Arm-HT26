@@ -2,6 +2,8 @@
 #include <stdlib.h>
 
 #include "can_driver.h"
+#include "driver/gpio.h"
+#include "driver/spi_common.h"
 #include "encoder.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -17,20 +19,23 @@
 
 static const char* const TAG = "Shoulder module";
 
+//TODO: configuration need to be updated for the new encoders and stepper motors. The gear ratios and other parameters may need to be adjusted based on the specific hardware being used.
+
 enum {
   MOTOR_UPDATE_PERIOD_MS = 10,
   MOTOR_STATUS_LOG_PERIOD = 100,
+  ENCODER_RESOLUTION_BITS = 12,
+  ENCODER_COUNTS_PER_TURN = 1U << ENCODER_RESOLUTION_BITS,
   STEPPER_UPPER_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
-  STEPPER_UPPER_ARM_ROTATION_DIR_GPIO = GPIO_NUM_10,
-  STEPPER_UPPER_ARM_ROTATION_STEP_GPIO = GPIO_NUM_7,
+  STEPPER_UPPER_ARM_ROTATION_DIR_GPIO = GPIO_NUM_2,
+  STEPPER_UPPER_ARM_ROTATION_STEP_GPIO = GPIO_NUM_15,
 
   STEPPER_UP_DOWN_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
-  STEPPER_UP_DOWN_ROTATION_DIR_GPIO = GPIO_NUM_NC, //Change to correct GPIO for UP_DOWN when board layout is complete
-  STEPPER_UP_DOWN_ROTATION_STEP_GPIO = GPIO_NUM_NC, //Change to correct GPIO for UP_DOWN when board layout is complete
-
+  STEPPER_UP_DOWN_ROTATION_DIR_GPIO = GPIO_NUM_18, //Pin 17 is NC and is connected to pin 18 with a jumper on the PCB. Change to correct GPIO for UP_DOWN when board layout is complete
+  STEPPER_UP_DOWN_ROTATION_STEP_GPIO = GPIO_NUM_19, //Pin 16 is NC and is connected to pin 18 with a jumper on the PCB. Change to correct GPIO for UP_DOWN when board layout is complete
   STEPPER_LEFT_RIGHT_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
-  STEPPER_LEFT_RIGHT_ROTATION_DIR_GPIO = GPIO_NUM_NC, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
-  STEPPER_LEFT_RIGHT_ROTATION_STEP_GPIO = GPIO_NUM_NC, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
+  STEPPER_LEFT_RIGHT_ROTATION_DIR_GPIO = GPIO_NUM_4, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
+  STEPPER_LEFT_RIGHT_ROTATION_STEP_GPIO = GPIO_NUM_0, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
   
   // Microstepping pins.
   // NOTE: Since we're setting the stepper driver's pins in the hardware, we
@@ -47,8 +52,17 @@ enum {
   STEPPER_UP_DOWN_ROTATION_M1_GPIO = GPIO_NUM_NC,
   STEPPER_UP_DOWN_ROTATION_M2_GPIO = GPIO_NUM_NC,
 
-  CAN_TX_GPIO = GPIO_NUM_6,
-  CAN_RX_GPIO = GPIO_NUM_5,
+  CAN_TX_GPIO = GPIO_NUM_1,
+  CAN_RX_GPIO = GPIO_NUM_3,
+
+  // Shared SPI bus and four chip selects for the shoulder PCB.
+  ENCODER_CLK_GPIO = GPIO_NUM_14,
+  ENCODER_SPIMISO_GPIO = GPIO_NUM_12,
+  ENCODER_SPIMOSI_GPIO = GPIO_NUM_13,
+  ENCODER_CS_UPDOWN_GPIO = GPIO_NUM_26,
+  ENCODER_CS_LEFT_RIGHT_GPIO = GPIO_NUM_25,
+  ENCODER_CS_UPPER_ARM_GPIO = GPIO_NUM_33,
+  ENCODER_CS_BICEP_GPIO = GPIO_NUM_32,
 };
 
 
@@ -65,7 +79,7 @@ static const stepper_control_config_t kUpDownRotationStepperConfig = {
     .microstep_m1_gpio = STEPPER_UP_DOWN_ROTATION_M1_GPIO,
     .microstep_m2_gpio = STEPPER_UP_DOWN_ROTATION_M2_GPIO,
     .direction = STEPPER_DIR_NORMAL,
-    .gear_ratio = 15.F,
+    .gear_ratio = 120.F,
     .max_speed_decreasing_angle = {40.F},
     .max_speed_increasing_angle = {40.F},
     .max_accel = {20.F},
@@ -92,7 +106,7 @@ static const stepper_control_config_t kLeftRightRotationStepperConfig = {
     .microstep_m1_gpio = STEPPER_LEFT_RIGHT_ROTATION_M1_GPIO,
     .microstep_m2_gpio = STEPPER_LEFT_RIGHT_ROTATION_M2_GPIO,
     .direction = STEPPER_DIR_NORMAL,
-    .gear_ratio = 15.F,
+    .gear_ratio = 1.F,
     .max_speed_decreasing_angle = {40.F},
     .max_speed_increasing_angle = {40.F},
     .max_accel = {20.F},
@@ -140,6 +154,7 @@ typedef struct {
   EncoderAngle up_down;
   EncoderAngle left_right;
   EncoderAngle upper_arm_rotation;
+  EncoderAngle bicep;
 } ShoulderEncoderAngles;
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
@@ -149,52 +164,89 @@ static stepper_control_handle_t s_up_down_stepper_handle;
 static stepper_control_handle_t s_upper_arm_rotation_stepper_handle;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-// Call this from the future encoder reader task after all three reads succeed.
-// Convert each sensor reading to degrees in its encoder's frame, for example
-// (EncoderAngle){.degree = up_down_degrees}. The stepper applies the joint
-// calibration separately.
-// Publish the first sample before motor initialization and refresh the angles
-// at least once per motor update period. Each call replaces all three together.
-[[maybe_unused]]
-static void update_encoder_angles(EncoderAngle up_down, EncoderAngle left_right,
-                                  EncoderAngle upper_arm_rotation) {
-  if (!isfinite(up_down.degree) || !isfinite(left_right.degree) ||
-      !isfinite(upper_arm_rotation.degree)) {
+// Publish once each of the three shoulder motors has encoder feedback.
+static void update_encoder_angles(const ShoulderEncoderAngles* angles) {
+  if (!isfinite(angles->up_down.degree) || !isfinite(angles->left_right.degree) ||
+      !isfinite(angles->upper_arm_rotation.degree)) {
     return;
   }
 
-  const ShoulderEncoderAngles angles = {
-      .up_down = up_down,
-      .left_right = left_right,
-      .upper_arm_rotation = upper_arm_rotation,
-  };
-  xQueueOverwrite(s_encoder_angles_queue, &angles);
+  xQueueOverwrite(s_encoder_angles_queue, angles);
 }
 
-// Define the three ENCODER_*_CS_GPIO constants from the PCB layout.
+// Set up the shared SPI bus and leave all four chip selects idle high.
+static void init_encoders(void) {
+  const gpio_num_t chip_selects[] = {
+      ENCODER_CS_UPDOWN_GPIO,
+      ENCODER_CS_LEFT_RIGHT_GPIO,
+      ENCODER_CS_UPPER_ARM_GPIO,
+      ENCODER_CS_BICEP_GPIO,
+  };
+  uint64_t cs_pin_mask = 0;
+  for (size_t i = 0; i < LIMB_ARR_LEN(chip_selects); ++i) {
+    const gpio_num_t pin = chip_selects[i];
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
+      ESP_LOGE(TAG, "Encoder chip-select GPIO %d is invalid for this target", pin);
+      abort();
+    }
+    // Set the output latch high before enabling the active-low chip select.
+    ESP_ERROR_CHECK(gpio_set_level(pin, 1));
+    cs_pin_mask |= 1ULL << pin;
+  }
+
+  const gpio_config_t cs_config = {
+      .pin_bit_mask = cs_pin_mask,
+      .mode = GPIO_MODE_OUTPUT,
+      .pull_up_en = GPIO_PULLUP_DISABLE,
+      .pull_down_en = GPIO_PULLDOWN_DISABLE,
+      .intr_type = GPIO_INTR_DISABLE,
+  };
+  ESP_ERROR_CHECK(gpio_config(&cs_config));
+
+  spi_bus_config_t bus_config = {
+      .mosi_io_num = ENCODER_SPIMOSI_GPIO,
+      .miso_io_num = ENCODER_SPIMISO_GPIO,
+      .sclk_io_num = ENCODER_CLK_GPIO,
+      .quadwp_io_num = GPIO_NUM_NC,
+      .quadhd_io_num = GPIO_NUM_NC,
+      .data4_io_num = GPIO_NUM_NC,
+      .data5_io_num = GPIO_NUM_NC,
+      .data6_io_num = GPIO_NUM_NC,
+      .data7_io_num = GPIO_NUM_NC,
+  };
+  bitSizeMode(ENCODER_RESOLUTION_BITS == 12);
+  busInitalize(&bus_config);
+}
+
+// Convert a successful encoder read to degrees and keep the old angle on error.
 static bool read_encoder_angle(gpio_num_t chip_select, EncoderAngle* angle) {
   uint16_t counts;
   if (amt22ReadEncoder(chip_select, &counts) != ESP_OK) {
     return false;
   }
 
-  *angle = (EncoderAngle){.degree = counts * (360.0f / 4096.0f)};
+  *angle = (EncoderAngle){.degree = counts * (360.0f / ENCODER_COUNTS_PER_TURN)};
   return true;
 }
 
-static void encoder_reader_task(void* arg) {
-  (void)arg;
+// Refresh each encoder independently using its last successful angle.
+static void encoder_reader_task([[maybe_unused]] void* arg) {
+  ShoulderEncoderAngles angles = {
+      .up_down = {.degree = NAN},
+      .left_right = {.degree = NAN},
+      .upper_arm_rotation = {.degree = NAN},
+      .bicep = {.degree = NAN},
+  };
   TickType_t last_wake = xTaskGetTickCount();
 
   for (;;) {
-    EncoderAngle up_down;
-    EncoderAngle left_right;
-    EncoderAngle upper_arm_rotation;
-
-    if (read_encoder_angle(ENCODER_UP_DOWN_CS_GPIO, &up_down) &&
-        read_encoder_angle(ENCODER_LEFT_RIGHT_CS_GPIO, &left_right) &&
-        read_encoder_angle(ENCODER_UPPER_ARM_CS_GPIO, &upper_arm_rotation)) {
-      update_encoder_angles(up_down, left_right, upper_arm_rotation);
+    bool updated = read_encoder_angle(ENCODER_CS_UPDOWN_GPIO, &angles.up_down);
+    updated |= read_encoder_angle(ENCODER_CS_LEFT_RIGHT_GPIO, &angles.left_right);
+    updated |= read_encoder_angle(ENCODER_CS_UPPER_ARM_GPIO,
+                                  &angles.upper_arm_rotation);
+    updated |= read_encoder_angle(ENCODER_CS_BICEP_GPIO, &angles.bicep);
+    if (updated) {
+      update_encoder_angles(&angles);
     }
 
     xTaskDelayUntil(&last_wake, pdMS_TO_TICKS(MOTOR_UPDATE_PERIOD_MS));
@@ -303,7 +355,7 @@ static void can_rx_task([[maybe_unused]] void* arg) {
   vTaskDelete(NULL);
 }
 
-// Existing CAN angle IDs retain their names and joint-angle payloads.
+// Send the joint angle over the existing CAN ID and optionally log status.
 static void send_joint_angle_status(stepper_control_handle_t handle,
                                     EncoderAngle encoder_angle, uint32_t can_id,
                                     const char* axis, bool log_status,
@@ -366,6 +418,10 @@ static void motors_update_task([[maybe_unused]] void* args) {
         s_upper_arm_rotation_stepper_handle, angles.upper_arm_rotation,
         CAN_ID_ROBOT_UPPER_ARM_ROTATION_POTENTIOMETER, "upper arm rotation",
         log_tick == 34, &upper_arm_rotation_can_errors);
+
+    if (log_tick == 50 && isfinite(angles.bicep.degree)) {
+      ESP_LOGI(TAG, "Bicep encoder: %.2f degrees", angles.bicep.degree);
+    }
   }
 }
 
@@ -378,6 +434,8 @@ static void reenable_can_task([[maybe_unused]] void* pvParameter) {
 }
 
 void app_main(void) {
+  init_encoders();
+
   // CAN initialization.
   {
     CanMsgFilter can_filter = {
@@ -400,9 +458,13 @@ void app_main(void) {
     abort();
   }
 
-  // Start the future encoder reader here, after the queue exists. It must call
-  // update_encoder_angles() with the first valid sample to unblock startup.
-  ESP_LOGI(TAG, "Waiting for initial absolute encoder angles");
+  if (xTaskCreate(encoder_reader_task, "Encoder reader", 4096, NULL, 6, NULL) !=
+      pdPASS) {
+    ESP_LOGE(TAG, "Failed to create encoder reader task");
+    abort();
+  }
+
+  ESP_LOGI(TAG, "Waiting for initial shoulder motor encoder angles");
   ShoulderEncoderAngles initial_angles;
   if (xQueuePeek(s_encoder_angles_queue, &initial_angles, portMAX_DELAY) !=
       pdTRUE) {

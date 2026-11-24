@@ -13,6 +13,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from filters import EMGConfig, EMGProcessor, IMUConfig, IMUProcessor
+from reconstruct_timestamps import get_trial_start, relative_seconds
 from vision import VisionProcessor
 
 try:
@@ -28,8 +29,8 @@ PROCESSED_DIR = PROJECT_ROOT / "outputs" / "processed"
 PREVIEW_CALIBRATION_S = 0.5
 
 IMU_SENSOR_LABELS = {
-    0: "Wrist (IMU0)",
-    1: "Shoulder (IMU1)",
+    0: "Forearm/Wrist (IMU0)",
+    1: "Upper Arm/Shoulder (IMU1)",
 }
 IMU_FOREARM_SENSOR_ID = 0
 IMU_UPPER_ARM_SENSOR_ID = 1
@@ -100,7 +101,7 @@ def process_emg(rows: list[dict]):
 
 
 def process_imus(rows: list[dict]):
-    """Retain sensor IDs 0 and 1. NO assumed physical upper/forearm mapping."""
+    """Process the two sensor IDs separately (0=forearm, 1=upper arm)."""
     by_sensor: dict[int, list[dict]] = {}
     for row in rows:
         by_sensor.setdefault(int(row["sensor"]), []).append(row)
@@ -136,20 +137,23 @@ def process_camera(path: Path):
 def process_trial(trial: Path, save: bool = False):
     ble = trial / "ble"
     print(f"\nProcessing {trial.parent.name}/{trial.name}")
+    trial_start_ns = get_trial_start(trial)
     emg_rows = load_csv(ble / "emg.csv")
     imu_rows = load_csv(ble / "imu.csv")
+    for row in emg_rows + imu_rows:
+        row["aligned_time_s"] = relative_seconds(int(row["synced_host_monotonic_ns"]), trial_start_ns)
     emg_states = process_emg(emg_rows)
     imu_raw, imu_states = process_imus(imu_rows)
     cam_recording, cam_states = process_camera(trial / "camera" / "pose.json")
 
     results = {
-        "trial": trial, "emg_raw": emg_rows, "emg": emg_states,
+        "trial": trial, "trial_start_ns": trial_start_ns, "emg_raw": emg_rows, "emg": emg_states,
         "imu_raw": imu_raw, "imu": imu_states,
         "camera_raw": cam_recording, "camera": cam_states,
     }
     print(f"EMG: {len(emg_states)} samples")
     for sid, states in imu_states.items():
-        print(f"IMU sensor={sid}: {len(states)} samples (physical mounting not mapped)")
+        print(f"IMU sensor={sid}: {len(states)} samples (0=forearm, 1=upper arm)")
     print(f"Vision: {len(cam_states)} observations")
     if cam_states:
         print("Vision arm valid:", sum(x.arm.valid for x in cam_states),
@@ -203,17 +207,18 @@ def save_results(results: dict, out_dir: Path):
         "camera_valid_arm": sum(s.arm.valid for s in results["camera"]),
         "camera_valid_hand": sum(s.hand.tracking_valid for s in results["camera"]),
         "calibration_note": "First 0.5s preview baseline/gyro bias, not verified stationary/resting",
-        "synchronization_note": "Independent timestamps; no cross-sensor packet alignment done",
-        "imu_mapping_note": "Sensor IDs are not assigned to upper_arm/forearm",
+        "synchronization_note": "Common host time origin; physical sensor alignment and timing accuracy not validated",
+        "imu_mapping_note": "Sensor 0=forearm, sensor 1=upper arm; orientation frame alignment still uncalibrated",
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     if plt is not None:
         plot_emg_imu(results, show=False, save_to=out_dir / "emg_imu_preview.png")
         plot_camera(results, show=False, save_to=out_dir / "camera_preview.png")
+        plot_imu_orientation(results, show=False, save_to=out_dir / "imu_orientation_preview.png")
 
 
 def _sec(times: list[int], origin: int) -> list[float]:
-    return [(t - origin) / 1e9 for t in times]
+    return [relative_seconds(t, origin) for t in times]
 
 
 def plot_emg_imu(results: dict, show: bool = True, save_to: Path | None = None):
@@ -225,9 +230,7 @@ def plot_emg_imu(results: dict, show: bool = True, save_to: Path | None = None):
     ids = sorted(imu_raw)
     if not raw and not ids:
         return
-    origin = min([int(r["synced_host_monotonic_ns"]) for r in raw[:1]] + [
-        int(imu_raw[sid][0]["synced_host_monotonic_ns"]) for sid in ids if imu_raw[sid]
-    ])
+    origin = results["trial_start_ns"]
     # Keep old raw vs processed preview, for BOTH IMUs.
     nrows = 2 + 4 * len(ids)
     fig, axes = plt.subplots(nrows, 1, figsize=(14, max(6, 2.0 * nrows)), sharex=True, squeeze=False)
@@ -263,7 +266,7 @@ def plot_emg_imu(results: dict, show: bool = True, save_to: Path | None = None):
                 axes[base+j].legend(loc="upper right", ncol=3)
     for ax in axes:
         ax.grid(True, alpha=0.3)
-    axes[-1].set_xlabel("Time from first sample [s]")
+    axes[-1].set_xlabel("Time from trial start [s]")
     fig.tight_layout()
     if save_to:
         fig.savefig(save_to, dpi=140)
@@ -318,7 +321,7 @@ def plot_camera(results: dict, show: bool = True, save_to: Path | None = None):
     ]
 
     side = source.get("side", "left")
-    origin = states[0].timestamp_ns
+    origin = results["trial_start_ns"]
     t = _sec([s.timestamp_ns for s in states], origin)
 
     fig, axes = plt.subplots(
@@ -463,7 +466,7 @@ def plot_camera(results: dict, show: bool = True, save_to: Path | None = None):
         ax.grid(True, alpha=0.3)
 
     axes[-1].set_xlabel(
-        "Time from first camera observation [s]"
+        "Time from trial start [s]"
     )
 
     fig.tight_layout()
@@ -476,6 +479,53 @@ def plot_camera(results: dict, show: bool = True, save_to: Path | None = None):
     else:
         plt.close(fig)
 
+def quat_to_euler(q: tuple[float, float, float, float]):
+    """Quaternion (w,x,y,z) to roll/pitch/yaw in degrees, for preview only."""
+    w, x, y, z = q
+    roll = math.atan2(2.0*(w*x + y*z), 1.0 - 2.0*(x*x + y*y))
+    sinp = 2.0*(w*y - z*x)
+    pitch = math.asin(max(-1.0, min(1.0, sinp)))
+    yaw = math.atan2(2.0*(w*z + x*y), 1.0 - 2.0*(y*y + z*z))
+    return tuple(math.degrees(v) for v in (roll, pitch, yaw))
+
+
+def plot_imu_orientation(results: dict, show: bool = True, save_to: Path | None = None):
+    """Preview RPY for each IMU; the saved estimate remains a quaternion."""
+    if plt is None:
+        print("Install matplotlib to plot: pip install matplotlib")
+        return
+    imu_states = results["imu"]
+    if not imu_states:
+        print("No IMU data to preview")
+        return
+
+    ids = sorted(imu_states)
+    fig, axes = plt.subplots(len(ids), 1, figsize=(14, 4*len(ids)),
+                             sharex=True, squeeze=False)
+    for ax, sid in zip((row[0] for row in axes), ids):
+        states = imu_states[sid]
+        t = _sec([s.timestamp_ns for s in states], results["trial_start_ns"])
+        angles = [quat_to_euler(s.orientation_quat)
+                  if s.orientation_valid and s.orientation_quat is not None
+                  else (math.nan, math.nan, math.nan) for s in states]
+        for index, name in enumerate(("Roll (X)", "Pitch (Y)", "Yaw (Z)")):
+            ax.plot(t, [r[index] for r in angles], label=name)
+        ax.set_title(f"{IMU_SENSOR_LABELS.get(sid, f'IMU sensor={sid}')} - Orientation")
+        ax.set_ylabel("Angle [deg]")
+        ax.legend(loc="upper right", ncol=3)
+        ax.grid(True, alpha=0.3)
+        print(f"IMU{sid} orientation valid: {sum(s.orientation_valid for s in states)}/{len(states)}")
+    axes[-1][0].set_xlabel("Time from trial start [s]")
+    fig.suptitle("IMU Orientation Estimation")
+    fig.tight_layout()
+    if save_to:
+        fig.savefig(save_to, dpi=140)
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
 def main() -> int:
     while True:
         print("\n======================================")
@@ -483,25 +533,28 @@ def main() -> int:
         print("======================================")
         print("1. Preview EMG + both IMUs")
         print("2. Preview camera + finger tracking")
-        print("3. Process one recording + save CSV/JSONL/graphs")
-        print("4. Process all recordings")
-        print("5. Exit")
+        print("3. Preview IMU Orientation")
+        print("4. Process one recording + save CSV/JSONL/graphs")
+        print("5. Process all recordings")
+        print("6. Exit")
         choice = input("Select mode: ").strip()
-        if choice == "5":
+        if choice == "6":
             return 0
-        if choice in ("1", "2", "3"):
+        if choice in ("1", "2", "3", "4"):
             trial = _select_trial()
             if trial is None:
                 continue
             try:
-                results = process_trial(trial, save=choice == "3")
+                results = process_trial(trial, save=(choice == "4"))
                 if choice == "1":
                     plot_emg_imu(results)
                 elif choice == "2":
                     plot_camera(results)
+                elif choice == "3":
+                    plot_imu_orientation(results)
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 print(f"Cannot process trial: {exc}")
-        elif choice == "4":
+        elif choice == "5":
             trials = find_trials()
             print(f"Found {len(trials)} trials")
             for trial in trials:

@@ -1,2 +1,0 @@
-#define SAMPLING_FREQUENCY 3000
-

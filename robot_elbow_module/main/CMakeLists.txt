@@ -1,0 +1,16 @@
+idf_component_register(
+  SRCS
+  "main.c"
+  INCLUDE_DIRS
+  "."
+  REQUIRES
+  can_driver
+  absolute_encoder
+  elbow_feedback
+  esp_driver_gpio
+  esp_driver_spi
+  imu
+  stepper
+  driver
+  freertos
+  limb_utils)

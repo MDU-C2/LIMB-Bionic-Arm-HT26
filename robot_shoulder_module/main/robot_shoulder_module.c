@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 
@@ -22,13 +23,14 @@
 
 static const char* const TAG = "Shoulder module";
 
-#if CONFIG_LIMB_ENCODERLESS_DEMO
+// Manual motor-test branch: use counted STEP pulses without encoder feedback.
 static const bool kEnableOpenLoopControl = true;
-#else
-static const bool kEnableOpenLoopControl = false;
-#endif
 
-//TODO: configuration need to be updated for the new encoders and stepper motors. The gear ratios and other parameters may need to be adjusted based on the specific hardware being used.
+static const float kManualTestMaxAbsAngleDeg = 10.0f;
+static const float kManualTestMaxSpeedDps = 1.0f;
+
+// Manual-test wiring used by this firmware. Verify these GPIOs against the
+// physical shoulder PCB before applying motor power.
 
 enum {
   MOTOR_UPDATE_PERIOD_MS = 10,
@@ -38,11 +40,11 @@ enum {
   STEPPER_UPPER_ARM_ROTATION_STEP_GPIO = GPIO_NUM_15,
 
   STEPPER_UP_DOWN_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
-  STEPPER_UP_DOWN_ROTATION_DIR_GPIO = GPIO_NUM_18, //Pin 17 is NC and is connected to pin 18 with a jumper on the PCB. Change to correct GPIO for UP_DOWN when board layout is complete
-  STEPPER_UP_DOWN_ROTATION_STEP_GPIO = GPIO_NUM_19, //Pin 16 is NC and is connected to pin 18 with a jumper on the PCB. Change to correct GPIO for UP_DOWN when board layout is complete
+  STEPPER_UP_DOWN_ROTATION_DIR_GPIO = GPIO_NUM_18,
+  STEPPER_UP_DOWN_ROTATION_STEP_GPIO = GPIO_NUM_19,
   STEPPER_LEFT_RIGHT_ARM_ROTATION_ENABLE_GPIO = GPIO_NUM_NC,
-  STEPPER_LEFT_RIGHT_ROTATION_DIR_GPIO = GPIO_NUM_4, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
-  STEPPER_LEFT_RIGHT_ROTATION_STEP_GPIO = GPIO_NUM_0, //Change to correct GPIO for LEFT_RIGHT when board layout is complete
+  STEPPER_LEFT_RIGHT_ROTATION_DIR_GPIO = GPIO_NUM_4,
+  STEPPER_LEFT_RIGHT_ROTATION_STEP_GPIO = GPIO_NUM_0,
   
   // Microstepping pins.
   // NOTE: Since we're setting the stepper driver's pins in the hardware, we
@@ -175,13 +177,6 @@ static stepper_control_handle_t s_up_down_stepper_handle;
 static stepper_control_handle_t s_upper_arm_rotation_stepper_handle;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-typedef enum {
-  kShoulderUpDown,
-  kShoulderLeftRight,
-  kShoulderUpperArmRotation,
-  kShoulderAxisCount,
-} ShoulderAxis;
-
 typedef struct {
   const stepper_control_config_t* config;
   const stepper_control_handle_t* closed_loop_handle;
@@ -192,7 +187,7 @@ typedef struct {
   JointAngle starting_angle;
 } ShoulderAxisConfig;
 
-// In demo mode each starting angle must match the physical pose at arming.
+// In open-loop mode each starting angle must match the physical pose at boot.
 static const ShoulderAxisConfig kShoulderAxes[kShoulderAxisCount] = {
     [kShoulderUpDown] = {
         .config = &kUpDownRotationStepperConfig,
@@ -372,12 +367,7 @@ static void can_rx_task([[maybe_unused]] void* arg) {
   uint8_t can_buf_len;
 
   while (true) {
-    esp_err_t err = kEnableOpenLoopControl
-        ? can_receive_standard_data(&can_id, can_buf, &can_buf_len, portMAX_DELAY)
-        : can_receive(&can_id, can_buf, &can_buf_len, portMAX_DELAY);
-    if (kEnableOpenLoopControl && err == ESP_ERR_INVALID_RESPONSE) {
-      continue;
-    }
+    esp_err_t err = can_receive(&can_id, can_buf, &can_buf_len, portMAX_DELAY);
     if (err != ESP_OK) {
       ESP_LOGW(TAG, "Error calling can_receive: %s", esp_err_to_name(err));
       continue;
@@ -389,7 +379,7 @@ static void can_rx_task([[maybe_unused]] void* arg) {
       ++index;
     }
     if (index == kShoulderAxisCount) {
-      ESP_LOGW(TAG, "Unknown CAN Message received: 0x%x", can_id);
+      ESP_LOGW(TAG, "Unknown CAN message received: 0x%" PRIx32, can_id);
       continue;
     }
 
@@ -404,19 +394,27 @@ static void can_rx_task([[maybe_unused]] void* arg) {
     }
 
     if (can_buf_len != 2 * sizeof(float)) {
-      ESP_LOGW(TAG, "Invalid %s actuation payload length: %u", axis->name,
-               can_buf_len);
+      ESP_LOGW(TAG, "Invalid %s actuation payload length: %" PRIu8,
+               axis->name, can_buf_len);
       continue;
     }
 
     JointAngle joint_angle = {deserialize_float(can_buf, kFromLittleEndian)};
     AngularVelocity target_velocity = {
         deserialize_float(can_buf + sizeof(float), kFromLittleEndian)};
+    if (!isfinite(joint_angle.degree) || !isfinite(target_velocity.dps) ||
+        target_velocity.dps <= 0.0f ||
+        (kEnableOpenLoopControl &&
+         (fabsf(joint_angle.degree) > kManualTestMaxAbsAngleDeg ||
+          target_velocity.dps > kManualTestMaxSpeedDps))) {
+      ESP_LOGW(TAG, "Rejected unsafe %s manual-test command", axis->name);
+      continue;
+    }
+    ESP_LOGI(TAG, "Received %s actuation: angle=%f, velocity=%f dps",
+             axis->name, joint_angle.degree, target_velocity.dps);
     if (kEnableOpenLoopControl) {
       open_loop_stepper_set_target(index, joint_angle, target_velocity);
     } else {
-      ESP_LOGI(TAG, "Received %s actuation: angle=%f, velocity=%f dps",
-               axis->name, joint_angle.degree, target_velocity.dps);
       stepper_set_target_angle(*axis->closed_loop_handle, joint_angle);
       stepper_set_target_velocity(*axis->closed_loop_handle, target_velocity);
     }
@@ -430,7 +428,8 @@ static void send_can_joint_angle(JointAngle angle, uint32_t can_id,
   const esp_err_t err = can_send(can_id, (const uint8_t*)&payload,
                                  sizeof(payload), 0);
   if (err != ESP_OK && (*can_errors_count)++ % 100 == 0) {
-    ESP_LOGW(TAG, "Error sending %s angle over CAN: %s, total error count: %u",
+    ESP_LOGW(TAG,
+             "Error sending %s angle over CAN: %s, total error count: %" PRIu32,
              axis, esp_err_to_name(err), *can_errors_count);
   }
 }
@@ -539,17 +538,7 @@ static void start_shoulder_can_tasks(void) {
 static void open_loop_motors_task([[maybe_unused]] void* arg) {
   for (ShoulderAxis index = kShoulderUpDown; index < kShoulderAxisCount; ++index) {
     const ShoulderAxisConfig* axis = &kShoulderAxes[index];
-    // Reuse the existing static joint limits. No encoder readings are needed.
-    const Encoder* encoder = &axis->config->encoder;
-    const OpenLoopReference reference = {
-        .starting_angle = axis->starting_angle,
-        .min_angle = to_joint_angle(encoder, encoder->is_reversed
-            ? encoder->max_encoder_angle : encoder->min_encoder_angle),
-        .max_angle = to_joint_angle(encoder, encoder->is_reversed
-            ? encoder->min_encoder_angle : encoder->max_encoder_angle),
-        .joint_direction_reversed = encoder->is_reversed,
-    };
-    open_loop_stepper_init(index, axis->config, reference);
+    open_loop_stepper_init(index, axis->config, axis->starting_angle);
   }
   start_shoulder_can_tasks();
 
@@ -640,7 +629,8 @@ void app_main(void) {
     BaseType_t err = xTaskCreate(motors_update_task, "Motors update task",
                                  1024 * 2 * 2, NULL, 6, NULL);
     if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
+      ESP_LOGE(TAG, "Failed to create motors_update_task, err code: %d",
+               (int)err);
       abort();
     }
   }

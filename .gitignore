@@ -4,7 +4,9 @@
 
 # Generated build directories and local configuration
 **/build/
+**/.pio/
 **/sdkconfig
+**/sdkconfig.*
 **/sdkconfig.old
 **/managed_components/
 

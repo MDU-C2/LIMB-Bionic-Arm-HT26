@@ -142,9 +142,5 @@ esp_err_t can_send(uint32_t id, const uint8_t* data, uint8_t len,
 esp_err_t can_receive(uint32_t* id, uint8_t* data, uint8_t* len,
                       int timeout_ms);
 
-// Like can_receive, but reject extended and remote frames.
-esp_err_t can_receive_standard_data(uint32_t* id, uint8_t* data, uint8_t* len,
-                                    int timeout_ms);
-
 // Stop and deinitialize the node
 void can_deinit(void);

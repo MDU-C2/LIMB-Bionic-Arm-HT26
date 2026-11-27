@@ -2,6 +2,17 @@
 
 This program controls the elbow stepper motor and supports optional upper-arm IMU telemetry.
 
+## Encoder-free manual test branch
+
+`kEnableOpenLoopControl` is enabled in `main/main.c`. The elbow boots with its
+current physical position treated as joint `0 deg`, skips SPI encoder startup,
+accepts CAN actuation `0x240`, accepts STOP `0x140`, and publishes its estimated
+angle on `0x4A0`. Targets are limited to +/-10 degrees and speed to 1 degree/s.
+A new explicit actuation command rearms a previous CAN STOP.
+
+This estimate is based on commanded motion and cannot detect a stall or missed
+step. Use only on an unloaded test bench with an independent power cutoff.
+
 ## Steps for building and flashing the program
 
 The steps for building and flashing the ESP32-C3-Zero with the program are as follows:
@@ -23,11 +34,6 @@ should by running:
 ```sh
 idf.py monitor
 ```
-
-## Open-loop CAN motor test
-
-See the [encoderless motor demo](../motor_test/README.md) for the reference pose,
-bench validation and CAN controls.
 
 ## Configuration
 

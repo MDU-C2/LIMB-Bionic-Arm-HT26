@@ -20,20 +20,16 @@
 #include "hal/ledc_types.h"
 #include "imu.h"
 #include "limb_utils.h"
-#include "open_loop_stepper.h"
 #include "portmacro.h"
 #include "soc/gpio_num.h"
 #include "stepper.h"
 
 static const char* const TAG = "robot_elbow_module";
 
-#if CONFIG_LIMB_ENCODERLESS_DEMO
+// Manual motor-test branch: run the elbow from CAN without encoder feedback.
 static const bool kEnableOpenLoopControl = true;
-#else
-static const bool kEnableOpenLoopControl = false;
-#endif
-
-enum { ELBOW_AXIS = 0 };
+static const float kManualTestMaxAbsAngleDeg = 10.0f;
+static const float kManualTestMaxSpeedDps = 1.0f;
 
 enum {
   // Elbow V3.0 CAN transceiver connector J5.
@@ -59,6 +55,11 @@ enum {
   // PWM timers and channels
   PWM_ELBOW_CHANNEL = LEDC_CHANNEL_0,
   PWM_ELBOW_TIMER = LEDC_TIMER_0,
+
+  TASK_STACK_DEPTH = 4096,
+  TASK_STEPPER_UPDATE_PRIORITY = 6,
+  TASK_CAN_RX_PRIORITY = 5,
+  TASK_IMU_PRIORITY = 4,
 };
 
 #if CONFIG_IMU_ENABLED
@@ -109,10 +110,14 @@ static const stepper_control_config_t s_elbow_stepper_cfg = {
     //         .is_reversed = true,
     //     },
 
+    // Synthetic encoder frame used only by the encoder-free manual test.
+    // Encoder 110 degrees is joint zero; the allowed test range is +/-10 degrees.
     .encoder = {
-        // Set the measured range, endpoints, ratio and direction for this encoder.
-        // A zero ratio marks the calibration as missing and blocks motor startup.
-        .joint_angle_to_encoder_angle_ratio = 0.0F,
+        .range_of_motion = {285.0F},
+        .min_encoder_angle_as_joint_angle = {-10.0F},
+        .min_encoder_angle = {100.0F},
+        .max_encoder_angle = {120.0F},
+        .joint_angle_to_encoder_angle_ratio = 1.0F,
     },
 };
 
@@ -156,6 +161,7 @@ static const stepper_control_config_t s_elbow_stepper_cfg = {
 
 static stepper_control_handle_t s_elbow_stepper_handle = {0};
 static QueueHandle_t s_elbow_feedback_queue;
+static EncoderAngle s_open_loop_estimated_encoder_angle = {110.0F};
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 static void can_rx_task([[maybe_unused]] void* pvParameter) {
@@ -164,12 +170,7 @@ static void can_rx_task([[maybe_unused]] void* pvParameter) {
   uint32_t rx_id = 0;
 
   while (1) {
-    esp_err_t err = kEnableOpenLoopControl
-        ? can_receive_standard_data(&rx_id, msg_rx, &rx_len, portMAX_DELAY)
-        : can_receive(&rx_id, msg_rx, &rx_len, portMAX_DELAY);
-    if (kEnableOpenLoopControl && err == ESP_ERR_INVALID_RESPONSE) {
-      continue;
-    }
+    esp_err_t err = can_receive(&rx_id, msg_rx, &rx_len, portMAX_DELAY);
     if (err != ESP_OK) {
       ESP_LOGW(TAG, "Error calling can_receive: %s", esp_err_to_name(err));
       continue;
@@ -192,23 +193,27 @@ static void can_rx_task([[maybe_unused]] void* pvParameter) {
             deserialize_float(msg_rx, kFromLittleEndian)};
         AngularVelocity target_velocity = {
             deserialize_float(msg_rx + sizeof(float), kFromLittleEndian)};
-        if (kEnableOpenLoopControl) {
-          open_loop_stepper_set_target(ELBOW_AXIS, target_angle, target_velocity);
-        } else {
-          stepper_set_target_angle(s_elbow_stepper_handle, target_angle);
-          stepper_set_target_velocity(s_elbow_stepper_handle, target_velocity);
-          ESP_LOGI(TAG,
-                   "Received elbow actuation: angle=%f degrees, velocity=%f dps",
-                   target_angle.degree, target_velocity.dps);
+        if (!isfinite(target_angle.degree) ||
+            !isfinite(target_velocity.dps) || target_velocity.dps <= 0.0F ||
+            (kEnableOpenLoopControl &&
+             (fabsf(target_angle.degree) > kManualTestMaxAbsAngleDeg ||
+              target_velocity.dps > kManualTestMaxSpeedDps))) {
+          ESP_LOGW(TAG, "Rejected unsafe elbow manual-test command");
+          break;
         }
+        stepper_set_target_angle(s_elbow_stepper_handle, target_angle);
+        stepper_set_target_velocity(s_elbow_stepper_handle, target_velocity);
+        if (kEnableOpenLoopControl) {
+          // A fresh START command explicitly rearms an earlier CAN STOP.
+          stepper_set_estop(s_elbow_stepper_handle, false);
+        }
+        ESP_LOGI(TAG,
+                 "Received elbow actuation: angle=%f degrees, velocity=%f dps",
+                 target_angle.degree, target_velocity.dps);
         break;
       }
       case CAN_ID_ROBOT_ELBOW_UP_DOWN_STOP: {
-        if (kEnableOpenLoopControl) {
-          open_loop_stepper_request_stop(ELBOW_AXIS);
-        } else {
-          stepper_set_estop(s_elbow_stepper_handle, true);
-        }
+        stepper_set_estop(s_elbow_stepper_handle, true);
         ESP_LOGI(TAG, "Received stop command: 0x%" PRIx32, rx_id);
         break;
       }
@@ -493,23 +498,94 @@ static void stepper_task([[maybe_unused]] void* pvParameter) {
   }
 }
 
-static void open_loop_stepper_task([[maybe_unused]] void* arg) {
-  TickType_t tick = xTaskGetTickCount();
-  unsigned elapsed_ms = 0;
-  while (true) {
-    xTaskDelayUntil(&tick, pdMS_TO_TICKS(OPEN_LOOP_UPDATE_PERIOD_MS));
-    open_loop_stepper_update(ELBOW_AXIS);
-    elapsed_ms += OPEN_LOOP_UPDATE_PERIOD_MS;
-    if (elapsed_ms >= 10) {
-      elapsed_ms = 0;
-      const float angle = htolef(open_loop_stepper_get_angle(ELBOW_AXIS).degree);
-      can_send(CAN_ID_ROBOT_ELBOW_UP_DOWN_POTENTIOMETER,
-               (const uint8_t*)&angle, sizeof(angle), 0);
+static void init_elbow_can(void) {
+  const CanMsgFilter can_filter = {
+      .id = CAN_RECIPIENT_ROBOT_ELBOW,
+      .ignore_mask = create_filter_mask(CAN_MESSAGE_TYPE_FILTER_ANY,
+                                        CAN_RECIPIENT_FILTER_EXACT,
+                                        CAN_GENERIC_FILTER_ANY),
+  };
+  const esp_err_t err =
+      can_init(CAN_TX_PIN, CAN_RX_PIN, CAN_BAUDRATE, &can_filter);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize CAN driver: %s", esp_err_to_name(err));
+    abort();
+  }
+}
+
+// Encoder-free test loop. The estimate starts at joint zero on every boot and
+// follows the velocity sent to the existing STEP/DIR generator.
+static void open_loop_stepper_task([[maybe_unused]] void* pvParameter) {
+  const uint16_t dt_ms = 10;
+  TickType_t last_wake_time = xTaskGetTickCount();
+  uint32_t can_errors_count = 0;
+  uint32_t status_counter = 0;
+
+  for (;;) {
+    xTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(dt_ms));
+    stepper_update(s_elbow_stepper_handle, dt_ms,
+                   s_open_loop_estimated_encoder_angle);
+
+    const AngularVelocity velocity =
+        stepper_get_current_velocity(s_elbow_stepper_handle);
+    s_open_loop_estimated_encoder_angle.degree +=
+        velocity.dps * ((float)dt_ms / 1000.0F);
+    s_open_loop_estimated_encoder_angle = clamp_encoder_angle(
+        &s_elbow_stepper_cfg.encoder, s_open_loop_estimated_encoder_angle);
+
+    const JointAngle estimated_joint_angle = to_joint_angle(
+        &s_elbow_stepper_cfg.encoder, s_open_loop_estimated_encoder_angle);
+    const float can_angle = htolef(estimated_joint_angle.degree);
+    const esp_err_t err = can_send(CAN_ID_ROBOT_ELBOW_UP_DOWN_POTENTIOMETER,
+                                   (const uint8_t*)&can_angle,
+                                   sizeof(can_angle), 0);
+    if (err != ESP_OK && can_errors_count++ % 100 == 0) {
+      ESP_LOGW(TAG, "Error sending estimated elbow angle: %s, count: %" PRIu32,
+               esp_err_to_name(err), can_errors_count);
+    }
+
+    if (++status_counter >= 100) {
+      status_counter = 0;
+      ESP_LOGI(TAG, "Manual test estimate: %.2f deg, speed: %.2f deg/s",
+               estimated_joint_angle.degree, velocity.dps);
     }
   }
 }
 
-static bool init_encoder_motor(void) {
+void app_main(void) {
+  ESP_LOGI(TAG, "Robot elbow module starting...");
+
+  if (kEnableOpenLoopControl) {
+    ESP_LOGW(TAG, "ENCODER-FREE MANUAL TEST MODE: boot position is joint 0 deg");
+    esp_err_t stepper_error =
+        stepper_init(&s_elbow_stepper_cfg,
+                     s_open_loop_estimated_encoder_angle,
+                     &s_elbow_stepper_handle);
+    if (stepper_error != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to initialize elbow test stepper: %s",
+               esp_err_to_name(stepper_error));
+      abort();
+    }
+    init_elbow_can();
+
+    if (xTaskCreate(can_rx_task, "can_rx", TASK_STACK_DEPTH, NULL,
+                    TASK_CAN_RX_PRIORITY, NULL) != pdPASS ||
+        xTaskCreate(open_loop_stepper_task, "open_loop_stepper",
+                    TASK_STACK_DEPTH, NULL, TASK_STEPPER_UPDATE_PRIORITY,
+                    NULL) != pdPASS) {
+      ESP_LOGE(TAG, "Failed to create encoder-free elbow tasks");
+      abort();
+    }
+#if CONFIG_FORCE_REENABLE_CAN_ON_BUS_OFF
+    if (xTaskCreate(reenable_can_task, "reenable_can_task", TASK_STACK_DEPTH,
+                    NULL, TASK_CAN_RX_PRIORITY + 1, NULL) != pdPASS) {
+      ESP_LOGE(TAG, "Failed to create reenable_can_task");
+      abort();
+    }
+#endif
+    return;
+  }
+
   const Encoder* calibration = &s_elbow_stepper_cfg.encoder;
   const float encoder_ratio = calibration->joint_angle_to_encoder_angle_ratio;
   const bool calibration_valid =
@@ -524,7 +600,7 @@ static bool init_encoder_motor(void) {
     ESP_LOGW(TAG, "Elbow motor startup blocked: encoder calibration is missing or invalid");
   }
   if (!init_elbow_feedback_spi() || !calibration_valid) {
-    return false;
+    return;
   }
 
   ESP_LOGI(TAG, "Waiting for initial elbow encoder feedback over SPI");
@@ -539,45 +615,8 @@ static bool init_encoder_motor(void) {
              esp_err_to_name(stepper_error));
     abort();
   }
-  return true;
-}
 
-void app_main(void) {
-  ESP_LOGI(TAG, "Robot elbow module starting...");
-
-  if (kEnableOpenLoopControl) {
-    // Reuse the legacy potentiometer joint mapping above: the configured
-    // minimum is 0 deg and the span is (195 - 123) / (18 / 15) = 60 deg.
-    const OpenLoopReference reference = {
-        .starting_angle = {0.0f},
-        .min_angle = {0.0f},
-        .max_angle = {(195.0f - 123.0f) / (18.0f / 15.0f)},
-        .joint_direction_reversed = true,
-    };
-    open_loop_stepper_init(ELBOW_AXIS, &s_elbow_stepper_cfg, reference);
-  } else if (!init_encoder_motor()) {
-    return;
-  }
-
-  // Initialize CAN.
-  {
-    CanMsgFilter can_filter = {
-        // We want to accept all messages that are sent with the elbow node as
-        // the recipient.
-        .id = CAN_RECIPIENT_ROBOT_ELBOW,
-        .ignore_mask = create_filter_mask(CAN_MESSAGE_TYPE_FILTER_ANY,
-                                          CAN_RECIPIENT_FILTER_EXACT,
-                                          CAN_GENERIC_FILTER_ANY),
-    };
-    esp_err_t err = can_init(CAN_TX_PIN, CAN_RX_PIN, CAN_BAUDRATE, &can_filter);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Failed to initialize CAN driver: %s",
-               esp_err_to_name(err));
-      abort();
-    }
-    ESP_LOGI(TAG, "CAN initialized (TX=%d, RX=%d, %d baud)", CAN_TX_PIN,
-             CAN_RX_PIN, CAN_BAUDRATE);
-  }
+  init_elbow_can();
 
 #if CONFIG_IMU_ENABLED
   const bool imu_pins_assigned =
@@ -630,15 +669,6 @@ void app_main(void) {
   // }
   // s_adc_mgr_elbow_buffer->length = 0;
 
-  // Create FreeRTOS tasks
-  enum {
-    TASK_STACK_DEPTH = 4096,
-    TASK_STEPPER_UPDATE_PRIORITY = 6,
-    TASK_CAN_RX_PRIORITY = 5,
-    TASK_IMU_PRIORITY = 4,
-    TASK_STEPPER_TEST_PRIORITY = 3,
-  };
-
   {
     BaseType_t err = xTaskCreate(can_rx_task, "can_rx", TASK_STACK_DEPTH, NULL,
                                  TASK_CAN_RX_PRIORITY, NULL);
@@ -672,9 +702,7 @@ void app_main(void) {
 #endif
 
   {
-    TaskFunction_t motor_task = kEnableOpenLoopControl
-        ? open_loop_stepper_task : stepper_task;
-    BaseType_t err = xTaskCreate(motor_task, "stepper_task", TASK_STACK_DEPTH,
+    BaseType_t err = xTaskCreate(stepper_task, "stepper_task", TASK_STACK_DEPTH,
                                  NULL, TASK_STEPPER_UPDATE_PRIORITY, NULL);
     if (err != pdPASS) {
       ESP_LOGE(TAG, "Failed to create stepper task, err code: %ld", (long)err);

@@ -11,7 +11,6 @@ idf_component_register(
   esp_driver_spi
   imu
   stepper
-  open_loop_stepper
   driver
   freertos
   limb_utils)

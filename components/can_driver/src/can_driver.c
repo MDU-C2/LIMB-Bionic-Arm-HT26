@@ -6,7 +6,6 @@
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "hal/twai_types_deprecated.h"
 #include "portmacro.h"
 
 static const char* TAG = "CAN_DRIVER";
@@ -124,6 +123,11 @@ esp_err_t can_init(int tx_pin, int rx_pin, int baudrate,
 
 esp_err_t can_send(uint32_t id, const uint8_t* data, uint8_t len,
                    uint32_t ms_to_wait) {
+  if (id > 0x7FFU || len > CAN_MAX_MESSAGE_SIZE ||
+      (len > 0U && data == NULL)) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
   twai_message_t message = {
       .identifier = id,
       .data_length_code = len,
@@ -137,37 +141,24 @@ esp_err_t can_send(uint32_t id, const uint8_t* data, uint8_t len,
   return twai_transmit(&message, pdMS_TO_TICKS(ms_to_wait));
 }
 
-static esp_err_t receive_frame(uint32_t* id, uint8_t* data, uint8_t* len,
-                               int timeout_ms, bool standard_data_only) {
+esp_err_t can_receive(uint32_t* id, uint8_t* data, uint8_t* len,
+                      int timeout_ms) {
+  if (id == NULL || data == NULL || len == NULL) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
   twai_message_t message;
   esp_err_t ret = twai_receive(&message, pdMS_TO_TICKS(timeout_ms));
 
   if (ret == ESP_OK) {
-    if (standard_data_only && (message.extd || message.rtr)) {
-      return ESP_ERR_INVALID_RESPONSE;
-    }
     *id = message.identifier;
     *len = message.data_length_code;
 
-    // Since we don't support CAN FD, we know the maximum size of the
-    // message data is 8 bytes, meaning we can do a direct copy by
-    // treating the data buffer as an 8-byte integer.
-    // NOTE: We assume that the user has provided a buffer that's at least
-    // 8 bytes.
+    // The caller provides an eight-byte Classic CAN buffer.
     memcpy(data, message.data, CAN_MAX_MESSAGE_SIZE);
   }
 
   return ret;
-}
-
-esp_err_t can_receive(uint32_t* id, uint8_t* data, uint8_t* len,
-                      int timeout_ms) {
-  return receive_frame(id, data, len, timeout_ms, false);
-}
-
-esp_err_t can_receive_standard_data(uint32_t* id, uint8_t* data, uint8_t* len,
-                                    int timeout_ms) {
-  return receive_frame(id, data, len, timeout_ms, true);
 }
 
 void can_deinit(void) {

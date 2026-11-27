@@ -1,49 +1,87 @@
-# Temporary encoderless motor demo
+# LIMB – Bionic Arm
 
-## Build and flash
+Project repository for the **DVA490 / DVA474 – Projektkurs i Robotik** course at Mälardalen University (MDU), autumn semester 2026 (HT2026).
 
-Use ESP-IDF v5.5.2. With motor power disconnected, run these commands in each firmware directory.
+Course center: [Projects @ Collaborative Center (C2) MDU](https://github.com/MDU-C2)
 
-| Directory | Target |
-| --- | --- |
-| `robot_shoulder_module` | `esp32` |
-| `robot_elbow_module` | `esp32c3` |
+## Encoder-free manual motor test
 
-```sh
-idf.py set-target <target>
-idf.py menuconfig
-# Turn on LIMB config → Enable temporary encoderless motor demo.
-idf.py -p <serial-port> build flash
+This branch is a temporary bench-test configuration for all four arm motors.
+It deliberately does not use physical encoder feedback:
+
+- `robot_shoulder_module`: shoulder up/down, shoulder left/right and upper-arm rotation.
+- `robot_elbow_module`: bicep/elbow rotation.
+- `motor_control.py`: manual CAN GUI for selecting one or more motors.
+
+Both controllers publish an estimated angle so the GUI can validate that CAN
+communication is alive before it sends a movement command. The estimate starts
+at `0 deg` every time each ESP32 boots. It is not a measurement of the real arm.
+
+### Test limits
+
+- Target range: `-10` to `+10 deg` relative to the boot position.
+- Maximum change per GUI command: `5 deg`.
+- Maximum speed: `1 deg/s`.
+- The GUI sends STOP automatically after 7 seconds.
+- A new explicit START command rearms an axis stopped by CAN STOP.
+
+Place every joint in a safe unloaded middle position before boot and treat that
+position as zero. Use an independent physical power cutoff. This firmware must
+not be used with a person attached to the arm.
+
+### CAN protocol
+
+| Axis | Actuation | STOP | Estimated angle |
+| --- | ---: | ---: | ---: |
+| Bicep / elbow | `0x240` | `0x140` | `0x4A0` |
+| Shoulder up/down | `0x220` | `0x120` | `0x4A2` |
+| Shoulder left/right | `0x221` | `0x121` | `0x4A3` |
+| Upper-arm rotation | `0x222` | `0x122` | `0x4A1` |
+
+Actuation contains two little-endian 32-bit floats: absolute test angle in
+degrees followed by speed in degrees per second. Angle feedback contains one
+little-endian 32-bit float. CAN runs at 1 Mbit/s.
+
+### GPIO mapping used by this test firmware
+
+Verify these signals against the physical PCB before powering the motors:
+
+| Controller / axis | STEP | DIR | CAN TX | CAN RX |
+| --- | ---: | ---: | ---: | ---: |
+| Elbow ESP32-C3 | GPIO 7 | GPIO 6 | GPIO 1 | GPIO 0 |
+| Shoulder up/down | GPIO 19 | GPIO 18 | GPIO 1 | GPIO 3 |
+| Shoulder left/right | GPIO 0 | GPIO 4 | GPIO 1 | GPIO 3 |
+| Upper-arm rotation | GPIO 15 | GPIO 2 | GPIO 1 | GPIO 3 |
+
+### Build firmware
+
+From PowerShell with PlatformIO installed:
+
+```powershell
+cd robot_elbow_module
+pio run
+cd ..\robot_shoulder_module
+pio run
 ```
 
-## Align and run
+Successful builds create:
 
-Support the arm and align each joint with motor power disconnected. Use the project's physical joint datums or verified bench marks. Check that the joints stay at their references from power-up until arming.
+- `robot_elbow_module/.pio/build/elbow_esp32c3/firmware.bin`
+- `robot_shoulder_module/.pio/build/shoulder_esp32/firmware.bin`
 
-| Axis | Required physical start pose | Existing configured travel |
-| --- | --- | --- |
-| Shoulder up/down | Joint 0°, corresponding to 100° in its existing encoder mapping | −60° to +60° |
-| Shoulder left/right | Joint 0°, corresponding to 100° in its existing encoder mapping | −60° to +60° |
-| Upper arm rotation | Joint 0°, corresponding to 100° in its existing encoder mapping | −60° to +60° |
-| Elbow | Joint 0° at the low end of its configured joint travel, corresponding to 195° in the legacy potentiometer mapping | 0° to +60°, from the legacy potentiometer endpoints and ratio |
+Building does not flash either controller. Flash only the matching firmware to
+each board after checking the GPIO mapping above.
 
-The elbow's encoder calibration is missing in the base configuration. Demo mode reuses its legacy joint mapping. Verify the elbow's physical zero, direction, travel and STEP pulse count on the isolated bench before listing it as verified. Validate the other axes before listing them as verified as well.
+### GUI on Orin
 
-From the repository root, run `python3 motor_test/motor_control.py` for a CAN-frame preview. For live mode use Python 3 with Tkinter and `python-can`, and bring up the existing SocketCAN interface at **1 Mbit/s**. With a physical power cutoff available and nobody attached to the robot, run the panel and list only the bench-validated axes.
+Run in demo mode first:
 
 ```sh
-python3 motor_test/motor_control.py --live --channel can0 --verified updown leftright upper
-# Add elbow to --verified only after the elbow bench checks.
+python3 motor_control.py
 ```
 
-Select the aligned axes and click **Confirm start pose**. Wait for their estimates to appear, then enter a nearby absolute target and click **Start selected**. The panel keeps Christian's 5° per-test target window, 1°/s speed cap and seven-second test duration. The per-axis **Stop** and **Stop all** buttons let the current burst complete while retaining the estimate for the next test. **Emergency stop** stops all axes and latches them off. Use the physical cutoff if motion continues or a stop cannot be confirmed.
+After both ESP32 programs are built, flashed and connected to `can0`, run:
 
-Shoulder counts electrical STEP edges with PCNT. The elbow ESP32-C3 credits a finite RMT waveform only after it completes. A stalled motor, missed motor step, or moved joint can invalidate the physical reference even when pulse counting succeeds. After a suspected stall, interruption, loss of estimates or emergency stop, cut motor power, reset and realign affected axes, then confirm the pose again. Reset and realign before starting a new live GUI session.
-
-## CAN behavior
-
-The demo preserves the standard CAN IDs and payload sizes. The actuation payload remains two little-endian floats (joint target, speed). Positive-speed commands need refreshing within 500 ms. A speed of `+0.0` requests a normal stop. A speed of `-0.0` with the configured reference target is the explicit arming command. The existing empty STOP frame latches an emergency stop. The existing one-float angle frame carries an estimated joint angle, or NaN for an unarmed or faulted axis. Loss of command refresh or an unverifiable pulse burst latches the affected axis off.
-
-## Return to encoder feedback
-
-With motor power disconnected, turn off **Enable temporary encoderless motor demo** in both projects and rebuild and flash. Reconnect the original encoders and shoulder-to-elbow SPI feedback link, and use the original encoder-based controls. Elbow encoder mode still requires its measured calibration and fresh SPI feedback.
+```sh
+python3 motor_control.py --live --verified elbow updown leftright upper
+```

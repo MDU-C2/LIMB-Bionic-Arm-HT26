@@ -1,3 +1,3 @@
-idf_component_register(SRCS "src/encoder.c" REQUIRES limb_utils
+idf_component_register(SRCS "src/oldencoder.c" REQUIRES limb_utils
                        INCLUDE_DIRS "include")
  

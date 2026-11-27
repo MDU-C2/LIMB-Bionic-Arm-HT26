@@ -1,11 +1,5 @@
 mainmenu "Robot shoulder module"
     menu "LIMB config"
-        config LIMB_ENCODERLESS_DEMO
-            bool "Enable temporary encoderless motor demo"
-            default n
-            help
-                Use STEP pulse estimates instead of encoder feedback.
-                Requires physical alignment and explicit arming before motion.
         config FORCE_REENABLE_CAN_ON_BUS_OFF
             bool "Force reenable CAN on bus off"
             default n

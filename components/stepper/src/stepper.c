@@ -1,5 +1,6 @@
 #include "stepper.h"
 
+#include <inttypes.h>
 #include <math.h>
 
 #include "driver/gpio.h"
@@ -129,7 +130,8 @@ static void apply_motor_velocity(stepper_control_handle_t handle,
   // Clamp frequency
   uint32_t freq_hz = MAX((uint32_t)fabsf(velocity_sps), ctx->min_frequency);
 
-  ESP_LOGD(TAG, "Setting freq: %u Hz for %f dps", freq_hz, velocity.dps);
+  ESP_LOGD(TAG, "Setting freq: %" PRIu32 " Hz for %f dps", freq_hz,
+           velocity.dps);
 
   // Update frequency and duty
   ledc_set_freq(LEDC_LOW_SPEED_MODE, ctx->cfg.pwm_timer, freq_hz);
@@ -156,7 +158,8 @@ esp_err_t stepper_init(const stepper_control_config_t* cfg,
 
   // We define the degrees per second and need to convert that into steps per
   // second
-  const float microstepping_factor = MAX((int)ctx.cfg.microstepping_mode, 1);
+  const uint32_t microstepping_factor =
+      (uint32_t)MAX((int)ctx.cfg.microstepping_mode, 1);
   ctx.steps_per_degree = (float)cfg->steps_per_rev * cfg->gear_ratio *
                          microstepping_factor / 360.0f;
 
@@ -168,15 +171,17 @@ esp_err_t stepper_init(const stepper_control_config_t* cfg,
                             ctx.cfg.max_speed_increasing_angle.dps);
   const uint32_t max_freq = (uint32_t)roundf(max_vel * ctx.steps_per_degree);
 
-  ESP_LOGI(TAG, "Using microstepping factor %u", microstepping_factor);
+  ESP_LOGI(TAG, "Using microstepping factor %" PRIu32,
+           microstepping_factor);
 
   // The values of the ledc_timer_bit_t enumerations correspond to their
   // bitwidths.
   const ledc_timer_bit_t duty_res =
       ledc_find_suitable_duty_resolution(clk_freq, max_freq);
 
-  ESP_LOGI(TAG, "Selecting duty resolution %d for max frequency %u", duty_res,
-           (uint32_t)max_freq);
+  ESP_LOGI(TAG,
+           "Selecting duty resolution %d for max frequency %" PRIu32,
+           duty_res, max_freq);
 
   // Configure GPIOS for STEP, DIR and ENABLE
   uint64_t pin_mask = (1ULL << cfg->step_gpio);
@@ -318,7 +323,8 @@ esp_err_t stepper_init(const stepper_control_config_t* cfg,
     err = ledc_timer_config(&timer_cfg);
   }
   ctx.min_frequency = timer_cfg.freq_hz;
-  ESP_LOGI(TAG, "Selecting min frequency %u Hz", ctx.min_frequency);
+  ESP_LOGI(TAG, "Selecting min frequency %" PRIu32 " Hz",
+           ctx.min_frequency);
 
   const float min_allowed_velocity =
       (float)ctx.min_frequency / ctx.steps_per_degree;
@@ -356,8 +362,7 @@ esp_err_t stepper_init(const stepper_control_config_t* cfg,
       clamp_encoder_angle(&ctx.cfg.encoder, ctx.current_angle);
   ctx.use_position_feedback = true;
 
-  ESP_LOGI(TAG, "encoder initialized: angle=%.2f deg",
-           latest_encoder_angle.degree, initial_angle.degree);
+  ESP_LOGI(TAG, "Encoder initialized: angle=%.2f deg", initial_angle.degree);
 
   // Initialize motion state
   ctx.estop_active = false;
@@ -521,7 +526,7 @@ void stepper_set_estop(stepper_control_handle_t handle, bool active) {
 // ------ Getters ------
 
 EncoderAngle stepper_get_current_angle(stepper_control_handle_t handle) {
-  const motion_control_context_t* ctx = &s_contexts[handle];
+  motion_control_context_t* ctx = &s_contexts[handle];
 
   portENTER_CRITICAL(&ctx->spinlock);
   EncoderAngle angle = ctx->current_angle;
@@ -530,7 +535,7 @@ EncoderAngle stepper_get_current_angle(stepper_control_handle_t handle) {
 }
 
 EncoderAngle stepper_get_target_angle(stepper_control_handle_t handle) {
-  const motion_control_context_t* ctx = &s_contexts[handle];
+  motion_control_context_t* ctx = &s_contexts[handle];
 
   portENTER_CRITICAL(&ctx->spinlock);
   EncoderAngle angle = ctx->target_angle;
@@ -539,7 +544,7 @@ EncoderAngle stepper_get_target_angle(stepper_control_handle_t handle) {
 }
 
 AngularVelocity stepper_get_current_velocity(stepper_control_handle_t handle) {
-  const motion_control_context_t* ctx = &s_contexts[handle];
+  motion_control_context_t* ctx = &s_contexts[handle];
 
   portENTER_CRITICAL(&ctx->spinlock);
   AngularVelocity velocity = ctx->current_velocity;
@@ -548,7 +553,7 @@ AngularVelocity stepper_get_current_velocity(stepper_control_handle_t handle) {
 }
 
 bool stepper_is_moving(stepper_control_handle_t handle) {
-  const motion_control_context_t* ctx = &s_contexts[handle];
+  motion_control_context_t* ctx = &s_contexts[handle];
 
   portENTER_CRITICAL(&ctx->spinlock);
   bool moving = ctx->is_moving;
@@ -557,7 +562,7 @@ bool stepper_is_moving(stepper_control_handle_t handle) {
 }
 
 bool stepper_has_position_feedback(stepper_control_handle_t handle) {
-  const motion_control_context_t* ctx = &s_contexts[handle];
+  motion_control_context_t* ctx = &s_contexts[handle];
 
   portENTER_CRITICAL(&ctx->spinlock);
   bool has_feedback = ctx->use_position_feedback;

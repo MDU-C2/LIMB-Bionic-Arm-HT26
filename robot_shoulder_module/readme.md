@@ -33,7 +33,14 @@ idf.py monitor
 
 ## Open-loop CAN motor test
 
-See the [encoderless motor demo](../motor_test/README.md) for setup, arming and CAN controls.
+1. With motor power disconnected, unload the axes and place the joints at known starting angles. Set each `.starting_angle` in `kShoulderAxes` in [robot_shoulder_module.c](main/robot_shoulder_module.c) to the corresponding physical angle. The defaults assume all three axes start at zero degrees.
+2. Set `kEnableOpenLoopControl` to `true`, then build and flash the shoulder firmware. Connect the CAN transceiver as for normal operation.
+3. Apply motor power once the firmware has booted. Send the usual CAN actuation messages `0x220`, `0x221`, and `0x222`. Each message contains two little-endian 32-bit floats in order. Send the target joint angle in degrees, then the speed limit in degrees per second. A speed of zero stops issuing pulses without latching a STOP.
+4. The usual STOP messages `0x120`, `0x121`, and `0x122` stop the selected axis. A later explicit actuation command rearms an axis stopped by CAN STOP. A hardware or pulse-counting fault remains latched. The usual shoulder angle telemetry IDs carry the estimated joint angles from the counted STEP edges.
+
+Each startup assumes the configured reference angles. A stall, missed motor step, or movement while the driver is disabled can make the estimate drift. Open-loop mode uses the shoulder motor calibration for software joint limits and skips the encoder reader and elbow encoder forwarding.
+
+Set `kEnableOpenLoopControl` to `false` and rebuild to resume encoder feedback control.
 
 ## Configuration
 

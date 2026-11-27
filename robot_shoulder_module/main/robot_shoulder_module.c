@@ -16,10 +16,14 @@
 #include "freertos/task.h"
 #include "hal/ledc_types.h"
 #include "limb_utils.h"
+#include "open_loop_stepper.h"
 #include "soc/gpio_num.h"
 #include "stepper.h"
 
 static const char* const TAG = "Shoulder module";
+
+// Set true and rebuild to use the shoulder CAN commands with counted STEP pulses.
+static const bool kEnableOpenLoopControl = false;
 
 //TODO: configuration need to be updated for the new encoders and stepper motors. The gear ratios and other parameters may need to be adjusted based on the specific hardware being used.
 
@@ -81,7 +85,7 @@ static const stepper_control_config_t kUpDownRotationStepperConfig = {
     .microstep_m0_gpio = STEPPER_UP_DOWN_ROTATION_M0_GPIO,
     .microstep_m1_gpio = STEPPER_UP_DOWN_ROTATION_M1_GPIO,
     .microstep_m2_gpio = STEPPER_UP_DOWN_ROTATION_M2_GPIO,
-    .direction = STEPPER_DIR_NORMAL,
+    .direction = STEPPER_DIR_REVERSE,
     .gear_ratio = 120.F,
     .max_speed_decreasing_angle = {40.F},
     .max_speed_increasing_angle = {40.F},
@@ -109,7 +113,7 @@ static const stepper_control_config_t kLeftRightRotationStepperConfig = {
     .microstep_m1_gpio = STEPPER_LEFT_RIGHT_ROTATION_M1_GPIO,
     .microstep_m2_gpio = STEPPER_LEFT_RIGHT_ROTATION_M2_GPIO,
     .direction = STEPPER_DIR_NORMAL,
-    .gear_ratio = 1.F,
+    .gear_ratio = 285.F,
     .max_speed_decreasing_angle = {40.F},
     .max_speed_increasing_angle = {40.F},
     .max_accel = {20.F},
@@ -167,6 +171,47 @@ static stepper_control_handle_t s_left_right_stepper_handle;
 static stepper_control_handle_t s_up_down_stepper_handle;
 static stepper_control_handle_t s_upper_arm_rotation_stepper_handle;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+typedef struct {
+  const stepper_control_config_t* config;
+  const stepper_control_handle_t* closed_loop_handle;
+  CanMessageId stop_id;
+  CanMessageId actuation_id;
+  CanMessageId status_id;
+  const char* name;
+  JointAngle starting_angle;
+} ShoulderAxisConfig;
+
+// In open-loop mode each starting angle must match the physical pose at boot.
+static const ShoulderAxisConfig kShoulderAxes[kShoulderAxisCount] = {
+    [kShoulderUpDown] = {
+        .config = &kUpDownRotationStepperConfig,
+        .closed_loop_handle = &s_up_down_stepper_handle,
+        .stop_id = CAN_ID_ROBOT_SHOULDER_UP_DOWN_STOP,
+        .actuation_id = CAN_ID_ROBOT_SHOULDER_UP_DOWN_ACTUATION,
+        .status_id = CAN_ID_ROBOT_SHOULDER_UP_DOWN_POTENTIOMETER,
+        .name = "up/down",
+        .starting_angle = {0.0f},
+    },
+    [kShoulderLeftRight] = {
+        .config = &kLeftRightRotationStepperConfig,
+        .closed_loop_handle = &s_left_right_stepper_handle,
+        .stop_id = CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_STOP,
+        .actuation_id = CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_ACTUATION,
+        .status_id = CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_POTENTIOMETER,
+        .name = "left/right",
+        .starting_angle = {0.0f},
+    },
+    [kShoulderUpperArmRotation] = {
+        .config = &kUpperArmRotationStepperConfig,
+        .closed_loop_handle = &s_upper_arm_rotation_stepper_handle,
+        .stop_id = CAN_ID_ROBOT_UPPER_ARM_ROTATION_STOP,
+        .actuation_id = CAN_ID_ROBOT_UPPER_ARM_ROTATION_ACTUATION,
+        .status_id = CAN_ID_ROBOT_UPPER_ARM_ROTATION_POTENTIOMETER,
+        .name = "upper-arm rotation",
+        .starting_angle = {0.0f},
+    },
+};
 
 // Publish once each of the three shoulder motors has encoder feedback.
 static void update_encoder_angles(const ShoulderEncoderAngles* angles) {
@@ -311,9 +356,10 @@ static void encoder_reader_task([[maybe_unused]] void* arg) {
 }
 
 static void can_rx_task([[maybe_unused]] void* arg) {
-  uint32_t can_id = 0;
-  uint8_t can_buf[CAN_MAX_MESSAGE_SIZE] = {0};
-  uint8_t can_buf_len = 0;
+  uint32_t can_id;
+  uint64_t can_payload;
+  uint8_t* const can_buf = (uint8_t*)&can_payload;
+  uint8_t can_buf_len;
 
   while (true) {
     esp_err_t err = can_receive(&can_id, can_buf, &can_buf_len, portMAX_DELAY);
@@ -321,98 +367,60 @@ static void can_rx_task([[maybe_unused]] void* arg) {
       ESP_LOGW(TAG, "Error calling can_receive: %s", esp_err_to_name(err));
       continue;
     }
-    switch (can_id) {
-      case CAN_ID_ROBOT_SHOULDER_UP_DOWN_STOP: {
-        stepper_set_estop(s_up_down_stepper_handle, true);
-        break;
+
+    ShoulderAxis index = kShoulderUpDown;
+    while (index < kShoulderAxisCount && can_id != kShoulderAxes[index].stop_id &&
+           can_id != kShoulderAxes[index].actuation_id) {
+      ++index;
+    }
+    if (index == kShoulderAxisCount) {
+      ESP_LOGW(TAG, "Unknown CAN Message received: 0x%x", can_id);
+      continue;
+    }
+
+    const ShoulderAxisConfig* axis = &kShoulderAxes[index];
+    if (can_id == axis->stop_id) {
+      if (kEnableOpenLoopControl) {
+        open_loop_stepper_request_stop(index);
+      } else {
+        stepper_set_estop(*axis->closed_loop_handle, true);
       }
-      case CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_STOP: {
-        stepper_set_estop(s_left_right_stepper_handle, true);
-        break;
-      }
-      case CAN_ID_ROBOT_UPPER_ARM_ROTATION_STOP: {
-        stepper_set_estop(s_upper_arm_rotation_stepper_handle, true);
-        break;
-      }
-      case CAN_ID_ROBOT_SHOULDER_UP_DOWN_ACTUATION: {
-        enum {
-          kExpectedPayloadSize = 2 * sizeof(float),
-        };
-        if (can_buf_len != kExpectedPayloadSize) {
-          ESP_LOGW(TAG,
-                   "Invalid up/down actuation payload length: %u (expected %u)",
-                   can_buf_len, kExpectedPayloadSize);
-          break;
-        }
-        JointAngle joint_angle = {
-            deserialize_float(can_buf, kFromLittleEndian)};
-        AngularVelocity target_velocity = {
-            deserialize_float(can_buf + sizeof(float), kFromLittleEndian)};
-        ESP_LOGI(TAG, "Received up/down actuation: angle=%f, velocity=%f dps",
-                 joint_angle.degree, target_velocity.dps);
-        stepper_set_target_angle(s_up_down_stepper_handle, joint_angle);
-        stepper_set_target_velocity(s_up_down_stepper_handle, target_velocity);
-        break;
-      }
-      case CAN_ID_ROBOT_SHOULDER_LEFT_RIGHT_ACTUATION: {
-        enum {
-          kExpectedPayloadSize = 2 * sizeof(float),
-        };
-        if (can_buf_len != kExpectedPayloadSize) {
-          ESP_LOGW(
-              TAG,
-              "Invalid left/right actuation payload length: %u (expected %u)",
-              can_buf_len, kExpectedPayloadSize);
-          break;
-        }
-        JointAngle joint_angle = {
-            deserialize_float(can_buf, kFromLittleEndian)};
-        AngularVelocity target_velocity = {
-            deserialize_float(can_buf + sizeof(float), kFromLittleEndian)};
-        ESP_LOGI(TAG,
-                 "Received left/right actuation: angle=%f, velocity=%f dps",
-                 joint_angle.degree, target_velocity.dps);
-        stepper_set_target_angle(s_left_right_stepper_handle, joint_angle);
-        stepper_set_target_velocity(s_left_right_stepper_handle,
-                                    target_velocity);
-        break;
-      }
-      case CAN_ID_ROBOT_UPPER_ARM_ROTATION_ACTUATION: {
-        enum {
-          kExpectedPayloadSize = 2 * sizeof(float),
-        };
-        if (can_buf_len != kExpectedPayloadSize) {
-          ESP_LOGW(TAG,
-                   "Invalid upper-arm rotation actuation payload length: %u "
-                   "(expected %u)",
-                   can_buf_len, kExpectedPayloadSize);
-          break;
-        }
-        JointAngle joint_angle = {
-            deserialize_float(can_buf, kFromLittleEndian)};
-        AngularVelocity target_velocity = {
-            deserialize_float(can_buf + sizeof(float), kFromLittleEndian)};
-        ESP_LOGI(
-            TAG,
-            "Received upper-arm rotation actuation: angle=%f, velocity=%f dps",
-            joint_angle.degree, target_velocity.dps);
-        stepper_set_target_angle(s_upper_arm_rotation_stepper_handle,
-                                 joint_angle);
-        stepper_set_target_velocity(s_upper_arm_rotation_stepper_handle,
-                                    target_velocity);
-        break;
-      }
-      default: {
-        ESP_LOGW(TAG, "Unknown CAN Message received: 0x%x", can_id);
-        break;
-      }
+      continue;
+    }
+
+    if (can_buf_len != 2 * sizeof(float)) {
+      ESP_LOGW(TAG, "Invalid %s actuation payload length: %u", axis->name,
+               can_buf_len);
+      continue;
+    }
+
+    JointAngle joint_angle = {deserialize_float(can_buf, kFromLittleEndian)};
+    AngularVelocity target_velocity = {
+        deserialize_float(can_buf + sizeof(float), kFromLittleEndian)};
+    ESP_LOGI(TAG, "Received %s actuation: angle=%f, velocity=%f dps",
+             axis->name, joint_angle.degree, target_velocity.dps);
+    if (kEnableOpenLoopControl) {
+      open_loop_stepper_set_target(index, joint_angle, target_velocity);
+    } else {
+      stepper_set_target_angle(*axis->closed_loop_handle, joint_angle);
+      stepper_set_target_velocity(*axis->closed_loop_handle, target_velocity);
     }
   }
-
-  vTaskDelete(NULL);
 }
 
-// Send the joint angle over the existing CAN ID and optionally log status.
+// Publish a measured or estimated joint angle using the same CAN payload.
+static void send_can_joint_angle(JointAngle angle, uint32_t can_id,
+                                 const char* axis, uint32_t* can_errors_count) {
+  const float payload = htolef(angle.degree);
+  const esp_err_t err = can_send(can_id, (const uint8_t*)&payload,
+                                 sizeof(payload), 0);
+  if (err != ESP_OK && (*can_errors_count)++ % 100 == 0) {
+    ESP_LOGW(TAG, "Error sending %s angle over CAN: %s, total error count: %u",
+             axis, esp_err_to_name(err), *can_errors_count);
+  }
+}
+
+// Send the encoder-based joint angle and optionally log stepper status.
 static void send_joint_angle_status(stepper_control_handle_t handle,
                                     EncoderAngle encoder_angle, uint32_t can_id,
                                     const char* axis, bool log_status,
@@ -432,12 +440,7 @@ static void send_joint_angle_status(stepper_control_handle_t handle,
              stepper_is_moving(handle));
   }
 
-  esp_err_t err = can_send(can_id, (const uint8_t*)&joint_angle.degree,
-                           sizeof(joint_angle.degree), 0);
-  if (err != ESP_OK && (*can_errors_count)++ % 100 == 0) {
-    ESP_LOGW(TAG, "Error sending %s angle over CAN: %s, total error count: %u",
-             axis, esp_err_to_name(err), *can_errors_count);
-  }
+  send_can_joint_angle(joint_angle, can_id, axis, can_errors_count);
 }
 
 static void motors_update_task([[maybe_unused]] void* args) {
@@ -490,25 +493,71 @@ static void reenable_can_task([[maybe_unused]] void* pvParameter) {
   }
 }
 
-void app_main(void) {
-  init_encoders();
-  init_elbow_feedback_spi(ELBOW_LINK_CS_GPIO);
+// Initialize the same CAN filter and receiver for both control modes.
+static void init_shoulder_can(void) {
+  const CanMsgFilter can_filter = {
+      .id = CAN_RECIPIENT_ROBOT_SHOULDER,
+      .ignore_mask = create_filter_mask(CAN_MESSAGE_TYPE_FILTER_ANY,
+                                       CAN_RECIPIENT_FILTER_EXACT,
+                                       CAN_GENERIC_FILTER_ANY),
+  };
+  ESP_ERROR_CHECK(can_init(CAN_TX_GPIO, CAN_RX_GPIO, 1000000, &can_filter));
+}
 
-  // CAN initialization.
-  {
-    CanMsgFilter can_filter = {
-        .id = CAN_RECIPIENT_ROBOT_SHOULDER,
-        .ignore_mask = create_filter_mask(CAN_MESSAGE_TYPE_FILTER_ANY,
-                                          CAN_RECIPIENT_FILTER_EXACT,
-                                          CAN_GENERIC_FILTER_ANY),
-    };
+// Start receiving commands after all motors in the selected mode are ready.
+static void start_shoulder_can_tasks(void) {
+#if CONFIG_FORCE_REENABLE_CAN_ON_BUS_OFF
+  if (xTaskCreate(reenable_can_task, "reenable_can_task", 4096, NULL, 6, NULL) !=
+      pdPASS) {
+    ESP_LOGE(TAG, "Failed to create reenable_can_task");
+    abort();
+  }
+#endif
 
-    esp_err_t err = can_init(CAN_TX_GPIO, CAN_RX_GPIO, 1000000, &can_filter);
-    if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Error calling can_init: %s", esp_err_to_name(err));
-      abort();
+  if (xTaskCreate(can_rx_task, "CAN rx task", 4096, NULL, 5, NULL) != pdPASS) {
+    ESP_LOGE(TAG, "Failed to create CAN rx task");
+    abort();
+  }
+}
+
+// Own all RMT outputs and publish their estimated angles on the usual CAN IDs.
+static void open_loop_motors_task([[maybe_unused]] void* arg) {
+  for (ShoulderAxis index = kShoulderUpDown; index < kShoulderAxisCount; ++index) {
+    const ShoulderAxisConfig* axis = &kShoulderAxes[index];
+    open_loop_stepper_init(index, axis->config, axis->starting_angle);
+  }
+  start_shoulder_can_tasks();
+
+  TickType_t current_tick = xTaskGetTickCount();
+  uint32_t can_errors[kShoulderAxisCount] = {0};
+  for (;;) {
+    xTaskDelayUntil(&current_tick, pdMS_TO_TICKS(OPEN_LOOP_UPDATE_PERIOD_MS));
+    for (ShoulderAxis index = kShoulderUpDown; index < kShoulderAxisCount; ++index) {
+      open_loop_stepper_update(index);
+    }
+    for (ShoulderAxis index = kShoulderUpDown; index < kShoulderAxisCount; ++index) {
+      const ShoulderAxisConfig* axis = &kShoulderAxes[index];
+      send_can_joint_angle(open_loop_stepper_get_angle(index), axis->status_id,
+                           axis->name, &can_errors[index]);
     }
   }
+}
+
+void app_main(void) {
+  if (kEnableOpenLoopControl) {
+    init_shoulder_can();
+    // Keep the motor task on the core where it allocates the RMT ISR.
+    if (xTaskCreatePinnedToCore(open_loop_motors_task, "Open-loop motors", 4096,
+                                NULL, 6, NULL, xPortGetCoreID()) != pdPASS) {
+      ESP_LOGE(TAG, "Failed to create open-loop motor task");
+      abort();
+    }
+    return;
+  }
+
+  init_encoders();
+  init_elbow_feedback_spi(ELBOW_LINK_CS_GPIO);
+  init_shoulder_can();
 
   s_encoder_angles_queue = xQueueCreate(1, sizeof(ShoulderEncoderAngles));
   if (s_encoder_angles_queue == NULL) {
@@ -560,25 +609,7 @@ void app_main(void) {
     abort();
   }
 
-#if CONFIG_FORCE_REENABLE_CAN_ON_BUS_OFF
-  {
-    BaseType_t err = xTaskCreate(reenable_can_task, "reenable_can_task",
-                                 1024 * 2 * 2, NULL, 6, NULL);
-    if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
-      abort();
-    }
-  }
-#endif
-
-  {
-    BaseType_t err =
-        xTaskCreate(can_rx_task, "CAN rx task", 1024 * 2 * 2, NULL, 5, NULL);
-    if (err != pdPASS) {
-      ESP_LOGE(TAG, "Failed to create reenable_can_task, err code: %d");
-      abort();
-    }
-  }
+  start_shoulder_can_tasks();
 
   {
     BaseType_t err = xTaskCreate(motors_update_task, "Motors update task",

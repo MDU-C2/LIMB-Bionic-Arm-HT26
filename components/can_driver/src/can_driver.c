@@ -1,5 +1,7 @@
 #include "can_driver.h"
 
+#include <string.h>
+
 #include "driver/twai.h"
 #include "esp_check.h"
 #include "esp_err.h"
@@ -135,12 +137,15 @@ esp_err_t can_send(uint32_t id, const uint8_t* data, uint8_t len,
   return twai_transmit(&message, pdMS_TO_TICKS(ms_to_wait));
 }
 
-esp_err_t can_receive(uint32_t* id, uint8_t* data, uint8_t* len,
-                      int timeout_ms) {
+static esp_err_t receive_frame(uint32_t* id, uint8_t* data, uint8_t* len,
+                               int timeout_ms, bool standard_data_only) {
   twai_message_t message;
   esp_err_t ret = twai_receive(&message, pdMS_TO_TICKS(timeout_ms));
 
   if (ret == ESP_OK) {
+    if (standard_data_only && (message.extd || message.rtr)) {
+      return ESP_ERR_INVALID_RESPONSE;
+    }
     *id = message.identifier;
     *len = message.data_length_code;
 
@@ -149,10 +154,20 @@ esp_err_t can_receive(uint32_t* id, uint8_t* data, uint8_t* len,
     // treating the data buffer as an 8-byte integer.
     // NOTE: We assume that the user has provided a buffer that's at least
     // 8 bytes.
-    *(uint64_t*)data = *(uint64_t*)message.data;
+    memcpy(data, message.data, CAN_MAX_MESSAGE_SIZE);
   }
 
   return ret;
+}
+
+esp_err_t can_receive(uint32_t* id, uint8_t* data, uint8_t* len,
+                      int timeout_ms) {
+  return receive_frame(id, data, len, timeout_ms, false);
+}
+
+esp_err_t can_receive_standard_data(uint32_t* id, uint8_t* data, uint8_t* len,
+                                    int timeout_ms) {
+  return receive_frame(id, data, len, timeout_ms, true);
 }
 
 void can_deinit(void) {

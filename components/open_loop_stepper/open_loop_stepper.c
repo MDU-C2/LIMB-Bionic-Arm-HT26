@@ -4,7 +4,9 @@
 #include <stdlib.h>
 
 #include "driver/gpio.h"
+#if SOC_PCNT_SUPPORTED
 #include "driver/pulse_cnt.h"
+#endif
 #include "driver/rmt_tx.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
@@ -12,7 +14,7 @@
 #include "freertos/task.h"
 #include "motor_ramping.h"
 
-static const char* const TAG = "Open-loop shoulder";
+static const char* const TAG = "Open-loop stepper";
 
 enum {
   RMT_CLOCK_HZ = 1000000,
@@ -20,13 +22,27 @@ enum {
   STEP_LOW_MIN_US = 5,
   // Leave 1 ms for task and transmit overhead between successive bursts.
   BURST_DURATION_US = (OPEN_LOOP_UPDATE_PERIOD_MS - 1) * 1000,
+#if SOC_PCNT_SUPPORTED
+  AXIS_COUNT = 3,
+  RMT_MEM_SYMBOLS = 128,
   MAX_BURST_STEPS = BURST_DURATION_US / (STEP_HIGH_US + STEP_LOW_MIN_US),
+#else
+  AXIS_COUNT = 1,
+  RMT_MEM_SYMBOLS = 2 * SOC_RMT_MEM_WORDS_PER_CHANNEL,
+  // With no PCNT, avoid streaming or RMT loop mode. A single hardware
+  // transaction holds all STEP pulses plus the end marker.
+  MAX_BURST_STEPS = RMT_MEM_SYMBOLS - 1,
+#endif
+  COMMAND_TIMEOUT_MS = 500,
   BURST_TIMEOUT_MS = 2 * OPEN_LOOP_UPDATE_PERIOD_MS,
 };
 
 typedef struct {
   JointAngle target_angle;
   AngularVelocity speed;
+  TickType_t last_command;
+  bool armed;
+  bool pause_requested;
   bool stop_requested;
 } OpenLoopCommand;
 
@@ -34,7 +50,9 @@ typedef struct {
   const stepper_control_config_t* config;
   rmt_channel_handle_t tx;
   rmt_encoder_handle_t pulse_encoder;
+#if SOC_PCNT_SUPPORTED
   pcnt_unit_handle_t counter;
+#endif
   rmt_symbol_word_t pulses[MAX_BURST_STEPS];
   JointAngle starting_angle;
   float steps_per_degree;
@@ -43,44 +61,42 @@ typedef struct {
   int position_steps;
   int burst_steps;
   TickType_t burst_start;
-  AngularVelocity encoder_velocity;
+  AngularVelocity joint_velocity;
   float fractional_steps;
+  bool joint_direction_reversed;
+  bool armed;
   bool disabled;
 } OpenLoopAxis;
 
-static OpenLoopAxis s_axes[kShoulderAxisCount];
-static OpenLoopCommand s_commands[kShoulderAxisCount];
+static OpenLoopAxis s_axes[AXIS_COUNT];
+static OpenLoopCommand s_commands[AXIS_COUNT];
 static portMUX_TYPE s_command_lock = portMUX_INITIALIZER_UNLOCKED;
 
-// Configure STEP and DIR, then loop the electrical STEP signal into PCNT.
-void open_loop_stepper_init(ShoulderAxis index,
+void open_loop_stepper_init(unsigned index,
                             const stepper_control_config_t* config,
-                            JointAngle starting_angle) {
+                            OpenLoopReference reference) {
   OpenLoopAxis* axis = &s_axes[index];
   axis->config = config;
-  axis->starting_angle = starting_angle;
+  axis->starting_angle = reference.starting_angle;
+  axis->joint_direction_reversed = reference.joint_direction_reversed;
   const unsigned microsteps = MAX((unsigned)config->microstepping_mode, 1U);
   axis->steps_per_degree =
       config->steps_per_rev * microsteps * config->gear_ratio / 360.0f;
-  const Encoder* encoder = &config->encoder;
-  const float first_limit = to_joint_angle(encoder, encoder->min_encoder_angle).degree;
-  const float second_limit = to_joint_angle(encoder, encoder->max_encoder_angle).degree;
-  if (!isfinite(first_limit) || !isfinite(second_limit) ||
+  if (!isfinite(reference.min_angle.degree) ||
+      !isfinite(reference.max_angle.degree) ||
+      reference.min_angle.degree >= reference.max_angle.degree ||
       !isfinite(axis->steps_per_degree) || axis->steps_per_degree <= 0.0f ||
-      !isfinite(starting_angle.degree) ||
-      encoder->joint_angle_to_encoder_angle_ratio <= 0.0f) {
-    ESP_LOGE(TAG, "Invalid calibration or starting angle for axis %d", index);
-    abort();
+      !isfinite(reference.starting_angle.degree) ||
+      reference.starting_angle.degree < reference.min_angle.degree ||
+      reference.starting_angle.degree > reference.max_angle.degree) {
+    axis->disabled = true;
+    ESP_LOGE(TAG, "Axis %u blocked: missing joint limits or invalid reference", index);
+    return;
   }
-  axis->min_steps = (int)ceilf((fminf(first_limit, second_limit) -
-                                starting_angle.degree) * axis->steps_per_degree);
-  axis->max_steps = (int)floorf((fmaxf(first_limit, second_limit) -
-                                 starting_angle.degree) * axis->steps_per_degree);
-  if (axis->min_steps > 0 || axis->max_steps < 0) {
-    ESP_LOGE(TAG, "Starting angle for axis %d is outside its joint limits", index);
-    abort();
-  }
-  s_commands[index].target_angle = starting_angle;
+  axis->min_steps = (int)ceilf((reference.min_angle.degree -
+                                axis->starting_angle.degree) * axis->steps_per_degree);
+  axis->max_steps = (int)floorf((reference.max_angle.degree -
+                                 axis->starting_angle.degree) * axis->steps_per_degree);
 
   ESP_ERROR_CHECK(gpio_set_level(config->step_gpio, 0));
   ESP_ERROR_CHECK(gpio_set_level(config->dir_gpio, 0));
@@ -99,7 +115,7 @@ void open_loop_stepper_init(ShoulderAxis index,
       .gpio_num = config->step_gpio,
       .clk_src = RMT_CLK_SRC_DEFAULT,
       .resolution_hz = RMT_CLOCK_HZ,
-      .mem_block_symbols = 128,
+      .mem_block_symbols = RMT_MEM_SYMBOLS,
       .trans_queue_depth = 1,
   };
   const rmt_copy_encoder_config_t encoder_config = {};
@@ -107,6 +123,7 @@ void open_loop_stepper_init(ShoulderAxis index,
   ESP_ERROR_CHECK(rmt_new_copy_encoder(&encoder_config, &axis->pulse_encoder));
   ESP_ERROR_CHECK(rmt_enable(axis->tx));
 
+#if SOC_PCNT_SUPPORTED
   const pcnt_unit_config_t counter_config = {.low_limit = -1, .high_limit = 30000};
   const pcnt_chan_config_t step_config = {
       .edge_gpio_num = config->step_gpio,
@@ -119,49 +136,75 @@ void open_loop_stepper_init(ShoulderAxis index,
       PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_HOLD));
   ESP_ERROR_CHECK(pcnt_unit_enable(axis->counter));
   ESP_ERROR_CHECK(pcnt_unit_start(axis->counter));
+#endif
 }
 
-// Update angle and speed together while preserving any latched STOP command.
-void open_loop_stepper_set_target(ShoulderAxis index, JointAngle angle,
+static bool command_timed_out(const OpenLoopCommand* command, TickType_t now) {
+  return command->speed.dps > 0.0f &&
+         now - command->last_command >= pdMS_TO_TICKS(COMMAND_TIMEOUT_MS);
+}
+
+void open_loop_stepper_set_target(unsigned index, JointAngle angle,
                                   AngularVelocity speed) {
-  if (!isfinite(angle.degree) || !isfinite(speed.dps)) {
+  if (!isfinite(angle.degree) || !isfinite(speed.dps) || speed.dps < 0.0f) {
     return;
   }
   portENTER_CRITICAL(&s_command_lock);
-  s_commands[index].target_angle = angle;
-  s_commands[index].speed = speed;
+  OpenLoopCommand* command = &s_commands[index];
+  const TickType_t now = xTaskGetTickCount();
+  if (command_timed_out(command, now)) {
+    command->stop_requested = true;
+  }
+  if (!command->stop_requested) {
+    if (speed.dps == 0.0f && signbit(speed.dps)) {
+      if (angle.degree == s_axes[index].starting_angle.degree) {
+        command->armed = true;
+      }
+    } else if (speed.dps == 0.0f) {
+      command->speed = speed;
+      command->pause_requested = true;
+    } else if (command->armed && !command->pause_requested) {
+      command->target_angle = angle;
+      command->speed = speed;
+      command->last_command = now;
+    }
+  }
   portEXIT_CRITICAL(&s_command_lock);
 }
 
-// Ask the motor task to stop this axis and discard future motion commands.
-void open_loop_stepper_request_stop(ShoulderAxis index) {
+void open_loop_stepper_request_stop(unsigned index) {
   portENTER_CRITICAL(&s_command_lock);
   s_commands[index].stop_requested = true;
   portEXIT_CRITICAL(&s_command_lock);
 }
 
-// Return the estimated joint angle from the reference plus signed STEP edges.
-JointAngle open_loop_stepper_get_angle(ShoulderAxis index) {
+JointAngle open_loop_stepper_get_angle(unsigned index) {
   const OpenLoopAxis* axis = &s_axes[index];
+  if (!axis->armed || axis->disabled) {
+    return (JointAngle){NAN};
+  }
   return (JointAngle){axis->starting_angle.degree +
                       (float)axis->position_steps / axis->steps_per_degree};
 }
 
-// Account for edges emitted by a completed or interrupted transmission.
-static esp_err_t record_burst(OpenLoopAxis* axis, bool completed) {
+// Credit a burst only on completion. Shoulder also verifies the electrical
+// STEP edges. On ESP32-C3 the finite, memory-resident transaction is the count.
+static esp_err_t record_burst(OpenLoopAxis* axis) {
+#if SOC_PCNT_SUPPORTED
   int count;
   esp_err_t err = pcnt_unit_get_count(axis->counter, &count);
   if (err != ESP_OK) {
     return err;
   }
-  axis->position_steps += axis->burst_steps < 0 ? -count : count;
-  const int expected = abs(axis->burst_steps);
+  if (count != abs(axis->burst_steps)) {
+    return ESP_ERR_INVALID_RESPONSE;
+  }
+#endif
+  axis->position_steps += axis->burst_steps;
   axis->burst_steps = 0;
-  return count > expected || (completed && count != expected)
-             ? ESP_ERR_INVALID_RESPONSE : ESP_OK;
+  return ESP_OK;
 }
 
-// Stop the waveform before counting any edges that escaped an interrupted burst.
 static void disable_axis(OpenLoopAxis* axis, esp_err_t reason) {
   axis->disabled = true;
   if (axis->config->enable_gpio != GPIO_NUM_NC) {
@@ -177,13 +220,8 @@ static void disable_axis(OpenLoopAxis* axis, esp_err_t reason) {
              esp_err_to_name(stop_error));
     return;
   }
-  if (axis->burst_steps != 0 && record_burst(axis, false) != ESP_OK) {
-    ESP_LOGE(TAG, "Could not verify STEP count on GPIO %d", axis->config->step_gpio);
-  }
-  if (reason != ESP_OK) {
-    ESP_LOGE(TAG, "STEP GPIO %d stopped: %s", axis->config->step_gpio,
-             esp_err_to_name(reason));
-  }
+  ESP_LOGW(TAG, "STEP GPIO %d stopped: %s", axis->config->step_gpio,
+           reason == ESP_OK ? "emergency stop" : esp_err_to_name(reason));
 }
 
 // Ramp toward a quantized joint target and retain sub-step movement between ticks.
@@ -198,28 +236,25 @@ static int plan_burst(OpenLoopAxis* axis, JointAngle current,
                                         axis->steps_per_degree);
   const int remaining = target_steps - axis->position_steps;
   if (remaining == 0 || command->speed.dps <= 0.0f) {
-    axis->encoder_velocity.dps = 0.0f;
+    axis->joint_velocity.dps = 0.0f;
     axis->fractional_steps = 0.0f;
     return 0;
   }
 
   const stepper_control_config_t* config = axis->config;
-  const Encoder* encoder = &config->encoder;
-  const float encoder_ratio = encoder->joint_angle_to_encoder_angle_ratio;
   const MotorRampingArgs args = {
-      .current_angle = to_encoder_angle(encoder, current),
-      .target_angle = to_encoder_angle(encoder, (JointAngle){target_angle}),
-      .current_velocity = axis->encoder_velocity,
-      .max_acceleration = {config->max_accel.dps2 * encoder_ratio},
+      .current_angle = {current.degree},
+      .target_angle = {target_angle},
+      .current_velocity = axis->joint_velocity,
+      .max_acceleration = config->max_accel,
       .max_speed_decreasing_angle = {fminf(command->speed.dps,
-                                          config->max_speed_decreasing_angle.dps) * encoder_ratio},
+                                          config->max_speed_decreasing_angle.dps)},
       .max_speed_increasing_angle = {fminf(command->speed.dps,
-                                          config->max_speed_increasing_angle.dps) * encoder_ratio},
+                                          config->max_speed_increasing_angle.dps)},
       .timestep_ms = OPEN_LOOP_UPDATE_PERIOD_MS,
   };
-  axis->encoder_velocity = motor_ramping_trapezoidal(&args);
-  const float encoder_sign = encoder->is_reversed ? -1.0f : 1.0f;
-  const float joint_speed = axis->encoder_velocity.dps * encoder_sign / encoder_ratio;
+  axis->joint_velocity = motor_ramping_trapezoidal(&args);
+  const float joint_speed = axis->joint_velocity.dps;
   if ((joint_speed < 0.0f) != (remaining < 0)) {
     axis->fractional_steps = 0.0f;
     return 0;
@@ -244,14 +279,19 @@ static esp_err_t start_burst(OpenLoopAxis* axis, int steps) {
     axis->pulses[i] = pulse;
   }
   const stepper_control_config_t* config = axis->config;
-  const bool encoder_decreasing = (steps < 0) != config->encoder.is_reversed;
-  const bool dir_high = encoder_decreasing != (config->direction == STEPPER_DIR_REVERSE);
+  const bool control_angle_decreasing = (steps < 0) != axis->joint_direction_reversed;
+  const bool dir_high = control_angle_decreasing != (config->direction == STEPPER_DIR_REVERSE);
   ESP_ERROR_CHECK(gpio_set_level(config->dir_gpio, dir_high));
   if (config->enable_gpio != GPIO_NUM_NC) {
     ESP_ERROR_CHECK(gpio_set_level(config->enable_gpio, 0));
   }
   esp_rom_delay_us(5);
-  ESP_ERROR_CHECK(pcnt_unit_clear_count(axis->counter));
+#if SOC_PCNT_SUPPORTED
+  esp_err_t clear_error = pcnt_unit_clear_count(axis->counter);
+  if (clear_error != ESP_OK) {
+    return clear_error;
+  }
+#endif
   const rmt_transmit_config_t tx_config = {.flags.queue_nonblocking = true};
   esp_err_t err = rmt_transmit(axis->tx, axis->pulse_encoder, axis->pulses,
                               count * sizeof(pulse), &tx_config);
@@ -263,19 +303,32 @@ static esp_err_t start_burst(OpenLoopAxis* axis, int steps) {
 }
 
 // Poll completion without blocking the other axes and apply the latest command.
-void open_loop_stepper_update(ShoulderAxis index) {
+void open_loop_stepper_update(unsigned index) {
   OpenLoopAxis* axis = &s_axes[index];
   if (axis->disabled) {
     return;
   }
   portENTER_CRITICAL(&s_command_lock);
+  const bool timed_out = command_timed_out(&s_commands[index], xTaskGetTickCount());
+  if (timed_out) {
+    s_commands[index].stop_requested = true;
+  }
   const OpenLoopCommand command = s_commands[index];
+  s_commands[index].pause_requested = false;
   portEXIT_CRITICAL(&s_command_lock);
   if (command.stop_requested) {
-    disable_axis(axis, ESP_OK);
+    disable_axis(axis, timed_out ? ESP_ERR_TIMEOUT : ESP_OK);
+    return;
+  }
+  axis->armed = command.armed;
+  if (!axis->armed) {
     return;
   }
 
+  if (command.pause_requested) {
+    axis->joint_velocity.dps = 0.0f;
+    axis->fractional_steps = 0.0f;
+  }
   if (axis->burst_steps != 0) {
     esp_err_t err = rmt_tx_wait_all_done(axis->tx, 0);
     if (err == ESP_ERR_TIMEOUT && xTaskGetTickCount() - axis->burst_start <
@@ -283,7 +336,7 @@ void open_loop_stepper_update(ShoulderAxis index) {
       return;
     }
     if (err == ESP_OK) {
-      err = record_burst(axis, true);
+      err = record_burst(axis);
     }
     if (err != ESP_OK) {
       disable_axis(axis, err);

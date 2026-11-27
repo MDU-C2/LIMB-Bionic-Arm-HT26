@@ -22,8 +22,11 @@
 
 static const char* const TAG = "Shoulder module";
 
-// Set true and rebuild to use the shoulder CAN commands with counted STEP pulses.
+#if CONFIG_LIMB_ENCODERLESS_DEMO
+static const bool kEnableOpenLoopControl = true;
+#else
 static const bool kEnableOpenLoopControl = false;
+#endif
 
 //TODO: configuration need to be updated for the new encoders and stepper motors. The gear ratios and other parameters may need to be adjusted based on the specific hardware being used.
 
@@ -172,6 +175,13 @@ static stepper_control_handle_t s_up_down_stepper_handle;
 static stepper_control_handle_t s_upper_arm_rotation_stepper_handle;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
+typedef enum {
+  kShoulderUpDown,
+  kShoulderLeftRight,
+  kShoulderUpperArmRotation,
+  kShoulderAxisCount,
+} ShoulderAxis;
+
 typedef struct {
   const stepper_control_config_t* config;
   const stepper_control_handle_t* closed_loop_handle;
@@ -182,7 +192,7 @@ typedef struct {
   JointAngle starting_angle;
 } ShoulderAxisConfig;
 
-// In open-loop mode each starting angle must match the physical pose at boot.
+// In demo mode each starting angle must match the physical pose at arming.
 static const ShoulderAxisConfig kShoulderAxes[kShoulderAxisCount] = {
     [kShoulderUpDown] = {
         .config = &kUpDownRotationStepperConfig,
@@ -362,7 +372,12 @@ static void can_rx_task([[maybe_unused]] void* arg) {
   uint8_t can_buf_len;
 
   while (true) {
-    esp_err_t err = can_receive(&can_id, can_buf, &can_buf_len, portMAX_DELAY);
+    esp_err_t err = kEnableOpenLoopControl
+        ? can_receive_standard_data(&can_id, can_buf, &can_buf_len, portMAX_DELAY)
+        : can_receive(&can_id, can_buf, &can_buf_len, portMAX_DELAY);
+    if (kEnableOpenLoopControl && err == ESP_ERR_INVALID_RESPONSE) {
+      continue;
+    }
     if (err != ESP_OK) {
       ESP_LOGW(TAG, "Error calling can_receive: %s", esp_err_to_name(err));
       continue;
@@ -397,11 +412,11 @@ static void can_rx_task([[maybe_unused]] void* arg) {
     JointAngle joint_angle = {deserialize_float(can_buf, kFromLittleEndian)};
     AngularVelocity target_velocity = {
         deserialize_float(can_buf + sizeof(float), kFromLittleEndian)};
-    ESP_LOGI(TAG, "Received %s actuation: angle=%f, velocity=%f dps",
-             axis->name, joint_angle.degree, target_velocity.dps);
     if (kEnableOpenLoopControl) {
       open_loop_stepper_set_target(index, joint_angle, target_velocity);
     } else {
+      ESP_LOGI(TAG, "Received %s actuation: angle=%f, velocity=%f dps",
+               axis->name, joint_angle.degree, target_velocity.dps);
       stepper_set_target_angle(*axis->closed_loop_handle, joint_angle);
       stepper_set_target_velocity(*axis->closed_loop_handle, target_velocity);
     }
@@ -524,7 +539,17 @@ static void start_shoulder_can_tasks(void) {
 static void open_loop_motors_task([[maybe_unused]] void* arg) {
   for (ShoulderAxis index = kShoulderUpDown; index < kShoulderAxisCount; ++index) {
     const ShoulderAxisConfig* axis = &kShoulderAxes[index];
-    open_loop_stepper_init(index, axis->config, axis->starting_angle);
+    // Reuse the existing static joint limits. No encoder readings are needed.
+    const Encoder* encoder = &axis->config->encoder;
+    const OpenLoopReference reference = {
+        .starting_angle = axis->starting_angle,
+        .min_angle = to_joint_angle(encoder, encoder->is_reversed
+            ? encoder->max_encoder_angle : encoder->min_encoder_angle),
+        .max_angle = to_joint_angle(encoder, encoder->is_reversed
+            ? encoder->min_encoder_angle : encoder->max_encoder_angle),
+        .joint_direction_reversed = encoder->is_reversed,
+    };
+    open_loop_stepper_init(index, axis->config, reference);
   }
   start_shoulder_can_tasks();
 

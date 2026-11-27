@@ -24,6 +24,11 @@ should by running:
 idf.py monitor
 ```
 
+## Open-loop CAN motor test
+
+See the [encoderless motor demo](../motor_test/README.md) for the reference pose,
+bench validation and CAN controls.
+
 ## Configuration
 
 The program has LIMB specific settings that can be configured using `idf.py menuconfig`.
